@@ -54,3 +54,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           no-cache: true
           pull: true
+          provenance: false
