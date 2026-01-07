@@ -145,6 +145,152 @@ docker run -p 9118:9118 \
   eero-exporter
 ```
 
+<details>
+<summary><strong>📦 Server Deployment Guide</strong></summary>
+
+If you're deploying to a server with Portainer or Docker, follow these steps:
+
+#### 1. Run the Setup Script
+
+Create and run this setup script on your server to prepare the directory structure and fix permissions:
+
+```bash
+#!/bin/bash
+# setup-eero-exporter.sh
+# Run this on your server before deploying the stack
+
+BASE_DIR="/volume1/docker/eero"
+
+echo "Setting up eero-exporter directory structure..."
+
+# Create directories
+mkdir -p "$BASE_DIR"
+mkdir -p "$BASE_DIR/prometheus_data"
+mkdir -p "$BASE_DIR/grafana_data"
+
+# Fix Prometheus permissions (runs as nobody:nobody = 65534:65534)
+chown -R 65534:65534 "$BASE_DIR/prometheus_data"
+
+# Fix Grafana permissions (runs as grafana = 472:472)
+chown -R 472:472 "$BASE_DIR/grafana_data"
+
+# Create empty session.json (to be populated after login)
+if [ ! -f "$BASE_DIR/session.json" ]; then
+    echo '{}' > "$BASE_DIR/session.json"
+    echo "Created empty session.json"
+fi
+
+# Create prometheus.yml config
+if [ ! -f "$BASE_DIR/prometheus.yml" ]; then
+    cat > "$BASE_DIR/prometheus.yml" << 'EOF'
+global:
+  scrape_interval: 60s
+  evaluation_interval: 60s
+
+scrape_configs:
+  - job_name: 'eero'
+    static_configs:
+      - targets: ['eero-exporter:9118']
+    metrics_path: /metrics
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+EOF
+    echo "Created prometheus.yml"
+fi
+
+echo ""
+echo "Done! Directory structure:"
+ls -la "$BASE_DIR"
+echo ""
+echo "Next steps:"
+echo "1. Login locally: eero-exporter login your-email@example.com"
+echo "2. Copy session: scp ~/.config/eero-exporter/session.json user@nas:$BASE_DIR/"
+echo "3. Deploy the stack in Portainer"
+```
+
+Save as `setup-eero-exporter.sh`, make executable (`chmod +x setup-eero-exporter.sh`), and run with `sudo`.
+
+#### 2. Authenticate and Copy Session
+
+On your local machine:
+
+```bash
+# Login and get session
+eero-exporter login your-email@example.com
+
+# Validate it works
+eero-exporter validate
+
+# Copy to server
+scp ~/.config/eero-exporter/session.json user@your-nas:/volume1/docker/eero/
+```
+
+#### 3. Example Portainer Stack
+
+Use this compose file with absolute paths for server deployment:
+
+```yaml
+version: "3.8"
+
+services:
+  eero-exporter:
+    image: ghcr.io/fulviofreitas/eero-prometheus-exporter:latest
+    container_name: eero-exporter
+    restart: unless-stopped
+    ports:
+      - "9118:9118"
+    volumes:
+      - /volume1/docker/eero/session.json:/home/eero/.config/eero-exporter/session.json:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:9118/ready')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: eero-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - /volume1/docker/eero/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /volume1/docker/eero/prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: eero-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - /volume1/docker/eero/grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+```
+
+#### Common Issues
+
+| Issue                     | Solution                                                        |
+| ------------------------- | --------------------------------------------------------------- |
+| Prometheus won't start    | Run `chown -R 65534:65534 /volume1/docker/eero/prometheus_data` |
+| Grafana permission denied | Run `chown -R 472:472 /volume1/docker/eero/grafana_data`        |
+| Session invalid errors    | Re-run login locally and copy new `session.json` to server      |
+| Health check failing      | Use `/ready` endpoint (always 200) instead of `/health`         |
+
+</details>
+
 ---
 
 ## 💻 CLI Reference
