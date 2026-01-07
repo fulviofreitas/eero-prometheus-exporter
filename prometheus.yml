@@ -1,0 +1,14 @@
+# Prometheus configuration for eero-exporter
+global:
+  scrape_interval: 60s
+  evaluation_interval: 60s
+
+scrape_configs:
+  - job_name: "eero"
+    static_configs:
+      - targets: ["eero-exporter:9118"]
+    scrape_interval: 60s
+    scrape_timeout: 30s
+    metrics_path: /metrics
+
+
