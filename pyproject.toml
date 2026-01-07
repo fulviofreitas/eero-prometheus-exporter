@@ -1,0 +1,73 @@
+[project]
+name = "eero-prometheus-exporter"
+version = "1.0.0"
+description = "Modern Prometheus exporter for eero mesh WiFi networks"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Eero Exporter Team" }]
+requires-python = ">=3.10"
+keywords = ["eero", "prometheus", "exporter", "metrics", "mesh", "wifi", "monitoring"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Networking :: Monitoring",
+]
+dependencies = [
+    "aiohttp>=3.9.0",
+    "prometheus-client>=0.19.0",
+    "pydantic>=2.5.0",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.7.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+eero-exporter = "eero_exporter.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/fulviofreitas/eero-prometheus-exporter"
+Documentation = "https://github.com/fulviofreitas/eero-prometheus-exporter#readme"
+Repository = "https://github.com/fulviofreitas/eero-prometheus-exporter"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+
