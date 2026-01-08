@@ -28,8 +28,9 @@ __all__ = [
 
 _LOGGER = logging.getLogger(__name__)
 
-# Default cookie file path for Docker/headless environments
-DEFAULT_COOKIE_FILE = Path.home() / ".config" / "eero-exporter" / "cookies.json"
+# Default session file path - used as cookie storage for eero-client
+# This keeps backward compatibility with existing Docker setups using session.json
+DEFAULT_SESSION_FILE = Path.home() / ".config" / "eero-exporter" / "session.json"
 
 
 def _model_to_dict(model: Any) -> Dict[str, Any]:
@@ -100,7 +101,7 @@ class EeroClient:
         """
         # Note: session_id and user_token are ignored - eero-client manages auth internally
         self._timeout = timeout
-        self._cookie_file = cookie_file or str(DEFAULT_COOKIE_FILE)
+        self._cookie_file = cookie_file or str(DEFAULT_SESSION_FILE)
         self._use_keyring = use_keyring
         self._client: Optional[OfficialEeroClient] = None
         self._preferred_network_id: Optional[str] = None

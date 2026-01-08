@@ -6,7 +6,6 @@ import time
 from typing import Any, Dict, List, Optional
 
 from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
-from .config import SessionData
 from .metrics import (
     DEVICE_BLOCKED,
     DEVICE_CONNECTED,
@@ -80,7 +79,6 @@ class EeroCollector:
 
     def __init__(
         self,
-        session: SessionData,
         include_devices: bool = True,
         include_profiles: bool = True,
         timeout: int = 30,
@@ -88,12 +86,10 @@ class EeroCollector:
         """Initialize the collector.
 
         Args:
-            session: Session data for authentication
             include_devices: Whether to collect device metrics
             include_profiles: Whether to collect profile metrics
             timeout: Request timeout in seconds
         """
-        self._session = session
         self._include_devices = include_devices
         self._include_profiles = include_profiles
         self._timeout = timeout
@@ -110,9 +106,6 @@ class EeroCollector:
         success = False
 
         try:
-            if not self._session.is_valid:
-                raise EeroAuthError("No valid session. Please authenticate first.")
-
             async with EeroClient(timeout=self._timeout) as client:
                 # Get networks
                 networks = await client.get_networks()

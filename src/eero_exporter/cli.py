@@ -16,7 +16,7 @@ from rich.table import Table
 from . import __version__
 from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
 from .collector import EeroCollector
-from .config import DEFAULT_CONFIG_FILE, DEFAULT_SESSION_FILE, ExporterConfig, SessionData
+from .config import DEFAULT_CONFIG_FILE, DEFAULT_SESSION_FILE, ExporterConfig
 from .server import run_server
 
 app = typer.Typer(
@@ -100,14 +100,6 @@ def login(
                     console.print(f"[bold red]Verification failed:[/bold red] {e}")
                     raise typer.Exit(1)
 
-        # Save session marker (actual auth is in cookies.json managed by eero-client)
-        session = SessionData(
-            user_token="managed_by_eero_client",
-            session_id="managed_by_eero_client",
-            preferred_network_id=session_data.get("preferred_network_id"),
-        )
-        session.save(session_path)
-
         console.print("\n[green]✓[/green] Login successful!")
         console.print(f"[dim]Session saved to: {session_path}[/dim]\n")
 
@@ -127,16 +119,11 @@ def logout(
     setup_logging()
     session_path = session_file or DEFAULT_SESSION_FILE
 
-    session = SessionData.from_file(session_path)
-    session.clear(session_path)
-
-    # Also clear the eero-client cookie file
-    cookie_file = session_path.parent / "cookies.json"
-    if cookie_file.exists():
-        cookie_file.unlink()
-        console.print("[dim]Cookie file removed.[/dim]")
-
-    console.print("[green]✓[/green] Session cleared.")
+    if session_path.exists():
+        session_path.unlink()
+        console.print("[green]✓[/green] Session cleared.")
+    else:
+        console.print("[yellow]No session file found.[/yellow]")
 
 
 @app.command()
@@ -173,15 +160,6 @@ def validate(
                 console.print("[bold red]✗[/bold red] Session file not found")
                 console.print(f"\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
             raise typer.Exit(2)
-
-        session = SessionData.from_file(session_path)
-
-        # Check if session has required fields
-        if not session.is_valid:
-            if not quiet:
-                console.print("[bold red]✗[/bold red] Session file is empty or invalid")
-                console.print(f"\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
-            raise typer.Exit(1)
 
         if not quiet:
             console.print("[dim]Session file loaded, testing API...[/dim]")
@@ -233,9 +211,7 @@ def status(
     async def _status() -> None:
         console.print(f"\n[bold blue]Eero Prometheus Exporter v{__version__}[/bold blue]\n")
 
-        session = SessionData.from_file(session_path)
-
-        if not session.is_valid:
+        if not session_path.exists():
             console.print("[yellow]Not authenticated.[/yellow]")
             console.print(f"\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
             raise typer.Exit(1)
@@ -298,15 +274,12 @@ def test(
     async def _test() -> None:
         console.print(f"\n[bold blue]Eero Prometheus Exporter v{__version__}[/bold blue]\n")
 
-        session = SessionData.from_file(session_path)
-
-        if not session.is_valid:
+        if not session_path.exists():
             console.print("[yellow]Not authenticated.[/yellow]")
             console.print(f"\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
             raise typer.Exit(1)
 
         collector = EeroCollector(
-            session=session,
             include_devices=True,
             include_profiles=True,
         )
@@ -399,10 +372,8 @@ def serve(
     if session_file:
         config.session_file = session_file
 
-    # Load session
-    session = SessionData.from_file(config.session_file)
-
-    if not session.is_valid:
+    # Check session file exists
+    if not config.session_file.exists():
         console.print("[bold red]Not authenticated.[/bold red]")
         console.print(f"\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
         raise typer.Exit(1)
@@ -415,7 +386,7 @@ def serve(
     ))
 
     # Run server
-    run_server(config, session)
+    run_server(config)
 
 
 @app.command()

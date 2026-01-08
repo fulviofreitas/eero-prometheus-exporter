@@ -12,7 +12,7 @@ from typing import Optional
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 
 from .collector import EeroCollector
-from .config import ExporterConfig, SessionData
+from .config import ExporterConfig
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -222,16 +222,14 @@ async def collection_loop(
     _LOGGER.info("Collection loop stopped")
 
 
-def run_server(config: ExporterConfig, session: SessionData) -> None:
+def run_server(config: ExporterConfig) -> None:
     """Run the metrics server.
 
     Args:
         config: Exporter configuration
-        session: Session data for authentication
     """
     # Create collector
     collector = EeroCollector(
-        session=session,
         include_devices=config.include_devices,
         include_profiles=config.include_profiles,
         timeout=config.timeout,
