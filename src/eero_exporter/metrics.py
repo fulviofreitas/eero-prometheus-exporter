@@ -269,122 +269,146 @@ EERO_NIGHTLIGHT_SCHEDULE_ENABLED = Gauge(
 # CLIENT DEVICE METRICS
 # =============================================================================
 
+# Common device labels for consistency:
+# - network_id: network identifier
+# - device_id: unique device identifier
+# - name: display name of device
+# - mac: MAC address
+# - manufacturer: device manufacturer (e.g., "Apple", "Samsung")
+# - device_type: device category (e.g., "computer", "phone", "tv")
+# - connection_type: "wired" or "wireless"
+# - source_eero: location of the eero the device is connected to
+
 DEVICE_CONNECTED = Gauge(
     f"{PREFIX}_device_connected",
     "Whether the device is connected (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name", "mac"],
+    labelnames=[
+        "network_id", "device_id", "name", "mac",
+        "manufacturer", "device_type", "connection_type", "source_eero",
+    ],
 )
 
 DEVICE_WIRELESS = Gauge(
     f"{PREFIX}_device_wireless",
     "Whether the device is wireless (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
 )
 
 DEVICE_BLOCKED = Gauge(
     f"{PREFIX}_device_blocked",
     "Whether the device is blocked (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name", "mac"],
+    labelnames=["network_id", "device_id", "name", "mac", "manufacturer"],
 )
 
 DEVICE_PAUSED = Gauge(
     f"{PREFIX}_device_paused",
     "Whether the device is paused (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
 )
 
 DEVICE_IS_GUEST = Gauge(
     f"{PREFIX}_device_is_guest",
     "Whether the device is on guest network (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer"],
 )
 
 DEVICE_SIGNAL_STRENGTH = Gauge(
     f"{PREFIX}_device_signal_strength_dbm",
     "Device signal strength in dBm",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=[
+        "network_id", "device_id", "name",
+        "manufacturer", "band", "source_eero",
+    ],
 )
 
 DEVICE_CONNECTION_SCORE = Gauge(
     f"{PREFIX}_device_connection_score",
     "Device connection quality score",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=[
+        "network_id", "device_id", "name",
+        "manufacturer", "connection_type", "source_eero",
+    ],
 )
 
 DEVICE_CONNECTION_SCORE_BARS = Gauge(
     f"{PREFIX}_device_connection_score_bars",
     "Device connection quality score in bars (0-5)",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=[
+        "network_id", "device_id", "name",
+        "manufacturer", "connection_type", "source_eero",
+    ],
 )
 
 # =============================================================================
 # DEVICE WIRELESS METRICS
 # =============================================================================
 
+# Wireless metrics include band label ("2.4GHz", "5GHz", "6GHz") for filtering
+
 DEVICE_FREQUENCY = Gauge(
     f"{PREFIX}_device_frequency_mhz",
     "Device WiFi frequency in MHz",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer", "band", "source_eero"],
 )
 
 DEVICE_CHANNEL = Gauge(
     f"{PREFIX}_device_channel",
     "Device WiFi channel number",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "band", "source_eero"],
 )
 
 DEVICE_RX_BITRATE = Gauge(
     f"{PREFIX}_device_rx_bitrate_mbps",
     "Device receive bitrate in Mbps",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer", "band", "source_eero"],
 )
 
 DEVICE_SIGNAL_AVG = Gauge(
     f"{PREFIX}_device_signal_strength_avg_dbm",
     "Device average signal strength in dBm",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer", "band", "source_eero"],
 )
 
 DEVICE_RX_MCS = Gauge(
     f"{PREFIX}_device_rx_mcs",
     "Device receive MCS index",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "band"],
 )
 
 DEVICE_RX_NSS = Gauge(
     f"{PREFIX}_device_rx_nss",
     "Device receive number of spatial streams",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "band"],
 )
 
 DEVICE_RX_BANDWIDTH = Gauge(
     f"{PREFIX}_device_rx_bandwidth_mhz",
     "Device receive bandwidth in MHz",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "band"],
 )
 
 DEVICE_TX_BITRATE = Gauge(
     f"{PREFIX}_device_tx_bitrate_mbps",
     "Device transmit bitrate in Mbps",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer", "band", "source_eero"],
 )
 
 DEVICE_TX_MCS = Gauge(
     f"{PREFIX}_device_tx_mcs",
     "Device transmit MCS index",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "band"],
 )
 
 DEVICE_TX_NSS = Gauge(
     f"{PREFIX}_device_tx_nss",
     "Device transmit number of spatial streams",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "band"],
 )
 
 DEVICE_TX_BANDWIDTH = Gauge(
     f"{PREFIX}_device_tx_bandwidth_mhz",
     "Device transmit bandwidth in MHz",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "band"],
 )
 
 # =============================================================================
@@ -394,31 +418,31 @@ DEVICE_TX_BANDWIDTH = Gauge(
 DEVICE_PRIORITIZED = Gauge(
     f"{PREFIX}_device_prioritized",
     "Whether the device is prioritized for bandwidth (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
 )
 
 DEVICE_PRIVATE = Gauge(
     f"{PREFIX}_device_private",
     "Whether the device is marked as private (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer"],
 )
 
 DEVICE_CONNECTED_TO_GATEWAY = Gauge(
     f"{PREFIX}_device_connected_to_gateway",
     "Whether the device is connected directly to gateway (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "connection_type"],
 )
 
 DEVICE_DOWNLOAD_BYTES = Counter(
     f"{PREFIX}_device_download_bytes_total",
     "Total bytes downloaded by device",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
 )
 
 DEVICE_UPLOAD_BYTES = Counter(
     f"{PREFIX}_device_upload_bytes_total",
     "Total bytes uploaded by device",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
 )
 
 # =============================================================================
@@ -604,13 +628,13 @@ ACTIVITY_CATEGORY_BYTES = Gauge(
 DEVICE_ACTIVITY_DOWNLOAD_BYTES = Gauge(
     f"{PREFIX}_device_activity_download_bytes",
     "Device activity download bytes (current period)",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
 )
 
 DEVICE_ACTIVITY_UPLOAD_BYTES = Gauge(
     f"{PREFIX}_device_activity_upload_bytes",
     "Device activity upload bytes (current period)",
-    labelnames=["network_id", "device_id", "name"],
+    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
 )
 
 # =============================================================================

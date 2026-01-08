@@ -168,6 +168,94 @@ def _parse_timestamp(timestamp_str: Optional[str]) -> Optional[float]:
         return None
 
 
+def _frequency_to_band(frequency: Optional[int]) -> str:
+    """Convert frequency in MHz to WiFi band label.
+    
+    Args:
+        frequency: Frequency in MHz (e.g., 2412, 5180, 6115)
+    
+    Returns:
+        Band label: "2.4GHz", "5GHz", "6GHz", or "unknown"
+    """
+    if not frequency:
+        return "unknown"
+    if 2400 <= frequency <= 2500:
+        return "2.4GHz"
+    if 5150 <= frequency <= 5925:
+        return "5GHz"
+    if 5925 <= frequency <= 7125:
+        return "6GHz"
+    return "unknown"
+
+
+def _normalize_manufacturer(manufacturer: Optional[str]) -> str:
+    """Normalize manufacturer name for consistent labeling.
+    
+    Args:
+        manufacturer: Raw manufacturer string from API
+    
+    Returns:
+        Normalized manufacturer name or "unknown"
+    """
+    if not manufacturer:
+        return "unknown"
+    # Truncate long manufacturer names and normalize
+    name = manufacturer.strip()[:50]
+    return name if name else "unknown"
+
+
+def _normalize_device_type(device_type: Optional[str]) -> str:
+    """Normalize device type for consistent labeling.
+    
+    Args:
+        device_type: Raw device type from API
+    
+    Returns:
+        Normalized device type or "unknown"
+    """
+    if not device_type:
+        return "unknown"
+    return device_type.strip().lower()[:30] or "unknown"
+
+
+def _get_connection_type(device: Dict[str, Any]) -> str:
+    """Determine connection type from device data.
+    
+    Args:
+        device: Device dictionary from API
+    
+    Returns:
+        "wired", "wireless", or "unknown"
+    """
+    wireless = device.get("wireless")
+    if wireless is True:
+        return "wireless"
+    if wireless is False:
+        return "wired"
+    # Check connection_type field as fallback
+    conn_type = device.get("connection_type", "")
+    if conn_type:
+        return conn_type.lower() if conn_type.lower() in ("wired", "wireless") else "unknown"
+    return "unknown"
+
+
+def _get_source_eero_location(device: Dict[str, Any]) -> str:
+    """Extract the location of the eero the device is connected to.
+    
+    Args:
+        device: Device dictionary from API
+    
+    Returns:
+        Location string of source eero or "unknown"
+    """
+    source = device.get("source", {})
+    if source and isinstance(source, dict):
+        location = source.get("location")
+        if location:
+            return str(location)[:50]
+    return "unknown"
+
+
 class EeroCollector:
     """Collector for eero metrics."""
 
@@ -544,79 +632,142 @@ class EeroCollector:
             if not device_id:
                 continue
 
+            # Extract enriched labels
+            manufacturer = _normalize_manufacturer(device.get("manufacturer"))
+            device_type = _normalize_device_type(device.get("device_type"))
+            connection_type = _get_connection_type(device)
+            source_eero = _get_source_eero_location(device)
+            
+            # Get frequency for band label
+            connectivity = device.get("connectivity", {})
+            frequency = connectivity.get("frequency") if connectivity else None
+            band = _frequency_to_band(frequency)
+
             DEVICE_INFO.labels(
                 network_id=network_id, device_id=device_id, mac=mac
             ).info(
                 {
                     "name": name,
-                    "manufacturer": device.get("manufacturer") or "unknown",
+                    "manufacturer": manufacturer,
                     "ip": device.get("ip") or "unknown",
-                    "device_type": device.get("device_type") or "unknown",
+                    "device_type": device_type,
                     "hostname": device.get("hostname") or "unknown",
+                    "connection_type": connection_type,
+                    "source_eero": source_eero,
                 }
             )
 
             connected = device.get("connected", False)
             DEVICE_CONNECTED.labels(
-                network_id=network_id, device_id=device_id, name=name, mac=mac
+                network_id=network_id,
+                device_id=device_id,
+                name=name,
+                mac=mac,
+                manufacturer=manufacturer,
+                device_type=device_type,
+                connection_type=connection_type,
+                source_eero=source_eero,
             ).set(1 if connected else 0)
 
             wireless = device.get("wireless", False)
             DEVICE_WIRELESS.labels(
-                network_id=network_id, device_id=device_id, name=name
+                network_id=network_id,
+                device_id=device_id,
+                name=name,
+                manufacturer=manufacturer,
+                device_type=device_type,
             ).set(1 if wireless else 0)
 
             blocked = device.get("blacklisted", False)
             DEVICE_BLOCKED.labels(
-                network_id=network_id, device_id=device_id, name=name, mac=mac
+                network_id=network_id,
+                device_id=device_id,
+                name=name,
+                mac=mac,
+                manufacturer=manufacturer,
             ).set(1 if blocked else 0)
 
             paused = device.get("paused", False)
             DEVICE_PAUSED.labels(
-                network_id=network_id, device_id=device_id, name=name
+                network_id=network_id,
+                device_id=device_id,
+                name=name,
+                manufacturer=manufacturer,
+                device_type=device_type,
             ).set(1 if paused else 0)
 
             is_guest = device.get("is_guest", False)
             DEVICE_IS_GUEST.labels(
-                network_id=network_id, device_id=device_id, name=name
+                network_id=network_id,
+                device_id=device_id,
+                name=name,
+                manufacturer=manufacturer,
             ).set(1 if is_guest else 0)
 
-            connectivity = device.get("connectivity", {})
             if connectivity:
                 signal = _parse_signal_strength(connectivity.get("signal"))
                 if signal is not None:
                     DEVICE_SIGNAL_STRENGTH.labels(
-                        network_id=network_id, device_id=device_id, name=name
+                        network_id=network_id,
+                        device_id=device_id,
+                        name=name,
+                        manufacturer=manufacturer,
+                        band=band,
+                        source_eero=source_eero,
                     ).set(signal)
 
                 signal_avg = _parse_signal_strength(connectivity.get("signal_avg"))
                 if signal_avg is not None:
                     DEVICE_SIGNAL_AVG.labels(
-                        network_id=network_id, device_id=device_id, name=name
+                        network_id=network_id,
+                        device_id=device_id,
+                        name=name,
+                        manufacturer=manufacturer,
+                        band=band,
+                        source_eero=source_eero,
                     ).set(signal_avg)
 
                 score = connectivity.get("score")
                 if score is not None:
                     DEVICE_CONNECTION_SCORE.labels(
-                        network_id=network_id, device_id=device_id, name=name
+                        network_id=network_id,
+                        device_id=device_id,
+                        name=name,
+                        manufacturer=manufacturer,
+                        connection_type=connection_type,
+                        source_eero=source_eero,
                     ).set(score)
 
                 score_bars = connectivity.get("score_bars")
                 if score_bars is not None:
                     DEVICE_CONNECTION_SCORE_BARS.labels(
-                        network_id=network_id, device_id=device_id, name=name
+                        network_id=network_id,
+                        device_id=device_id,
+                        name=name,
+                        manufacturer=manufacturer,
+                        connection_type=connection_type,
+                        source_eero=source_eero,
                     ).set(score_bars)
 
-                frequency = connectivity.get("frequency")
                 if frequency is not None:
                     DEVICE_FREQUENCY.labels(
-                        network_id=network_id, device_id=device_id, name=name
+                        network_id=network_id,
+                        device_id=device_id,
+                        name=name,
+                        manufacturer=manufacturer,
+                        band=band,
+                        source_eero=source_eero,
                     ).set(frequency)
 
                 rx_bitrate = _parse_bitrate(connectivity.get("rx_bitrate"))
                 if rx_bitrate is not None:
                     DEVICE_RX_BITRATE.labels(
-                        network_id=network_id, device_id=device_id, name=name
+                        network_id=network_id,
+                        device_id=device_id,
+                        name=name,
+                        manufacturer=manufacturer,
+                        band=band,
+                        source_eero=source_eero,
                     ).set(rx_bitrate)
 
                 rx_rate_info = connectivity.get("rx_rate_info", {})
@@ -624,26 +775,40 @@ class EeroCollector:
                     rx_mcs = rx_rate_info.get("mcs")
                     if rx_mcs is not None:
                         DEVICE_RX_MCS.labels(
-                            network_id=network_id, device_id=device_id, name=name
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            band=band,
                         ).set(rx_mcs)
 
                     rx_nss = rx_rate_info.get("nss")
                     if rx_nss is not None:
                         DEVICE_RX_NSS.labels(
-                            network_id=network_id, device_id=device_id, name=name
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            band=band,
                         ).set(rx_nss)
 
                     rx_bw = rx_rate_info.get("bandwidth")
                     if rx_bw is not None:
                         DEVICE_RX_BANDWIDTH.labels(
-                            network_id=network_id, device_id=device_id, name=name
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            band=band,
                         ).set(rx_bw)
 
                     if rx_bitrate is None:
                         rx_rate_bitrate = rx_rate_info.get("bitrate")
                         if rx_rate_bitrate is not None:
                             DEVICE_RX_BITRATE.labels(
-                                network_id=network_id, device_id=device_id, name=name
+                                network_id=network_id,
+                                device_id=device_id,
+                                name=name,
+                                manufacturer=manufacturer,
+                                band=band,
+                                source_eero=source_eero,
                             ).set(rx_rate_bitrate)
 
                 tx_rate_info = connectivity.get("tx_rate_info", {})
@@ -651,43 +816,68 @@ class EeroCollector:
                     tx_mcs = tx_rate_info.get("mcs")
                     if tx_mcs is not None:
                         DEVICE_TX_MCS.labels(
-                            network_id=network_id, device_id=device_id, name=name
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            band=band,
                         ).set(tx_mcs)
 
                     tx_nss = tx_rate_info.get("nss")
                     if tx_nss is not None:
                         DEVICE_TX_NSS.labels(
-                            network_id=network_id, device_id=device_id, name=name
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            band=band,
                         ).set(tx_nss)
 
                     tx_bw = tx_rate_info.get("bandwidth")
                     if tx_bw is not None:
                         DEVICE_TX_BANDWIDTH.labels(
-                            network_id=network_id, device_id=device_id, name=name
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            band=band,
                         ).set(tx_bw)
 
                     tx_bitrate = tx_rate_info.get("bitrate")
                     if tx_bitrate is not None:
                         DEVICE_TX_BITRATE.labels(
-                            network_id=network_id, device_id=device_id, name=name
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            manufacturer=manufacturer,
+                            band=band,
+                            source_eero=source_eero,
                         ).set(tx_bitrate)
 
             channel = device.get("channel")
             if channel is not None:
                 DEVICE_CHANNEL.labels(
-                    network_id=network_id, device_id=device_id, name=name
+                    network_id=network_id,
+                    device_id=device_id,
+                    name=name,
+                    band=band,
+                    source_eero=source_eero,
                 ).set(channel)
 
             prioritized = device.get("prioritized") or device.get("priority")
             if prioritized is not None:
                 DEVICE_PRIORITIZED.labels(
-                    network_id=network_id, device_id=device_id, name=name
+                    network_id=network_id,
+                    device_id=device_id,
+                    name=name,
+                    manufacturer=manufacturer,
+                    device_type=device_type,
                 ).set(1 if prioritized else 0)
 
             is_private = device.get("is_private")
             if is_private is not None:
                 DEVICE_PRIVATE.labels(
-                    network_id=network_id, device_id=device_id, name=name
+                    network_id=network_id,
+                    device_id=device_id,
+                    name=name,
+                    manufacturer=manufacturer,
                 ).set(1 if is_private else 0)
 
             source = device.get("source", {})
@@ -695,7 +885,10 @@ class EeroCollector:
                 source_is_gateway = source.get("is_gateway")
                 if source_is_gateway is not None:
                     DEVICE_CONNECTED_TO_GATEWAY.labels(
-                        network_id=network_id, device_id=device_id, name=name
+                        network_id=network_id,
+                        device_id=device_id,
+                        name=name,
+                        connection_type=connection_type,
                     ).set(1 if source_is_gateway else 0)
 
     async def _collect_profile_metrics(
@@ -970,18 +1163,30 @@ class EeroCollector:
                     or client_act.get("hostname")
                     or device_id
                 )
+                
+                # Extract additional labels from activity data
+                manufacturer = _normalize_manufacturer(client_act.get("manufacturer"))
+                device_type = _normalize_device_type(client_act.get("device_type"))
 
                 usage = client_act.get("usage", {})
                 if usage and isinstance(usage, dict):
                     dl = usage.get("download_bytes", 0)
                     if dl:
                         DEVICE_ACTIVITY_DOWNLOAD_BYTES.labels(
-                            network_id=network_id, device_id=device_id, name=name
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            manufacturer=manufacturer,
+                            device_type=device_type,
                         ).set(dl)
                     ul = usage.get("upload_bytes", 0)
                     if ul:
                         DEVICE_ACTIVITY_UPLOAD_BYTES.labels(
-                            network_id=network_id, device_id=device_id, name=name
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            manufacturer=manufacturer,
+                            device_type=device_type,
                         ).set(ul)
 
         except EeroAPIError as e:
