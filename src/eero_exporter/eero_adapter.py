@@ -1,6 +1,6 @@
 """Adapter to bridge eero-client library with the Prometheus exporter.
 
-This module provides a compatibility layer that wraps the official eero-client
+This module provides a compatibility layer that wraps the eero-client
 library, converting its Pydantic models to dictionaries for backward compatibility
 with the exporter's metrics collection logic.
 """
@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from eero import EeroClient as OfficialEeroClient
+from eero import EeroClient as BaseEeroClient
 from eero.exceptions import (
     EeroAPIException,
     EeroAuthenticationException,
@@ -72,7 +72,7 @@ class EeroClient:
     """Adapter wrapping eero-client for the Prometheus exporter.
 
     This class provides the same interface as the original embedded API client,
-    but delegates to the official eero-client library internally. Responses are
+    but delegates to the eero-client library internally. Responses are
     converted from Pydantic models to dictionaries for compatibility.
 
     The eero-client library handles authentication via:
@@ -103,7 +103,7 @@ class EeroClient:
         self._timeout = timeout
         self._cookie_file = cookie_file or str(DEFAULT_SESSION_FILE)
         self._use_keyring = use_keyring
-        self._client: Optional[OfficialEeroClient] = None
+        self._client: Optional[BaseEeroClient] = None
         self._preferred_network_id: Optional[str] = None
 
     @property
@@ -119,8 +119,8 @@ class EeroClient:
         cookie_path = Path(self._cookie_file)
         cookie_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Initialize the official client
-        self._client = OfficialEeroClient(
+        # Initialize the eero client
+        self._client = BaseEeroClient(
             cookie_file=self._cookie_file,
             use_keyring=self._use_keyring,
         )

@@ -32,7 +32,7 @@ This exporter gives you **real-time insights** into your network's performance, 
 | -------------------------- | ------------------------------------------------------------------------- |
 | 📊 **90+ Metrics**         | Network, eero hardware, devices, Ethernet ports, Thread, Eero Plus & more |
 | ⚡ **Async Architecture**  | Non-blocking I/O for efficient, lightweight collection                    |
-| 🔗 **Official API Client** | Powered by [eero-client](https://github.com/fulviofreitas/eero-client)    |
+| 🔗 **Async API Client**    | Powered by [eero-client](https://github.com/fulviofreitas/eero-client)    |
 | 🔐 **Secure Auth**         | Session-based authentication with secure local storage                    |
 | 🐳 **Docker Ready**        | Multi-stage build with minimal image footprint                            |
 | 🎨 **Beautiful CLI**       | Rich terminal output with colors and progress indicators                  |
@@ -594,7 +594,7 @@ ruff check src/
 
 ## 🔗 Dependencies
 
-This project uses the **[eero-client](https://github.com/fulviofreitas/eero-client)** library as its official API client for communicating with eero's cloud services. The eero-client provides:
+This project uses the **[eero-client](https://github.com/fulviofreitas/eero-client)** library for communicating with eero's cloud services. The eero-client provides:
 
 - 🚀 **Async-first** — Built on `aiohttp` for non-blocking operations
 - 📦 **Type-safe** — Pydantic models with full type hints
@@ -614,7 +614,7 @@ This project is a **complete revamp** inspired by and building upon the excellen
 
 This revamp modernizes the codebase with:
 
-- Official eero-client library integration
+- Async eero-client library integration
 - Full async/await architecture
 - Type hints throughout
 - Modern Python packaging (pyproject.toml)
