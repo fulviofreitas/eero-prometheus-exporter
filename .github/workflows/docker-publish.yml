@@ -50,6 +50,12 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=
             type=ref,event=pr
+          labels: |
+            org.opencontainers.image.title=Eero Prometheus Exporter
+            org.opencontainers.image.description=Export Prometheus metrics from your eero mesh WiFi network. Monitor connected devices, network health, speed tests, and more.
+          annotations: |
+            org.opencontainers.image.title=Eero Prometheus Exporter
+            org.opencontainers.image.description=Export Prometheus metrics from your eero mesh WiFi network. Monitor connected devices, network health, speed tests, and more.
 
       - name: 📦 Build and push Docker image
         id: push
@@ -60,13 +66,10 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: |
-            type=gha
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: |
-            type=gha,mode=max
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max,image-manifest=true
-          provenance: mode=max
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: min
           sbom: true
 
       - name: 📝 Generate artifact attestation
