@@ -46,7 +46,8 @@ def _model_to_dict(model: Any) -> Dict[str, Any]:
     if isinstance(model, dict):
         return model
     if hasattr(model, "model_dump"):
-        return model.model_dump()
+        # Use mode='json' to serialize enums to their values (not repr)
+        return model.model_dump(mode="json")
     if hasattr(model, "dict"):
         return model.dict()
     return {}
