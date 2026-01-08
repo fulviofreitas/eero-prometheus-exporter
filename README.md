@@ -28,15 +28,15 @@ This exporter gives you **real-time insights** into your network's performance, 
 
 ### What You Get
 
-| Feature                   | Description                                                                 |
-| ------------------------- | --------------------------------------------------------------------------- |
-| 📊 **50+ Metrics**        | Network status, speed tests, device connectivity, signal strength, and more |
-| ⚡ **Async Architecture** | Non-blocking I/O for efficient, lightweight collection                      |
-| 🔗 **Official API Client**| Powered by [eero-client](https://github.com/fulviofreitas/eero-client)      |
-| 🔐 **Secure Auth**        | Session-based authentication with secure local storage                      |
-| 🐳 **Docker Ready**       | Multi-stage build with minimal image footprint                              |
-| 🎨 **Beautiful CLI**      | Rich terminal output with colors and progress indicators                    |
-| 📈 **Grafana Compatible** | Perfect for building stunning dashboards                                    |
+| Feature                    | Description                                                                 |
+| -------------------------- | --------------------------------------------------------------------------- |
+| 📊 **50+ Metrics**         | Network status, speed tests, device connectivity, signal strength, and more |
+| ⚡ **Async Architecture**  | Non-blocking I/O for efficient, lightweight collection                      |
+| 🔗 **Official API Client** | Powered by [eero-client](https://github.com/fulviofreitas/eero-client)      |
+| 🔐 **Secure Auth**         | Session-based authentication with secure local storage                      |
+| 🐳 **Docker Ready**        | Multi-stage build with minimal image footprint                              |
+| 🎨 **Beautiful CLI**       | Rich terminal output with colors and progress indicators                    |
+| 📈 **Grafana Compatible**  | Perfect for building stunning dashboards                                    |
 
 ---
 
@@ -111,12 +111,17 @@ Your metrics are now live at **http://localhost:9118/metrics** 🚀
 
 ### Quick Start with Docker Compose
 
-**1. Authenticate locally first** (one-time setup):
+**1. Authenticate locally** (one-time setup):
 
 ```bash
+# Clone and install
+git clone https://github.com/fulviofreitas/eero-prometheus-exporter.git
+cd eero-prometheus-exporter
 pip install -e .
+
+# Login with your eero account
 eero-exporter login your-email@example.com
-# Enter your verification code
+# Enter verification code when prompted
 ```
 
 **2. Copy your session file:**
@@ -125,16 +130,27 @@ eero-exporter login your-email@example.com
 cp ~/.config/eero-exporter/session.json ./session.json
 ```
 
-**3. Launch:**
+**3. Launch the exporter:**
 
 ```bash
 docker-compose up -d
 ```
 
-**4. Want the full monitoring stack?** Add Prometheus and Grafana:
+**4. Add the full monitoring stack** (optional):
 
 ```bash
 docker-compose --profile monitoring up -d
+```
+
+### Using Docker Run
+
+```bash
+# Run the exporter
+docker run -d \
+  -p 9118:9118 \
+  -v ./session.json:/home/eero/.config/eero-exporter/session.json:ro \
+  --name eero-exporter \
+  ghcr.io/fulviofreitas/eero-prometheus-exporter:latest
 ```
 
 ### Building from Source
@@ -218,7 +234,7 @@ Save as `setup-eero-exporter.sh`, make executable (`chmod +x setup-eero-exporter
 On your local machine:
 
 ```bash
-# Login and get session
+# Login with your eero account
 eero-exporter login your-email@example.com
 
 # Validate it works
@@ -485,13 +501,13 @@ avg_over_time(eero_exporter_scrape_success[1h])
 
 ## 🔒 Security
 
-| Aspect               | Implementation                                              |
-| -------------------- | ----------------------------------------------------------- |
-| **Token Storage**    | Restricted file permissions (0600)                          |
-| **Default Location** | `~/.config/eero-exporter/session.json`                      |
+| Aspect               | Implementation                                                                   |
+| -------------------- | -------------------------------------------------------------------------------- |
+| **Token Storage**    | Restricted file permissions (0600)                                               |
+| **Default Location** | `~/.config/eero-exporter/session.json`                                           |
 | **Auth Library**     | Uses [eero-client](https://github.com/fulviofreitas/eero-client) for secure auth |
-| **Logging**          | Tokens are never logged in plain text                       |
-| **API Connection**   | HTTPS only (TLS 1.2+)                                       |
+| **Logging**          | Tokens are never logged in plain text                                            |
+| **API Connection**   | HTTPS only (TLS 1.2+)                                                            |
 
 ---
 
@@ -621,4 +637,3 @@ Standing on the shoulders of giants 💪
 _If this helps you, consider giving it a ⭐_
 
 </div>
-

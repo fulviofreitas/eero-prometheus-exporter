@@ -9,7 +9,7 @@ services:
     ports:
       - "9118:9118"
     volumes:
-      # Mount session file for authentication
+      # Mount session file for authentication (read-only)
       - ./session.json:/home/eero/.config/eero-exporter/session.json:ro
       # Optional: mount config file
       # - ./config.yml:/home/eero/.config/eero-exporter/config.yml:ro
