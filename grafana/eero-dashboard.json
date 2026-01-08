@@ -2854,7 +2854,7 @@
       "pluginVersion": "12.3.1",
       "targets": [
         {
-          "expr": "topk(10, avg_over_time(eero_device_signal_strength_dbm{network_id=~\"$network_id\"}[$__rate_interval]))",
+          "expr": "topk(10, avg_over_time(eero_device_signal_strength_dbm{network_id=~\"$network_id\"}[$__rate_interval]) != 0)",
           "legendFormat": "{{name}}",
           "refId": "A"
         }
