@@ -60,6 +60,9 @@ services:
       - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
+      # Provisioning: auto-configure datasources and dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/eero-dashboard.json:/var/lib/grafana/dashboards/eero-dashboard.json:ro
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false

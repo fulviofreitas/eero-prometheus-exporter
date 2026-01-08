@@ -4692,10 +4692,7 @@
   "templating": {
     "list": [
       {
-        "current": {
-          "text": "eero-prometheus",
-          "value": "cf9j4219n7r40a"
-        },
+        "current": {},
         "includeAll": false,
         "label": "Data Source",
         "name": "datasource",

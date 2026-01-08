@@ -184,6 +184,8 @@ echo "Setting up eero-exporter directory structure..."
 mkdir -p "$BASE_DIR"
 mkdir -p "$BASE_DIR/prometheus_data"
 mkdir -p "$BASE_DIR/grafana_data"
+mkdir -p "$BASE_DIR/grafana/provisioning/datasources"
+mkdir -p "$BASE_DIR/grafana/provisioning/dashboards"
 
 # Fix Prometheus permissions (runs as nobody:nobody = 65534:65534)
 chown -R 65534:65534 "$BASE_DIR/prometheus_data"
@@ -217,6 +219,38 @@ EOF
     echo "Created prometheus.yml"
 fi
 
+# Create Grafana datasource provisioning (auto-configures Prometheus)
+cat > "$BASE_DIR/grafana/provisioning/datasources/prometheus.yml" << 'EOF'
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: POST
+EOF
+echo "Created Grafana datasource provisioning"
+
+# Create Grafana dashboard provisioning
+cat > "$BASE_DIR/grafana/provisioning/dashboards/dashboards.yml" << 'EOF'
+apiVersion: 1
+providers:
+  - name: "Eero Dashboards"
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+EOF
+echo "Created Grafana dashboard provisioning"
+
 echo ""
 echo "Done! Directory structure:"
 ls -la "$BASE_DIR"
@@ -224,7 +258,8 @@ echo ""
 echo "Next steps:"
 echo "1. Login locally: eero-exporter login your-email@example.com"
 echo "2. Copy session: scp ~/.config/eero-exporter/session.json user@nas:$BASE_DIR/"
-echo "3. Deploy the stack in Portainer"
+echo "3. Download dashboard: curl -o $BASE_DIR/grafana/eero-dashboard.json https://raw.githubusercontent.com/fulviofreitas/eero-prometheus-exporter/master/grafana/eero-dashboard.json"
+echo "4. Deploy the stack in Portainer"
 ```
 
 Save as `setup-eero-exporter.sh`, make executable (`chmod +x setup-eero-exporter.sh`), and run with `sudo`.
@@ -244,9 +279,19 @@ eero-exporter validate
 scp ~/.config/eero-exporter/session.json user@your-nas:/volume1/docker/eero/
 ```
 
-#### 3. Example Portainer Stack
+#### 3. Download the Dashboard
 
-Use this compose file with absolute paths for server deployment:
+Download the pre-built Grafana dashboard to your server:
+
+```bash
+# On the server, or via SSH
+curl -o /volume1/docker/eero/grafana/eero-dashboard.json \
+  https://raw.githubusercontent.com/fulviofreitas/eero-prometheus-exporter/master/grafana/eero-dashboard.json
+```
+
+#### 4. Example Portainer Stack
+
+Use this compose file with absolute paths for server deployment. **Grafana will auto-configure the Prometheus datasource and import the dashboard on startup!**
 
 ```yaml
 version: "3.8"
@@ -293,9 +338,19 @@ services:
       - "3000:3000"
     volumes:
       - /volume1/docker/eero/grafana_data:/var/lib/grafana
+      # Auto-provisioning: datasource + dashboard
+      - /volume1/docker/eero/grafana/provisioning:/etc/grafana/provisioning:ro
+      - /volume1/docker/eero/grafana/eero-dashboard.json:/var/lib/grafana/dashboards/eero-dashboard.json:ro
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 ```
+
+> 💡 **Auto-provisioning**: When Grafana starts, it automatically:
+>
+> 1. Creates the Prometheus datasource pointing to `http://prometheus:9090`
+> 2. Imports the Eero dashboard from the mounted JSON file
+>
+> No manual configuration needed—just deploy and open Grafana!
 
 #### Common Issues
 
@@ -305,6 +360,7 @@ services:
 | Grafana permission denied | Run `chown -R 472:472 /volume1/docker/eero/grafana_data`        |
 | Session invalid errors    | Re-run login locally and copy new `session.json` to server      |
 | Health check failing      | Use `/ready` endpoint (always 200) instead of `/health`         |
+| Dashboard not showing     | Verify `eero-dashboard.json` exists in the grafana folder       |
 
 </details>
 
