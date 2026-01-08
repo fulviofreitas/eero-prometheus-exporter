@@ -47,7 +47,6 @@ from .metrics import (  # Device metrics; Device wireless metrics; Device additi
     EERO_CONNECTED_CLIENTS,
     EERO_CONNECTED_WIRED_CLIENTS,
     EERO_CONNECTED_WIRELESS_CLIENTS,
-    EERO_CPU_USAGE,
     EERO_HEARTBEAT_OK,
     EERO_INFO,
     EERO_IS_GATEWAY,
@@ -527,12 +526,6 @@ class EeroCollector:
                 EERO_MEMORY_USAGE.labels(
                     network_id=network_id, eero_id=eero_id, location=location
                 ).set(memory_usage)
-
-            cpu_usage = eero.get("cpu_usage")
-            if cpu_usage is not None:
-                EERO_CPU_USAGE.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
-                ).set(cpu_usage)
 
             temperature = eero.get("temperature")
             if temperature is not None:

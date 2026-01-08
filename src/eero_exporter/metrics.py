@@ -167,12 +167,6 @@ EERO_MEMORY_USAGE = Gauge(
     labelnames=["network_id", "eero_id", "location"],
 )
 
-EERO_CPU_USAGE = Gauge(
-    f"{PREFIX}_eero_cpu_usage_percent",
-    "Eero CPU usage percentage",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
 EERO_TEMPERATURE = Gauge(
     f"{PREFIX}_eero_temperature_celsius",
     "Eero temperature in Celsius",

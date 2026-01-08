@@ -12,9 +12,9 @@
 ---
 
 _A modern, async Prometheus exporter for your eero mesh WiFi network._  
-_Monitor network health, device connectivity, speed tests, and 50+ metrics with ease._
+_Monitor network health, device connectivity, speed tests, and 90+ metrics with ease._
 
-[Get Started](#-quick-start) · [View Metrics](#-available-metrics) · [Docker Setup](#-docker) · [Troubleshooting](#-troubleshooting)
+[Get Started](#-quick-start) · [View Metrics](METRICS.md) · [Docker Setup](#-docker) · [Troubleshooting](#-troubleshooting)
 
 </div>
 
@@ -28,15 +28,16 @@ This exporter gives you **real-time insights** into your network's performance, 
 
 ### What You Get
 
-| Feature                    | Description                                                                 |
-| -------------------------- | --------------------------------------------------------------------------- |
-| 📊 **50+ Metrics**         | Network status, speed tests, device connectivity, signal strength, and more |
-| ⚡ **Async Architecture**  | Non-blocking I/O for efficient, lightweight collection                      |
-| 🔗 **Official API Client** | Powered by [eero-client](https://github.com/fulviofreitas/eero-client)      |
-| 🔐 **Secure Auth**         | Session-based authentication with secure local storage                      |
-| 🐳 **Docker Ready**        | Multi-stage build with minimal image footprint                              |
-| 🎨 **Beautiful CLI**       | Rich terminal output with colors and progress indicators                    |
-| 📈 **Grafana Compatible**  | Perfect for building stunning dashboards                                    |
+| Feature                    | Description                                                               |
+| -------------------------- | ------------------------------------------------------------------------- |
+| 📊 **90+ Metrics**         | Network, eero hardware, devices, Ethernet ports, Thread, Eero Plus & more |
+| ⚡ **Async Architecture**  | Non-blocking I/O for efficient, lightweight collection                    |
+| 🔗 **Official API Client** | Powered by [eero-client](https://github.com/fulviofreitas/eero-client)    |
+| 🔐 **Secure Auth**         | Session-based authentication with secure local storage                    |
+| 🐳 **Docker Ready**        | Multi-stage build with minimal image footprint                            |
+| 🎨 **Beautiful CLI**       | Rich terminal output with colors and progress indicators                  |
+| 📈 **Grafana Compatible**  | Perfect for building stunning dashboards                                  |
+| 💎 **Eero Plus Support**   | Activity tracking, backup network, and premium feature metrics            |
 
 ---
 
@@ -416,78 +417,27 @@ Options:
 
 ## 📊 Available Metrics
 
-<details>
-<summary><strong>🌐 Network Metrics</strong></summary>
+The exporter provides **90+ metrics** across 15 categories:
 
-| Metric                       | Type  | Description                          |
-| ---------------------------- | ----- | ------------------------------------ |
-| `eero_network_status`        | Gauge | Network status (1=online, 0=offline) |
-| `eero_network_clients_count` | Gauge | Total connected clients              |
-| `eero_network_eeros_count`   | Gauge | Number of eero devices in mesh       |
+| Category            | Metrics | Description                              |
+| ------------------- | ------- | ---------------------------------------- |
+| 🌐 Network          | 4       | Status, client count, eero count         |
+| 🚦 Network Features | 11      | WPA3, SQM, UPnP, Thread, IPv6, etc.      |
+| ⚡ Speed Test       | 3       | Upload, download, timestamp              |
+| 💚 Health           | 1       | Internet and network health              |
+| 📶 Eero Device      | 12      | Status, mesh quality, uptime, LED        |
+| 🖥️ Eero Hardware    | 6       | Memory, temperature, LED, reboot         |
+| 🔌 Ethernet Ports   | 6       | Port speed, carrier, WAN status          |
+| 🌙 Nightlight       | 4       | Eero Beacon nightlight settings          |
+| 📱 Client Device    | 11      | Connected, blocked, paused, prioritized  |
+| 📡 Device Wireless  | 14      | Signal, bitrate, MCS, bandwidth, channel |
+| 👥 Profiles         | 2       | Pause status, device count               |
+| ⚙️ SQM              | 2       | Upload/download bandwidth limits         |
+| 🧵 Thread           | 2       | IoT device count, border routers         |
+| 💎 Eero Plus        | 11      | Backup network, activity tracking        |
+| 🔧 Exporter         | 4       | Scrape duration, success, errors         |
 
-</details>
-
-<details>
-<summary><strong>⚡ Speed Test Metrics</strong></summary>
-
-| Metric                              | Type  | Description               |
-| ----------------------------------- | ----- | ------------------------- |
-| `eero_speed_upload_mbps`            | Gauge | Upload speed in Mbps      |
-| `eero_speed_download_mbps`          | Gauge | Download speed in Mbps    |
-| `eero_speed_test_timestamp_seconds` | Gauge | Last speed test timestamp |
-
-</details>
-
-<details>
-<summary><strong>💚 Health Metrics</strong></summary>
-
-| Metric               | Type  | Description                               |
-| -------------------- | ----- | ----------------------------------------- |
-| `eero_health_status` | Gauge | Health by source (internet, eero_network) |
-
-</details>
-
-<details>
-<summary><strong>📶 Eero Device Metrics</strong></summary>
-
-| Metric                              | Type  | Description                         |
-| ----------------------------------- | ----- | ----------------------------------- |
-| `eero_eero_status`                  | Gauge | Device status (1=online, 0=offline) |
-| `eero_eero_is_gateway`              | Gauge | Whether device is the gateway       |
-| `eero_eero_connected_clients_count` | Gauge | Connected clients per eero          |
-| `eero_eero_mesh_quality_bars`       | Gauge | Mesh quality (0-5 bars)             |
-| `eero_eero_uptime_seconds`          | Gauge | Device uptime in seconds            |
-| `eero_eero_led_on`                  | Gauge | LED status (1=on, 0=off)            |
-| `eero_eero_update_available`        | Gauge | Firmware update available           |
-| `eero_eero_wired`                   | Gauge | Wired backhaul connection           |
-
-</details>
-
-<details>
-<summary><strong>📱 Client Device Metrics</strong></summary>
-
-| Metric                            | Type  | Description              |
-| --------------------------------- | ----- | ------------------------ |
-| `eero_device_connected`           | Gauge | Connection status        |
-| `eero_device_wireless`            | Gauge | Wireless vs wired        |
-| `eero_device_blocked`             | Gauge | Block status             |
-| `eero_device_paused`              | Gauge | Pause status             |
-| `eero_device_signal_strength_dbm` | Gauge | Signal strength in dBm   |
-| `eero_device_connection_score`    | Gauge | Connection quality score |
-
-</details>
-
-<details>
-<summary><strong>🔧 Exporter Metrics</strong></summary>
-
-| Metric                                  | Type    | Description              |
-| --------------------------------------- | ------- | ------------------------ |
-| `eero_exporter_scrape_duration_seconds` | Gauge   | Collection duration      |
-| `eero_exporter_scrape_success`          | Gauge   | Last scrape success      |
-| `eero_exporter_scrape_errors_total`     | Counter | Total scrape errors      |
-| `eero_exporter_api_requests_total`      | Counter | API requests by endpoint |
-
-</details>
+**👉 [View Full Metrics Reference →](METRICS.md)**
 
 ---
 
@@ -534,24 +484,20 @@ log_level: INFO
 ## 📈 Example Queries
 
 ```promql
-# Is the network online?
+# Network online?
 eero_network_status == 1
-
-# Total devices across all networks
-sum(eero_network_clients_count)
 
 # Average mesh quality
 avg(eero_eero_mesh_quality_bars)
 
-# Find eeros needing updates
-eero_eero_update_available == 1
-
-# Devices with weak signal (below -70 dBm)
+# Devices with weak signal
 eero_device_signal_strength_dbm < -70
 
-# Scrape success rate over the last hour
-avg_over_time(eero_exporter_scrape_success[1h])
+# Eeros needing updates
+eero_eero_update_available == 1
 ```
+
+**👉 [More example queries in METRICS.md →](METRICS.md#-example-promql-queries)**
 
 ---
 
