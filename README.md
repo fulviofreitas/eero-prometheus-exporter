@@ -119,11 +119,14 @@ eero-exporter login your-email@example.com
 # Enter your verification code
 ```
 
-**2. Copy your session file:**
+**2. Copy your session files:**
 
 ```bash
 cp ~/.config/eero-exporter/session.json ./session.json
+cp ~/.config/eero-exporter/cookies.json ./cookies.json
 ```
+
+> **Note:** Both files are required. `cookies.json` contains the actual authentication tokens managed by the eero-client library.
 
 **3. Launch:**
 
@@ -143,6 +146,7 @@ docker-compose --profile monitoring up -d
 docker build -t eero-exporter .
 docker run -p 9118:9118 \
   -v ./session.json:/home/eero/.config/eero-exporter/session.json:ro \
+  -v ./cookies.json:/home/eero/.config/eero-exporter/cookies.json:ro \
   eero-exporter
 ```
 
@@ -175,10 +179,15 @@ chown -R 65534:65534 "$BASE_DIR/prometheus_data"
 # Fix Grafana permissions (runs as grafana = 472:472)
 chown -R 472:472 "$BASE_DIR/grafana_data"
 
-# Create empty session.json (to be populated after login)
+# Create empty session files (to be populated after login)
 if [ ! -f "$BASE_DIR/session.json" ]; then
     echo '{}' > "$BASE_DIR/session.json"
     echo "Created empty session.json"
+fi
+
+if [ ! -f "$BASE_DIR/cookies.json" ]; then
+    echo '{}' > "$BASE_DIR/cookies.json"
+    echo "Created empty cookies.json"
 fi
 
 # Create prometheus.yml config
@@ -207,7 +216,9 @@ ls -la "$BASE_DIR"
 echo ""
 echo "Next steps:"
 echo "1. Login locally: eero-exporter login your-email@example.com"
-echo "2. Copy session: scp ~/.config/eero-exporter/session.json user@nas:$BASE_DIR/"
+echo "2. Copy session files:"
+echo "   scp ~/.config/eero-exporter/session.json user@nas:$BASE_DIR/"
+echo "   scp ~/.config/eero-exporter/cookies.json user@nas:$BASE_DIR/"
 echo "3. Deploy the stack in Portainer"
 ```
 
@@ -224,8 +235,9 @@ eero-exporter login your-email@example.com
 # Validate it works
 eero-exporter validate
 
-# Copy to server
+# Copy both session files to server
 scp ~/.config/eero-exporter/session.json user@your-nas:/volume1/docker/eero/
+scp ~/.config/eero-exporter/cookies.json user@your-nas:/volume1/docker/eero/
 ```
 
 #### 3. Example Portainer Stack
@@ -244,6 +256,7 @@ services:
       - "9118:9118"
     volumes:
       - /volume1/docker/eero/session.json:/home/eero/.config/eero-exporter/session.json:ro
+      - /volume1/docker/eero/cookies.json:/home/eero/.config/eero-exporter/cookies.json:ro
     healthcheck:
       test:
         [
@@ -283,12 +296,13 @@ services:
 
 #### Common Issues
 
-| Issue                     | Solution                                                        |
-| ------------------------- | --------------------------------------------------------------- |
-| Prometheus won't start    | Run `chown -R 65534:65534 /volume1/docker/eero/prometheus_data` |
-| Grafana permission denied | Run `chown -R 472:472 /volume1/docker/eero/grafana_data`        |
-| Session invalid errors    | Re-run login locally and copy new `session.json` to server      |
-| Health check failing      | Use `/ready` endpoint (always 200) instead of `/health`         |
+| Issue                     | Solution                                                                     |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| Prometheus won't start    | Run `chown -R 65534:65534 /volume1/docker/eero/prometheus_data`              |
+| Grafana permission denied | Run `chown -R 472:472 /volume1/docker/eero/grafana_data`                     |
+| Session invalid errors    | Re-run login locally and copy both `session.json` and `cookies.json` to server |
+| Health check failing      | Use `/ready` endpoint (always 200) instead of `/health`                      |
+| Missing cookies.json      | Both session files must be mounted for authentication to work               |
 
 </details>
 
@@ -485,12 +499,13 @@ avg_over_time(eero_exporter_scrape_success[1h])
 
 ## 🔒 Security
 
-| Aspect               | Implementation                         |
-| -------------------- | -------------------------------------- |
-| **Token Storage**    | Restricted file permissions (0600)     |
-| **Default Location** | `~/.config/eero-exporter/session.json` |
-| **Logging**          | Tokens are never logged in plain text  |
-| **API Connection**   | HTTPS only                             |
+| Aspect               | Implementation                                              |
+| -------------------- | ----------------------------------------------------------- |
+| **Token Storage**    | Restricted file permissions (0600)                          |
+| **Session Files**    | `~/.config/eero-exporter/session.json` + `cookies.json`     |
+| **Auth Library**     | Uses [eero-client](https://github.com/fulviofreitas/eero-client) for secure auth |
+| **Logging**          | Tokens are never logged in plain text                       |
+| **API Connection**   | HTTPS only (TLS 1.2+)                                       |
 
 ---
 
