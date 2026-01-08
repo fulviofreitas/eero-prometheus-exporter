@@ -280,3 +280,128 @@ class EeroClient:
         network = await self._client.get_network(network_id)
         network_dict = _model_to_dict(network)
         return network_dict.get("speed", {})
+
+    # =========================================================================
+    # Transfer Stats
+    # =========================================================================
+
+    async def get_transfer_stats(
+        self, network_id: str, device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Get transfer statistics for network or device."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.get_transfer_stats(network_id, device_id)
+
+    # =========================================================================
+    # SQM Settings
+    # =========================================================================
+
+    async def get_sqm_settings(self, network_id: str) -> Dict[str, Any]:
+        """Get SQM (Smart Queue Management) settings."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.get_sqm_settings(network_id)
+
+    # =========================================================================
+    # Security Settings
+    # =========================================================================
+
+    async def get_security_settings(self, network_id: str) -> Dict[str, Any]:
+        """Get security settings for the network."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.get_security_settings(network_id)
+
+    # =========================================================================
+    # Premium Features (Eero Plus)
+    # =========================================================================
+
+    async def get_premium_status(self, network_id: str) -> Dict[str, Any]:
+        """Get Eero Plus/Secure subscription status."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.get_premium_status(network_id)
+
+    async def is_premium(self, network_id: str) -> bool:
+        """Check if the network has an active Eero Plus subscription."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.is_premium(network_id)
+
+    # =========================================================================
+    # Activity (Eero Plus)
+    # =========================================================================
+
+    async def get_activity(self, network_id: str) -> Dict[str, Any]:
+        """Get network activity summary (Eero Plus feature)."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.get_activity(network_id)
+
+    async def get_activity_clients(self, network_id: str) -> List[Dict[str, Any]]:
+        """Get per-client activity data (Eero Plus feature)."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.get_activity_clients(network_id)
+
+    async def get_activity_categories(self, network_id: str) -> List[Dict[str, Any]]:
+        """Get activity data grouped by category (Eero Plus feature)."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.get_activity_categories(network_id)
+
+    # =========================================================================
+    # Backup Network (Eero Plus)
+    # =========================================================================
+
+    async def get_backup_network(self, network_id: str) -> Dict[str, Any]:
+        """Get backup network configuration (Eero Plus feature)."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.get_backup_network(network_id)
+
+    async def get_backup_status(self, network_id: str) -> Dict[str, Any]:
+        """Get current backup network status (Eero Plus feature)."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.get_backup_status(network_id)
+
+    async def is_using_backup(self, network_id: str) -> bool:
+        """Check if the network is currently using backup connection."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.is_using_backup(network_id)
+
+    # =========================================================================
+    # Thread
+    # =========================================================================
+
+    async def get_thread(self, network_id: str) -> Dict[str, Any]:
+        """Get Thread network information."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.get_thread(network_id)
+
+    # =========================================================================
+    # Diagnostics
+    # =========================================================================
+
+    async def get_diagnostics(self, network_id: str) -> Dict[str, Any]:
+        """Get network diagnostics information."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        return await self._client.get_diagnostics(network_id)

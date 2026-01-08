@@ -27,6 +27,12 @@ DEVICE_INFO = Info(
     labelnames=["network_id", "device_id", "mac"],
 )
 
+ETHERNET_PORT_INFO = Info(
+    f"{PREFIX}_ethernet_port",
+    "Information about an Ethernet port",
+    labelnames=["network_id", "eero_id", "port_number"],
+)
+
 # =============================================================================
 # NETWORK METRICS
 # =============================================================================
@@ -152,6 +158,114 @@ EERO_WIRED = Gauge(
 )
 
 # =============================================================================
+# EERO HARDWARE METRICS
+# =============================================================================
+
+EERO_MEMORY_USAGE = Gauge(
+    f"{PREFIX}_eero_memory_usage_percent",
+    "Eero memory usage percentage",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+EERO_CPU_USAGE = Gauge(
+    f"{PREFIX}_eero_cpu_usage_percent",
+    "Eero CPU usage percentage",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+EERO_TEMPERATURE = Gauge(
+    f"{PREFIX}_eero_temperature_celsius",
+    "Eero temperature in Celsius",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+EERO_LED_BRIGHTNESS = Gauge(
+    f"{PREFIX}_eero_led_brightness",
+    "Eero LED brightness level (0-100)",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+EERO_LAST_REBOOT = Gauge(
+    f"{PREFIX}_eero_last_reboot_timestamp_seconds",
+    "Timestamp of last eero reboot (Unix epoch)",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+EERO_PROVIDES_WIFI = Gauge(
+    f"{PREFIX}_eero_provides_wifi",
+    "Whether the eero provides WiFi (1=yes, 0=no)",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+EERO_BACKUP_CONNECTION = Gauge(
+    f"{PREFIX}_eero_backup_connection",
+    "Whether the eero is using backup connection (1=yes, 0=no)",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+# =============================================================================
+# EERO ETHERNET PORT METRICS
+# =============================================================================
+
+ETHERNET_PORT_CARRIER = Gauge(
+    f"{PREFIX}_ethernet_port_carrier",
+    "Whether the Ethernet port has link (1=yes, 0=no)",
+    labelnames=["network_id", "eero_id", "location", "port_number", "port_name"],
+)
+
+ETHERNET_PORT_SPEED = Gauge(
+    f"{PREFIX}_ethernet_port_speed_mbps",
+    "Ethernet port negotiated speed in Mbps",
+    labelnames=["network_id", "eero_id", "location", "port_number", "port_name"],
+)
+
+ETHERNET_PORT_IS_WAN = Gauge(
+    f"{PREFIX}_ethernet_port_is_wan",
+    "Whether the Ethernet port is used for WAN (1=yes, 0=no)",
+    labelnames=["network_id", "eero_id", "location", "port_number", "port_name"],
+)
+
+ETHERNET_PORT_POWER_SAVING = Gauge(
+    f"{PREFIX}_ethernet_port_power_saving",
+    "Whether power saving is enabled on the port (1=yes, 0=no)",
+    labelnames=["network_id", "eero_id", "location", "port_number", "port_name"],
+)
+
+EERO_WIRED_INTERNET = Gauge(
+    f"{PREFIX}_eero_wired_internet",
+    "Whether the eero has wired internet connection (1=yes, 0=no)",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+# =============================================================================
+# EERO NIGHTLIGHT METRICS (Eero Beacon)
+# =============================================================================
+
+EERO_NIGHTLIGHT_ENABLED = Gauge(
+    f"{PREFIX}_eero_nightlight_enabled",
+    "Whether nightlight is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+EERO_NIGHTLIGHT_BRIGHTNESS = Gauge(
+    f"{PREFIX}_eero_nightlight_brightness",
+    "Nightlight brightness level (0-100)",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+EERO_NIGHTLIGHT_AMBIENT_ENABLED = Gauge(
+    f"{PREFIX}_eero_nightlight_ambient_enabled",
+    "Whether ambient light sensing is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+EERO_NIGHTLIGHT_SCHEDULE_ENABLED = Gauge(
+    f"{PREFIX}_eero_nightlight_schedule_enabled",
+    "Whether nightlight schedule is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+# =============================================================================
 # CLIENT DEVICE METRICS
 # =============================================================================
 
@@ -204,6 +318,110 @@ DEVICE_CONNECTION_SCORE_BARS = Gauge(
 )
 
 # =============================================================================
+# DEVICE WIRELESS METRICS
+# =============================================================================
+
+DEVICE_FREQUENCY = Gauge(
+    f"{PREFIX}_device_frequency_mhz",
+    "Device WiFi frequency in MHz",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_CHANNEL = Gauge(
+    f"{PREFIX}_device_channel",
+    "Device WiFi channel number",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_RX_BITRATE = Gauge(
+    f"{PREFIX}_device_rx_bitrate_mbps",
+    "Device receive bitrate in Mbps",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_SIGNAL_AVG = Gauge(
+    f"{PREFIX}_device_signal_strength_avg_dbm",
+    "Device average signal strength in dBm",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_RX_MCS = Gauge(
+    f"{PREFIX}_device_rx_mcs",
+    "Device receive MCS index",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_RX_NSS = Gauge(
+    f"{PREFIX}_device_rx_nss",
+    "Device receive number of spatial streams",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_RX_BANDWIDTH = Gauge(
+    f"{PREFIX}_device_rx_bandwidth_mhz",
+    "Device receive bandwidth in MHz",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_TX_BITRATE = Gauge(
+    f"{PREFIX}_device_tx_bitrate_mbps",
+    "Device transmit bitrate in Mbps",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_TX_MCS = Gauge(
+    f"{PREFIX}_device_tx_mcs",
+    "Device transmit MCS index",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_TX_NSS = Gauge(
+    f"{PREFIX}_device_tx_nss",
+    "Device transmit number of spatial streams",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_TX_BANDWIDTH = Gauge(
+    f"{PREFIX}_device_tx_bandwidth_mhz",
+    "Device transmit bandwidth in MHz",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+# =============================================================================
+# DEVICE ADDITIONAL METRICS
+# =============================================================================
+
+DEVICE_PRIORITIZED = Gauge(
+    f"{PREFIX}_device_prioritized",
+    "Whether the device is prioritized for bandwidth (1=yes, 0=no)",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_PRIVATE = Gauge(
+    f"{PREFIX}_device_private",
+    "Whether the device is marked as private (1=yes, 0=no)",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_CONNECTED_TO_GATEWAY = Gauge(
+    f"{PREFIX}_device_connected_to_gateway",
+    "Whether the device is connected directly to gateway (1=yes, 0=no)",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_DOWNLOAD_BYTES = Counter(
+    f"{PREFIX}_device_download_bytes_total",
+    "Total bytes downloaded by device",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_UPLOAD_BYTES = Counter(
+    f"{PREFIX}_device_upload_bytes_total",
+    "Total bytes uploaded by device",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+# =============================================================================
 # PROFILE METRICS
 # =============================================================================
 
@@ -217,6 +435,198 @@ PROFILE_DEVICES_COUNT = Gauge(
     f"{PREFIX}_profile_devices_count",
     "Number of devices in the profile",
     labelnames=["network_id", "profile_id", "name"],
+)
+
+# =============================================================================
+# NETWORK FEATURE FLAGS
+# =============================================================================
+
+NETWORK_WPA3_ENABLED = Gauge(
+    f"{PREFIX}_network_wpa3_enabled",
+    "Whether WPA3 is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_BAND_STEERING_ENABLED = Gauge(
+    f"{PREFIX}_network_band_steering_enabled",
+    "Whether band steering is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_SQM_ENABLED = Gauge(
+    f"{PREFIX}_network_sqm_enabled",
+    "Whether Smart Queue Management is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_UPNP_ENABLED = Gauge(
+    f"{PREFIX}_network_upnp_enabled",
+    "Whether UPnP is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_THREAD_ENABLED = Gauge(
+    f"{PREFIX}_network_thread_enabled",
+    "Whether Thread is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_IPV6_ENABLED = Gauge(
+    f"{PREFIX}_network_ipv6_enabled",
+    "Whether IPv6 is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_DNS_CACHING_ENABLED = Gauge(
+    f"{PREFIX}_network_dns_caching_enabled",
+    "Whether DNS caching is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_POWER_SAVING_ENABLED = Gauge(
+    f"{PREFIX}_network_power_saving_enabled",
+    "Whether power saving is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_GUEST_ENABLED = Gauge(
+    f"{PREFIX}_network_guest_enabled",
+    "Whether guest network is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_PREMIUM_ENABLED = Gauge(
+    f"{PREFIX}_network_premium_enabled",
+    "Whether Eero Plus/Secure subscription is active (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_BACKUP_INTERNET_ENABLED = Gauge(
+    f"{PREFIX}_network_backup_internet_enabled",
+    "Whether backup internet is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+# =============================================================================
+# NETWORK TRANSFER METRICS
+# =============================================================================
+
+NETWORK_DOWNLOAD_BYTES = Counter(
+    f"{PREFIX}_network_download_bytes_total",
+    "Total bytes downloaded on the network",
+    labelnames=["network_id"],
+)
+
+NETWORK_UPLOAD_BYTES = Counter(
+    f"{PREFIX}_network_upload_bytes_total",
+    "Total bytes uploaded on the network",
+    labelnames=["network_id"],
+)
+
+# =============================================================================
+# SQM (SMART QUEUE MANAGEMENT) METRICS
+# =============================================================================
+
+SQM_UPLOAD_BANDWIDTH = Gauge(
+    f"{PREFIX}_sqm_upload_bandwidth_mbps",
+    "SQM upload bandwidth limit in Mbps",
+    labelnames=["network_id"],
+)
+
+SQM_DOWNLOAD_BANDWIDTH = Gauge(
+    f"{PREFIX}_sqm_download_bandwidth_mbps",
+    "SQM download bandwidth limit in Mbps",
+    labelnames=["network_id"],
+)
+
+# =============================================================================
+# BACKUP NETWORK METRICS (Eero Plus)
+# =============================================================================
+
+BACKUP_ENABLED = Gauge(
+    f"{PREFIX}_backup_enabled",
+    "Whether backup network is enabled (1=yes, 0=no)",
+    labelnames=["network_id"],
+)
+
+BACKUP_ACTIVE = Gauge(
+    f"{PREFIX}_backup_active",
+    "Whether backup network is currently active (1=yes, 0=no)",
+    labelnames=["network_id"],
+)
+
+BACKUP_CONNECTED = Gauge(
+    f"{PREFIX}_backup_connected",
+    "Whether backup connection is established (1=yes, 0=no)",
+    labelnames=["network_id"],
+)
+
+BACKUP_DATA_USED = Counter(
+    f"{PREFIX}_backup_data_used_bytes_total",
+    "Total bytes used on backup connection",
+    labelnames=["network_id"],
+)
+
+BACKUP_SIGNAL_STRENGTH = Gauge(
+    f"{PREFIX}_backup_signal_strength",
+    "Backup connection signal strength",
+    labelnames=["network_id"],
+)
+
+# =============================================================================
+# ACTIVITY METRICS (Eero Plus)
+# =============================================================================
+
+ACTIVITY_DOWNLOAD_BYTES = Gauge(
+    f"{PREFIX}_activity_download_bytes",
+    "Network activity download bytes (current period)",
+    labelnames=["network_id"],
+)
+
+ACTIVITY_UPLOAD_BYTES = Gauge(
+    f"{PREFIX}_activity_upload_bytes",
+    "Network activity upload bytes (current period)",
+    labelnames=["network_id"],
+)
+
+ACTIVITY_ACTIVE_CLIENTS = Gauge(
+    f"{PREFIX}_activity_active_clients",
+    "Number of active clients (Eero Plus)",
+    labelnames=["network_id"],
+)
+
+ACTIVITY_CATEGORY_BYTES = Gauge(
+    f"{PREFIX}_activity_category_bytes",
+    "Activity bytes by category",
+    labelnames=["network_id", "category"],
+)
+
+DEVICE_ACTIVITY_DOWNLOAD_BYTES = Gauge(
+    f"{PREFIX}_device_activity_download_bytes",
+    "Device activity download bytes (current period)",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+DEVICE_ACTIVITY_UPLOAD_BYTES = Gauge(
+    f"{PREFIX}_device_activity_upload_bytes",
+    "Device activity upload bytes (current period)",
+    labelnames=["network_id", "device_id", "name"],
+)
+
+# =============================================================================
+# THREAD METRICS
+# =============================================================================
+
+THREAD_DEVICE_COUNT = Gauge(
+    f"{PREFIX}_thread_device_count",
+    "Number of Thread devices on the network",
+    labelnames=["network_id"],
+)
+
+THREAD_BORDER_ROUTER = Gauge(
+    f"{PREFIX}_thread_border_router",
+    "Number of Thread border routers",
+    labelnames=["network_id"],
 )
 
 # =============================================================================
