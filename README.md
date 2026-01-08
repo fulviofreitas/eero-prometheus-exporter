@@ -32,6 +32,7 @@ This exporter gives you **real-time insights** into your network's performance, 
 | ------------------------- | --------------------------------------------------------------------------- |
 | 📊 **50+ Metrics**        | Network status, speed tests, device connectivity, signal strength, and more |
 | ⚡ **Async Architecture** | Non-blocking I/O for efficient, lightweight collection                      |
+| 🔗 **Official API Client**| Powered by [eero-client](https://github.com/fulviofreitas/eero-client)      |
 | 🔐 **Secure Auth**        | Session-based authentication with secure local storage                      |
 | 🐳 **Docker Ready**       | Multi-stage build with minimal image footprint                              |
 | 🎨 **Beautiful CLI**      | Rich terminal output with colors and progress indicators                    |
@@ -572,16 +573,29 @@ ruff check src/
 
 ---
 
+## 🔗 Dependencies
+
+This project uses the **[eero-client](https://github.com/fulviofreitas/eero-client)** library as its official API client for communicating with eero's cloud services. The eero-client provides:
+
+- 🚀 **Async-first** — Built on `aiohttp` for non-blocking operations
+- 📦 **Type-safe** — Pydantic models with full type hints
+- 🔒 **Secure** — System keyring integration for credential storage
+
+---
+
 ## 🙏 Acknowledgments & Credits
 
 This project is a **complete revamp** inspired by and building upon the excellent work of:
 
-- **[brmurphy/eero-exporter](https://github.com/brmurphy/eero-exporter)** — The original eero Prometheus exporter that started it all. Huge thanks to [@brmurphy](https://github.com/brmurphy) for pioneering this concept and the [343max/eero-client](https://github.com/343max/eero-client) library integration.
+- **[fulviofreitas/eero-client](https://github.com/fulviofreitas/eero-client)** — The modern, async Python client for the eero API that powers this exporter. Built on the foundation laid by [@343max](https://github.com/343max/eero-client).
+
+- **[brmurphy/eero-exporter](https://github.com/brmurphy/eero-exporter)** — The original eero Prometheus exporter that started it all. Huge thanks to [@brmurphy](https://github.com/brmurphy) for pioneering this concept.
 
 - **[acaranta/docker-eero-prometheus-exporter](https://github.com/acaranta/docker-eero-prometheus-exporter)** — Docker containerization approach that made deployment a breeze. Thanks to [@acaranta](https://github.com/acaranta) for the container-first thinking.
 
 This revamp modernizes the codebase with:
 
+- Official eero-client library integration
 - Full async/await architecture
 - Type hints throughout
 - Modern Python packaging (pyproject.toml)
@@ -606,3 +620,4 @@ Standing on the shoulders of giants 💪
 _If this helps you, consider giving it a ⭐_
 
 </div>
+

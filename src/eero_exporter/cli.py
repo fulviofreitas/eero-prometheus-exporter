@@ -14,7 +14,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from . import __version__
-from .api import EeroAPIError, EeroAuthError, EeroClient
+from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
 from .collector import EeroCollector
 from .config import DEFAULT_CONFIG_FILE, DEFAULT_SESSION_FILE, ExporterConfig, SessionData
 from .server import run_server
@@ -91,7 +91,6 @@ def login(
             task = progress.add_task("Verifying code...", total=None)
 
             async with EeroClient(user_token=user_token) as client:
-                client._user_token = user_token
                 try:
                     session_data = await client.verify(code)
                     progress.remove_task(task)
@@ -426,5 +425,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 

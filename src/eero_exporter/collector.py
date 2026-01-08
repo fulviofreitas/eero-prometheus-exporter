@@ -5,7 +5,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from .api import EeroAPIError, EeroAuthError, EeroClient
+from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
 from .config import SessionData
 from .metrics import (
     DEVICE_BLOCKED,
@@ -565,3 +565,4 @@ class EeroCollector:
                 profile_id=profile_id,
                 name=name,
             ).set(len(devices))
+
