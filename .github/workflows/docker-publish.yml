@@ -69,7 +69,7 @@ jobs:
           annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: min
+          provenance: mode=min
           sbom: true
 
       - name: 📝 Generate artifact attestation
