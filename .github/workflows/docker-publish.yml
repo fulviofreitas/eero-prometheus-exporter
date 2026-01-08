@@ -50,14 +50,6 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=
             type=ref,event=pr
-          labels: |
-            org.opencontainers.image.title=Eero Prometheus Exporter
-            org.opencontainers.image.description=Export Prometheus metrics from your eero mesh WiFi network. Monitor connected devices, network health, speed tests, and more.
-          annotations: |
-            manifest:org.opencontainers.image.title=Eero Prometheus Exporter
-            manifest:org.opencontainers.image.description=Export Prometheus metrics from your eero mesh WiFi network. Monitor connected devices, network health, speed tests, and more.
-            manifest-descriptor:org.opencontainers.image.title=Eero Prometheus Exporter
-            manifest-descriptor:org.opencontainers.image.description=Export Prometheus metrics from your eero mesh WiFi network. Monitor connected devices, network health, speed tests, and more.
 
       - name: 📦 Build and push Docker image
         id: push
@@ -68,7 +60,6 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: mode=min
@@ -81,18 +72,6 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
-
-      - name: 🔗 Link package to repository
-        if: github.event_name != 'pull_request'
-        run: |
-          PACKAGE_NAME=$(echo "${{ env.IMAGE_NAME }}" | cut -d'/' -f2)
-          curl -L -X PATCH \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/user/packages/container/${PACKAGE_NAME}" \
-            -d '{"repository_id":${{ github.repository_id }}}'
-        continue-on-error: true
 
       - name: 📊 Output image details
         run: |

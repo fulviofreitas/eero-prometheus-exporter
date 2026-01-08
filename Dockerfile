@@ -20,16 +20,11 @@ RUN python -m build --wheel
 # Final stage
 FROM python:3.12-slim
 
-# OCI Image Labels
-# https://github.com/opencontainers/image-spec/blob/main/annotations.md
-LABEL org.opencontainers.image.title="Eero Prometheus Exporter" \
+# OCI Image Labels - GitHub Container Registry supported labels
+# https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#labelling-container-images
+LABEL org.opencontainers.image.source="https://github.com/fulviofreitas/eero-prometheus-exporter" \
       org.opencontainers.image.description="Export Prometheus metrics from your eero mesh WiFi network. Monitor connected devices, network health, speed tests, and more." \
-      org.opencontainers.image.version="1.0.0" \
-      org.opencontainers.image.source="https://github.com/fulviofreitas/eero-prometheus-exporter" \
-      org.opencontainers.image.url="https://github.com/fulviofreitas/eero-prometheus-exporter" \
-      org.opencontainers.image.documentation="https://github.com/fulviofreitas/eero-prometheus-exporter#readme" \
-      org.opencontainers.image.vendor="@fulviofreitas" \
-      org.opencontainers.image.authors="@fulviofreitas"
+      org.opencontainers.image.licenses="Apache-2.0"
 
 WORKDIR /app
 
