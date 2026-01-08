@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Eero Prometheus Exporter
 # Multi-stage build for minimal image size
 
@@ -5,10 +6,11 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Install build dependencies
-RUN pip install --no-cache-dir build
+# Install build dependencies with cache mount
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install build
 
-# Copy source code
+# Copy only files needed for build
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 
@@ -28,16 +30,18 @@ WORKDIR /app
 # Create non-root user
 RUN groupadd -r eero && useradd -r -g eero eero
 
-# Install git (required for pip to install eero-client from GitHub)
-# Then install the wheel and clean up
+# Install dependencies with cache mounts for speed
+# Git is required for pip to install eero-client from GitHub
 COPY --from=builder /app/dist/*.whl ./
-RUN apt-get update && \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    --mount=type=cache,target=/root/.cache/pip \
+    apt-get update && \
     apt-get install -y --no-install-recommends git && \
-    pip install --no-cache-dir *.whl && \
+    pip install *.whl && \
     rm *.whl && \
     apt-get purge -y git && \
-    apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get autoremove -y
 
 # Create config directory with proper permissions
 RUN mkdir -p /home/eero/.config/eero-exporter && \
@@ -57,6 +61,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Default command
 ENTRYPOINT ["eero-exporter"]
 CMD ["serve", "--host", "0.0.0.0", "--port", "9118"]
-
-
-
