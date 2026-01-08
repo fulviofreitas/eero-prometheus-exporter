@@ -28,9 +28,16 @@ WORKDIR /app
 # Create non-root user
 RUN groupadd -r eero && useradd -r -g eero eero
 
-# Install the wheel from builder stage
+# Install git (required for pip to install eero-client from GitHub)
+# Then install the wheel and clean up
 COPY --from=builder /app/dist/*.whl ./
-RUN pip install --no-cache-dir *.whl && rm *.whl
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    pip install --no-cache-dir *.whl && \
+    rm *.whl && \
+    apt-get purge -y git && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create config directory with proper permissions
 RUN mkdir -p /home/eero/.config/eero-exporter && \
@@ -50,5 +57,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Default command
 ENTRYPOINT ["eero-exporter"]
 CMD ["serve", "--host", "0.0.0.0", "--port", "9118"]
+
 
 
