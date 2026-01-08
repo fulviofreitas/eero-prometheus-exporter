@@ -6,10 +6,19 @@ with the exporter's metrics collection logic.
 """
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from eero import EeroClient as OfficialEeroClient
-from eero.exceptions import EeroAPIError, EeroAuthError
+from eero.exceptions import (
+    EeroAPIException,
+    EeroAuthenticationException,
+    EeroException,
+)
+
+# Re-export exceptions with legacy names for backward compatibility
+EeroAPIError = EeroAPIException
+EeroAuthError = EeroAuthenticationException
 
 __all__ = [
     "EeroClient",
@@ -18,6 +27,9 @@ __all__ = [
 ]
 
 _LOGGER = logging.getLogger(__name__)
+
+# Default cookie file path for Docker/headless environments
+DEFAULT_COOKIE_FILE = Path.home() / ".config" / "eero-exporter" / "cookies.json"
 
 
 def _model_to_dict(model: Any) -> Dict[str, Any]:
@@ -37,7 +49,7 @@ def _model_to_dict(model: Any) -> Dict[str, Any]:
         return model.model_dump()
     if hasattr(model, "dict"):
         return model.dict()
-    return dict(model) if hasattr(model, "__iter__") else {}
+    return {}
 
 
 def _models_to_dicts(models: List[Any]) -> List[Dict[str, Any]]:
@@ -60,6 +72,12 @@ class EeroClient:
     This class provides the same interface as the original embedded API client,
     but delegates to the official eero-client library internally. Responses are
     converted from Pydantic models to dictionaries for compatibility.
+
+    The eero-client library handles authentication via:
+    - System keyring (default, for desktop use)
+    - Cookie file (for Docker/headless environments)
+
+    For Docker deployments, use cookie_file parameter to persist credentials.
     """
 
     def __init__(
@@ -67,31 +85,42 @@ class EeroClient:
         session_id: Optional[str] = None,
         user_token: Optional[str] = None,
         timeout: int = 30,
+        cookie_file: Optional[str] = None,
+        use_keyring: bool = False,
     ) -> None:
         """Initialize the eero client adapter.
 
         Args:
-            session_id: The session ID for authenticated requests
-            user_token: The user token (used during login flow)
-            timeout: Request timeout in seconds
+            session_id: Ignored (kept for backward compatibility)
+            user_token: Ignored (kept for backward compatibility)
+            timeout: Request timeout in seconds (currently unused)
+            cookie_file: Path to cookie file for credential storage
+            use_keyring: Whether to use system keyring (default: False for Docker)
         """
-        self._session_id = session_id
-        self._user_token = user_token
+        # Note: session_id and user_token are ignored - eero-client manages auth internally
         self._timeout = timeout
+        self._cookie_file = cookie_file or str(DEFAULT_COOKIE_FILE)
+        self._use_keyring = use_keyring
         self._client: Optional[OfficialEeroClient] = None
         self._preferred_network_id: Optional[str] = None
 
     @property
     def is_authenticated(self) -> bool:
         """Check if the client is authenticated."""
-        return bool(self._session_id)
+        if self._client:
+            return self._client.is_authenticated
+        return False
 
     async def __aenter__(self) -> "EeroClient":
         """Enter async context manager."""
-        # Initialize the official client with session credentials
+        # Ensure cookie directory exists
+        cookie_path = Path(self._cookie_file)
+        cookie_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Initialize the official client
         self._client = OfficialEeroClient(
-            session_id=self._session_id,
-            user_token=self._user_token,
+            cookie_file=self._cookie_file,
+            use_keyring=self._use_keyring,
         )
         await self._client.__aenter__()
         return self
@@ -112,14 +141,17 @@ class EeroClient:
             identifier: Email address or phone number
 
         Returns:
-            User token for verification step
+            A placeholder token (actual auth is managed by eero-client)
         """
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        user_token = await self._client.login(identifier)
-        self._user_token = user_token
-        return user_token
+        success = await self._client.login(identifier)
+        if not success:
+            raise EeroAuthError("Login request failed")
+
+        # Return a placeholder - actual token management is internal to eero-client
+        return "pending_verification"
 
     async def verify(self, code: str) -> Dict[str, Any]:
         """Verify login with the code sent to the user.
@@ -128,27 +160,33 @@ class EeroClient:
             code: Verification code from email/SMS
 
         Returns:
-            Session data including session_id and network info
+            Session data (placeholder for compatibility)
         """
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result = await self._client.verify(code)
+        success = await self._client.verify(code)
+        if not success:
+            raise EeroAuthError("Verification failed")
 
-        # Convert result to dictionary format expected by exporter
-        if hasattr(result, "model_dump"):
-            session_data = result.model_dump()
-        else:
-            session_data = {
-                "session_id": getattr(result, "session_id", self._user_token),
-                "user_token": self._user_token,
-                "preferred_network_id": getattr(result, "preferred_network_id", None),
-            }
+        # Get preferred network ID
+        try:
+            networks = await self._client.get_networks()
+            if networks:
+                network = networks[0]
+                if hasattr(network, "url"):
+                    url = str(network.url)
+                    parts = url.rstrip("/").split("/")
+                    if parts:
+                        self._preferred_network_id = parts[-1]
+        except Exception:
+            pass
 
-        self._session_id = session_data.get("session_id")
-        self._preferred_network_id = session_data.get("preferred_network_id")
-
-        return session_data
+        return {
+            "session_id": "managed_by_eero_client",
+            "user_token": "managed_by_eero_client",
+            "preferred_network_id": self._preferred_network_id,
+        }
 
     # =========================================================================
     # Account & Networks
@@ -173,7 +211,7 @@ class EeroClient:
         # Set preferred network if not set
         if not self._preferred_network_id and result:
             network_url = result[0].get("url", "")
-            parts = network_url.rstrip("/").split("/")
+            parts = str(network_url).rstrip("/").split("/")
             if parts:
                 self._preferred_network_id = parts[-1]
 
@@ -228,9 +266,15 @@ class EeroClient:
     # =========================================================================
 
     async def get_speed_test(self, network_id: str) -> Optional[Dict[str, Any]]:
-        """Get the latest speed test results."""
+        """Get the latest speed test results.
+
+        Note: eero-client uses run_speed_test() to trigger new tests.
+        This method gets the last known speed data from network info.
+        """
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        speed = await self._client.get_speed_test(network_id)
-        return _model_to_dict(speed) if speed else None
+        # Get speed data from network info
+        network = await self._client.get_network(network_id)
+        network_dict = _model_to_dict(network)
+        return network_dict.get("speed", {})

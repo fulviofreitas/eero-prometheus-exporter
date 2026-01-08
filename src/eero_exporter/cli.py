@@ -61,36 +61,37 @@ def login(
     async def _login() -> None:
         console.print(f"\n[bold blue]Eero Prometheus Exporter v{__version__}[/bold blue]\n")
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Sending verification code...", total=None)
+        # Use a single client context for the entire login flow
+        # (eero-client manages cookies internally)
+        async with EeroClient() as client:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task("Sending verification code...", total=None)
 
-            async with EeroClient() as client:
                 try:
-                    user_token = await client.login(identifier)
+                    await client.login(identifier)
                     progress.remove_task(task)
                 except EeroAuthError as e:
                     progress.remove_task(task)
                     console.print(f"[bold red]Login failed:[/bold red] {e}")
                     raise typer.Exit(1)
 
-        console.print("[green]✓[/green] Verification code sent!")
-        console.print(f"\nCheck your {'email' if '@' in identifier else 'phone'} for the code.\n")
+            console.print("[green]✓[/green] Verification code sent!")
+            console.print(f"\nCheck your {'email' if '@' in identifier else 'phone'} for the code.\n")
 
-        # Get verification code
-        code = typer.prompt("Enter verification code")
+            # Get verification code
+            code = typer.prompt("Enter verification code")
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Verifying code...", total=None)
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task("Verifying code...", total=None)
 
-            async with EeroClient(user_token=user_token) as client:
                 try:
                     session_data = await client.verify(code)
                     progress.remove_task(task)
@@ -99,12 +100,11 @@ def login(
                     console.print(f"[bold red]Verification failed:[/bold red] {e}")
                     raise typer.Exit(1)
 
-        # Save session
+        # Save session marker (actual auth is in cookies.json managed by eero-client)
         session = SessionData(
-            user_token=session_data.get("user_token"),
-            session_id=session_data.get("session_id"),
+            user_token="managed_by_eero_client",
+            session_id="managed_by_eero_client",
             preferred_network_id=session_data.get("preferred_network_id"),
-            session_expiry=session_data.get("session_expiry"),
         )
         session.save(session_path)
 
@@ -129,6 +129,12 @@ def logout(
 
     session = SessionData.from_file(session_path)
     session.clear(session_path)
+
+    # Also clear the eero-client cookie file
+    cookie_file = session_path.parent / "cookies.json"
+    if cookie_file.exists():
+        cookie_file.unlink()
+        console.print("[dim]Cookie file removed.[/dim]")
 
     console.print("[green]✓[/green] Session cleared.")
 
@@ -181,7 +187,7 @@ def validate(
             console.print("[dim]Session file loaded, testing API...[/dim]")
 
         # Test API connectivity
-        async with EeroClient(session_id=session.session_id) as client:
+        async with EeroClient() as client:
             try:
                 networks = await client.get_networks()
                 
@@ -243,7 +249,7 @@ def status(
         ) as progress:
             task = progress.add_task("Fetching network info...", total=None)
 
-            async with EeroClient(session_id=session.session_id) as client:
+            async with EeroClient() as client:
                 try:
                     networks = await client.get_networks()
                     progress.remove_task(task)
@@ -265,7 +271,7 @@ def status(
             name = network.get("name", "Unknown")
             status = network.get("status", "unknown")
             url = network.get("url", "")
-            network_id = url.rstrip("/").split("/")[-1] if url else "unknown"
+            network_id = str(url).rstrip("/").split("/")[-1] if url else "unknown"
 
             status_color = "green" if status in ("connected", "online") else "red"
             table.add_row(name, f"[{status_color}]{status}[/{status_color}]", network_id)
@@ -425,6 +431,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-

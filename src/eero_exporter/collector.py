@@ -48,11 +48,12 @@ from .metrics import (
 _LOGGER = logging.getLogger(__name__)
 
 
-def _extract_id_from_url(url: str) -> str:
+def _extract_id_from_url(url: Any) -> str:
     """Extract ID from an API URL."""
     if not url:
         return ""
-    parts = url.rstrip("/").split("/")
+    url_str = str(url)
+    parts = url_str.rstrip("/").split("/")
     return parts[-1] if parts else ""
 
 
@@ -112,11 +113,7 @@ class EeroCollector:
             if not self._session.is_valid:
                 raise EeroAuthError("No valid session. Please authenticate first.")
 
-            async with EeroClient(
-                session_id=self._session.session_id,
-                user_token=self._session.user_token,
-                timeout=self._timeout,
-            ) as client:
+            async with EeroClient(timeout=self._timeout) as client:
                 # Get networks
                 networks = await client.get_networks()
                 EXPORTER_API_REQUESTS.labels(
