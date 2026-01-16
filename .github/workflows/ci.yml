@@ -1,0 +1,234 @@
+# ============================================================================
+# 🧪 Continuous Integration Pipeline
+# ============================================================================
+# Comprehensive CI that runs all checks: linting, tests, and type checking.
+# This is the single source of truth for code quality before release.
+#
+# Chain: CI → Release → Docker
+# ============================================================================
+
+name: 🧪 CI Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+  # Triggered when eero-client releases a new version
+  repository_dispatch:
+    types: [eero-client-release]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ============================================================================
+  # 📝 Commit Lint
+  # ============================================================================
+  commitlint:
+    name: 📝 Commit Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📦 Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 🔧 Install commitlint
+        run: npm install -g @commitlint/cli @commitlint/config-conventional
+
+      - name: 🔍 Validate commits
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx commitlint \
+              --from ${{ github.event.pull_request.base.sha }} \
+              --to ${{ github.event.pull_request.head.sha }} \
+              --verbose
+          else
+            npx commitlint --last --verbose
+          fi
+
+  # ============================================================================
+  # 🧹 Lint & Type Check
+  # ============================================================================
+  lint:
+    name: 🧹 Lint & Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: 'pyproject.toml'
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: 🧹 Run Ruff linter
+        run: ruff check src/
+
+      - name: 🔍 Run Ruff formatter check
+        run: ruff format --check src/
+
+      - name: 🔎 Run MyPy type checker
+        run: mypy src/eero_exporter/ --ignore-missing-imports
+
+  # ============================================================================
+  # 🧪 Tests
+  # ============================================================================
+  test:
+    name: 🧪 Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: 'pyproject.toml'
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: 🧪 Run tests with coverage
+        run: pytest --cov=eero_exporter --cov-report=xml --cov-report=term-missing -v
+
+      - name: 📊 Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: matrix.python-version == '3.12'
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 30
+
+  # ============================================================================
+  # 🐳 Docker Build Test
+  # ============================================================================
+  docker-build:
+    name: 🐳 Docker Build Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🐳 Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: eero-prometheus-exporter:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================================
+  # ✅ CI Success Gate
+  # ============================================================================
+  ci-success:
+    name: ✅ CI Success
+    runs-on: ubuntu-latest
+    needs: [commitlint, lint, test, docker-build]
+    if: always()
+
+    steps:
+      - name: 🔍 Check all jobs passed
+        run: |
+          COMMITLINT="${{ needs.commitlint.result }}"
+          LINT="${{ needs.lint.result }}"
+          TEST="${{ needs.test.result }}"
+          DOCKER="${{ needs.docker-build.result }}"
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🧪 CI Pipeline Summary
+
+          | Job | Status |
+          |:----|:-------|
+          | 📝 Commit Lint | ${COMMITLINT} |
+          | 🧹 Lint & Type Check | ${LINT} |
+          | 🧪 Tests | ${TEST} |
+          | 🐳 Docker Build | ${DOCKER} |
+
+          EOF
+
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << EOF
+
+          ### 📦 Triggered by eero-client Release
+
+          | Property | Value |
+          |:---------|:------|
+          | 🏷️ Version | \`${{ github.event.client_payload.version || 'unknown' }}\` |
+          | 🔖 Tag | \`${{ github.event.client_payload.tag || 'unknown' }}\` |
+
+          EOF
+          fi
+
+          # All must pass
+          if [[ "$COMMITLINT" == "success" && "$LINT" == "success" && "$TEST" == "success" && "$DOCKER" == "success" ]]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+
+          > [!NOTE]
+          > ### ✅ All Checks Passed
+          > CI pipeline completed successfully. Ready for release!
+
+          ---
+
+          ```
+          📝 Commit Lint  ──┐
+          🧹 Lint         ──┼──→  ✅ CI Success  ──→  🚀 Release  ──→  🐳 Docker
+          🧪 Tests        ──┤
+          🐳 Docker Build ──┘
+          ```
+
+          EOF
+            exit 0
+          else
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+
+          > [!CAUTION]
+          > ### ❌ Some Checks Failed
+          > Review the failed jobs above and fix any issues before merging.
+
+          EOF
+            exit 1
+          fi
