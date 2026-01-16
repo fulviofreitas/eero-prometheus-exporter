@@ -277,8 +277,14 @@ DEVICE_CONNECTED = Gauge(
     f"{PREFIX}_device_connected",
     "Whether the device is connected (1=yes, 0=no)",
     labelnames=[
-        "network_id", "device_id", "name", "mac",
-        "manufacturer", "device_type", "connection_type", "source_eero",
+        "network_id",
+        "device_id",
+        "name",
+        "mac",
+        "manufacturer",
+        "device_type",
+        "connection_type",
+        "source_eero",
     ],
 )
 
@@ -310,8 +316,12 @@ DEVICE_SIGNAL_STRENGTH = Gauge(
     f"{PREFIX}_device_signal_strength_dbm",
     "Device signal strength in dBm",
     labelnames=[
-        "network_id", "device_id", "name",
-        "manufacturer", "band", "source_eero",
+        "network_id",
+        "device_id",
+        "name",
+        "manufacturer",
+        "band",
+        "source_eero",
     ],
 )
 
@@ -319,8 +329,12 @@ DEVICE_CONNECTION_SCORE = Gauge(
     f"{PREFIX}_device_connection_score",
     "Device connection quality score",
     labelnames=[
-        "network_id", "device_id", "name",
-        "manufacturer", "connection_type", "source_eero",
+        "network_id",
+        "device_id",
+        "name",
+        "manufacturer",
+        "connection_type",
+        "source_eero",
     ],
 )
 
@@ -328,8 +342,12 @@ DEVICE_CONNECTION_SCORE_BARS = Gauge(
     f"{PREFIX}_device_connection_score_bars",
     "Device connection quality score in bars (0-5)",
     labelnames=[
-        "network_id", "device_id", "name",
-        "manufacturer", "connection_type", "source_eero",
+        "network_id",
+        "device_id",
+        "name",
+        "manufacturer",
+        "connection_type",
+        "source_eero",
     ],
 )
 
@@ -676,11 +694,9 @@ EXPORTER_API_REQUESTS = Counter(
 
 def reset_all_metrics() -> None:
     """Reset all metrics to their default state.
-    
+
     This is useful when re-scraping to avoid stale data.
     """
     # Note: Info metrics cannot be reset, they are idempotent
     # Gauges need to be cleared per label set, which we handle in the collector
     pass
-
-

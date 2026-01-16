@@ -7,13 +7,12 @@ with the exporter's metrics collection logic.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from eero import EeroClient as BaseEeroClient
 from eero.exceptions import (
     EeroAPIException,
     EeroAuthenticationException,
-    EeroException,
 )
 
 # Re-export exceptions with legacy names for backward compatibility
@@ -33,7 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 DEFAULT_SESSION_FILE = Path.home() / ".config" / "eero-exporter" / "session.json"
 
 
-def _model_to_dict(model: Any) -> Dict[str, Any]:
+def _model_to_dict(model: Any) -> dict[str, Any]:
     """Convert a Pydantic model to a dictionary.
 
     Args:
@@ -54,7 +53,7 @@ def _model_to_dict(model: Any) -> Dict[str, Any]:
     return {}
 
 
-def _models_to_dicts(models: List[Any]) -> List[Dict[str, Any]]:
+def _models_to_dicts(models: list[Any]) -> list[dict[str, Any]]:
     """Convert a list of Pydantic models to dictionaries.
 
     Args:
@@ -84,10 +83,10 @@ class EeroClient:
 
     def __init__(
         self,
-        session_id: Optional[str] = None,
-        user_token: Optional[str] = None,
+        session_id: str | None = None,
+        user_token: str | None = None,
         timeout: int = 30,
-        cookie_file: Optional[str] = None,
+        cookie_file: str | None = None,
         use_keyring: bool = False,
     ) -> None:
         """Initialize the eero client adapter.
@@ -103,8 +102,8 @@ class EeroClient:
         self._timeout = timeout
         self._cookie_file = cookie_file or str(DEFAULT_SESSION_FILE)
         self._use_keyring = use_keyring
-        self._client: Optional[BaseEeroClient] = None
-        self._preferred_network_id: Optional[str] = None
+        self._client: BaseEeroClient | None = None
+        self._preferred_network_id: str | None = None
 
     @property
     def is_authenticated(self) -> bool:
@@ -155,7 +154,7 @@ class EeroClient:
         # Return a placeholder - actual token management is internal to eero-client
         return "pending_verification"
 
-    async def verify(self, code: str) -> Dict[str, Any]:
+    async def verify(self, code: str) -> dict[str, Any]:
         """Verify login with the code sent to the user.
 
         Args:
@@ -194,7 +193,7 @@ class EeroClient:
     # Account & Networks
     # =========================================================================
 
-    async def get_account(self) -> Dict[str, Any]:
+    async def get_account(self) -> dict[str, Any]:
         """Get account information."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -202,7 +201,7 @@ class EeroClient:
         account = await self._client.get_account()
         return _model_to_dict(account)
 
-    async def get_networks(self) -> List[Dict[str, Any]]:
+    async def get_networks(self) -> list[dict[str, Any]]:
         """Get list of networks."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -219,7 +218,7 @@ class EeroClient:
 
         return result
 
-    async def get_network(self, network_id: str) -> Dict[str, Any]:
+    async def get_network(self, network_id: str) -> dict[str, Any]:
         """Get detailed network information."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -231,7 +230,7 @@ class EeroClient:
     # Eero Devices
     # =========================================================================
 
-    async def get_eeros(self, network_id: str) -> List[Dict[str, Any]]:
+    async def get_eeros(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of eero devices in a network."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -243,7 +242,7 @@ class EeroClient:
     # Client Devices
     # =========================================================================
 
-    async def get_devices(self, network_id: str) -> List[Dict[str, Any]]:
+    async def get_devices(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of client devices in a network."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -255,7 +254,7 @@ class EeroClient:
     # Profiles
     # =========================================================================
 
-    async def get_profiles(self, network_id: str) -> List[Dict[str, Any]]:
+    async def get_profiles(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of profiles in a network."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -267,7 +266,7 @@ class EeroClient:
     # Speed Test
     # =========================================================================
 
-    async def get_speed_test(self, network_id: str) -> Optional[Dict[str, Any]]:
+    async def get_speed_test(self, network_id: str) -> dict[str, Any] | None:
         """Get the latest speed test results.
 
         Note: eero-client uses run_speed_test() to trigger new tests.
@@ -286,8 +285,8 @@ class EeroClient:
     # =========================================================================
 
     async def get_transfer_stats(
-        self, network_id: str, device_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self, network_id: str, device_id: str | None = None
+    ) -> dict[str, Any]:
         """Get transfer statistics for network or device."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -298,7 +297,7 @@ class EeroClient:
     # SQM Settings
     # =========================================================================
 
-    async def get_sqm_settings(self, network_id: str) -> Dict[str, Any]:
+    async def get_sqm_settings(self, network_id: str) -> dict[str, Any]:
         """Get SQM (Smart Queue Management) settings."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -309,7 +308,7 @@ class EeroClient:
     # Security Settings
     # =========================================================================
 
-    async def get_security_settings(self, network_id: str) -> Dict[str, Any]:
+    async def get_security_settings(self, network_id: str) -> dict[str, Any]:
         """Get security settings for the network."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -320,7 +319,7 @@ class EeroClient:
     # Premium Features (Eero Plus)
     # =========================================================================
 
-    async def get_premium_status(self, network_id: str) -> Dict[str, Any]:
+    async def get_premium_status(self, network_id: str) -> dict[str, Any]:
         """Get Eero Plus/Secure subscription status."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -338,21 +337,21 @@ class EeroClient:
     # Activity (Eero Plus)
     # =========================================================================
 
-    async def get_activity(self, network_id: str) -> Dict[str, Any]:
+    async def get_activity(self, network_id: str) -> dict[str, Any]:
         """Get network activity summary (Eero Plus feature)."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         return await self._client.get_activity(network_id)
 
-    async def get_activity_clients(self, network_id: str) -> List[Dict[str, Any]]:
+    async def get_activity_clients(self, network_id: str) -> list[dict[str, Any]]:
         """Get per-client activity data (Eero Plus feature)."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         return await self._client.get_activity_clients(network_id)
 
-    async def get_activity_categories(self, network_id: str) -> List[Dict[str, Any]]:
+    async def get_activity_categories(self, network_id: str) -> list[dict[str, Any]]:
         """Get activity data grouped by category (Eero Plus feature)."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -363,14 +362,14 @@ class EeroClient:
     # Backup Network (Eero Plus)
     # =========================================================================
 
-    async def get_backup_network(self, network_id: str) -> Dict[str, Any]:
+    async def get_backup_network(self, network_id: str) -> dict[str, Any]:
         """Get backup network configuration (Eero Plus feature)."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         return await self._client.get_backup_network(network_id)
 
-    async def get_backup_status(self, network_id: str) -> Dict[str, Any]:
+    async def get_backup_status(self, network_id: str) -> dict[str, Any]:
         """Get current backup network status (Eero Plus feature)."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -388,7 +387,7 @@ class EeroClient:
     # Thread
     # =========================================================================
 
-    async def get_thread(self, network_id: str) -> Dict[str, Any]:
+    async def get_thread(self, network_id: str) -> dict[str, Any]:
         """Get Thread network information."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -399,7 +398,7 @@ class EeroClient:
     # Diagnostics
     # =========================================================================
 
-    async def get_diagnostics(self, network_id: str) -> Dict[str, Any]:
+    async def get_diagnostics(self, network_id: str) -> dict[str, Any]:
         """Get network diagnostics information."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")

@@ -1,19 +1,17 @@
 """Collector module for gathering eero metrics."""
 
-import asyncio
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
-from .metrics import (  # Device metrics; Device wireless metrics; Device additional metrics; Eero device metrics; Eero hardware metrics; Ethernet port metrics; Nightlight metrics; Network metrics; Network feature flags; Network transfer metrics; SQM metrics; Backup metrics; Activity metrics; Thread metrics; Profile metrics; Speed metrics
+from .metrics import (
     ACTIVITY_ACTIVE_CLIENTS,
     ACTIVITY_CATEGORY_BYTES,
     ACTIVITY_DOWNLOAD_BYTES,
     ACTIVITY_UPLOAD_BYTES,
     BACKUP_ACTIVE,
     BACKUP_CONNECTED,
-    BACKUP_DATA_USED,
     BACKUP_ENABLED,
     BACKUP_SIGNAL_STRENGTH,
     DEVICE_ACTIVITY_DOWNLOAD_BYTES,
@@ -24,7 +22,6 @@ from .metrics import (  # Device metrics; Device wireless metrics; Device additi
     DEVICE_CONNECTED_TO_GATEWAY,
     DEVICE_CONNECTION_SCORE,
     DEVICE_CONNECTION_SCORE_BARS,
-    DEVICE_DOWNLOAD_BYTES,
     DEVICE_FREQUENCY,
     DEVICE_INFO,
     DEVICE_IS_GUEST,
@@ -41,7 +38,6 @@ from .metrics import (  # Device metrics; Device wireless metrics; Device additi
     DEVICE_TX_BITRATE,
     DEVICE_TX_MCS,
     DEVICE_TX_NSS,
-    DEVICE_UPLOAD_BYTES,
     DEVICE_WIRELESS,
     EERO_BACKUP_CONNECTION,
     EERO_CONNECTED_CLIENTS,
@@ -80,7 +76,6 @@ from .metrics import (  # Device metrics; Device wireless metrics; Device additi
     NETWORK_BAND_STEERING_ENABLED,
     NETWORK_CLIENTS_COUNT,
     NETWORK_DNS_CACHING_ENABLED,
-    NETWORK_DOWNLOAD_BYTES,
     NETWORK_EEROS_COUNT,
     NETWORK_GUEST_ENABLED,
     NETWORK_INFO,
@@ -90,7 +85,6 @@ from .metrics import (  # Device metrics; Device wireless metrics; Device additi
     NETWORK_SQM_ENABLED,
     NETWORK_STATUS,
     NETWORK_THREAD_ENABLED,
-    NETWORK_UPLOAD_BYTES,
     NETWORK_UPNP_ENABLED,
     NETWORK_WPA3_ENABLED,
     PROFILE_DEVICES_COUNT,
@@ -116,7 +110,7 @@ def _extract_id_from_url(url: Any) -> str:
     return parts[-1] if parts else ""
 
 
-def _parse_signal_strength(signal_str: Optional[str]) -> Optional[float]:
+def _parse_signal_strength(signal_str: str | None) -> float | None:
     """Parse signal strength string to float."""
     if not signal_str:
         return None
@@ -126,7 +120,7 @@ def _parse_signal_strength(signal_str: Optional[str]) -> Optional[float]:
         return None
 
 
-def _parse_bitrate(bitrate_str: Optional[str]) -> Optional[float]:
+def _parse_bitrate(bitrate_str: str | None) -> float | None:
     """Parse bitrate string to Mbps float."""
     if not bitrate_str:
         return None
@@ -137,7 +131,7 @@ def _parse_bitrate(bitrate_str: Optional[str]) -> Optional[float]:
         return None
 
 
-def _parse_speed_mbps(speed_str: Optional[str]) -> Optional[float]:
+def _parse_speed_mbps(speed_str: str | None) -> float | None:
     """Parse ethernet speed string to Mbps."""
     if not speed_str:
         return None
@@ -154,7 +148,7 @@ def _parse_speed_mbps(speed_str: Optional[str]) -> Optional[float]:
         return None
 
 
-def _parse_timestamp(timestamp_str: Optional[str]) -> Optional[float]:
+def _parse_timestamp(timestamp_str: str | None) -> float | None:
     """Parse ISO timestamp string to Unix epoch."""
     if not timestamp_str:
         return None
@@ -167,12 +161,12 @@ def _parse_timestamp(timestamp_str: Optional[str]) -> Optional[float]:
         return None
 
 
-def _frequency_to_band(frequency: Optional[int]) -> str:
+def _frequency_to_band(frequency: int | None) -> str:
     """Convert frequency in MHz to WiFi band label.
-    
+
     Args:
         frequency: Frequency in MHz (e.g., 2412, 5180, 6115)
-    
+
     Returns:
         Band label: "2.4GHz", "5GHz", "6GHz", or "unknown"
     """
@@ -187,12 +181,12 @@ def _frequency_to_band(frequency: Optional[int]) -> str:
     return "unknown"
 
 
-def _normalize_manufacturer(manufacturer: Optional[str]) -> str:
+def _normalize_manufacturer(manufacturer: str | None) -> str:
     """Normalize manufacturer name for consistent labeling.
-    
+
     Args:
         manufacturer: Raw manufacturer string from API
-    
+
     Returns:
         Normalized manufacturer name or "unknown"
     """
@@ -203,12 +197,12 @@ def _normalize_manufacturer(manufacturer: Optional[str]) -> str:
     return name if name else "unknown"
 
 
-def _normalize_device_type(device_type: Optional[str]) -> str:
+def _normalize_device_type(device_type: str | None) -> str:
     """Normalize device type for consistent labeling.
-    
+
     Args:
         device_type: Raw device type from API
-    
+
     Returns:
         Normalized device type or "unknown"
     """
@@ -217,12 +211,12 @@ def _normalize_device_type(device_type: Optional[str]) -> str:
     return device_type.strip().lower()[:30] or "unknown"
 
 
-def _get_connection_type(device: Dict[str, Any]) -> str:
+def _get_connection_type(device: dict[str, Any]) -> str:
     """Determine connection type from device data.
-    
+
     Args:
         device: Device dictionary from API
-    
+
     Returns:
         "wired", "wireless", or "unknown"
     """
@@ -238,12 +232,12 @@ def _get_connection_type(device: Dict[str, Any]) -> str:
     return "unknown"
 
 
-def _get_source_eero_location(device: Dict[str, Any]) -> str:
+def _get_source_eero_location(device: dict[str, Any]) -> str:
     """Extract the location of the eero the device is connected to.
-    
+
     Args:
         device: Device dictionary from API
-    
+
     Returns:
         Location string of source eero or "unknown"
     """
@@ -275,7 +269,7 @@ class EeroCollector:
         self._include_thread = include_thread
         self._timeout = timeout
         self._last_collection_time: float = 0
-        self._cached_data: Dict[str, Any] = {}
+        self._cached_data: dict[str, Any] = {}
         self._is_premium: bool = False
 
     async def collect(self) -> bool:
@@ -286,9 +280,7 @@ class EeroCollector:
         try:
             async with EeroClient(timeout=self._timeout) as client:
                 networks = await client.get_networks()
-                EXPORTER_API_REQUESTS.labels(
-                    endpoint="networks", status="success"
-                ).inc()
+                EXPORTER_API_REQUESTS.labels(endpoint="networks", status="success").inc()
 
                 if not networks:
                     _LOGGER.warning("No networks found")
@@ -327,7 +319,7 @@ class EeroCollector:
     async def _collect_network_metrics(
         self,
         client: EeroClient,
-        network_data: Dict[str, Any],
+        network_data: dict[str, Any],
     ) -> None:
         """Collect metrics for a single network."""
         network_url = network_data.get("url", "")
@@ -369,14 +361,10 @@ class EeroCollector:
             eero_health = health.get("eero_network", {})
             if internet_health:
                 is_healthy = 1 if internet_health.get("status") == "connected" else 0
-                HEALTH_STATUS.labels(network_id=network_id, source="internet").set(
-                    is_healthy
-                )
+                HEALTH_STATUS.labels(network_id=network_id, source="internet").set(is_healthy)
             if eero_health:
                 is_healthy = 1 if eero_health.get("status") == "connected" else 0
-                HEALTH_STATUS.labels(network_id=network_id, source="eero_network").set(
-                    is_healthy
-                )
+                HEALTH_STATUS.labels(network_id=network_id, source="eero_network").set(is_healthy)
 
         speed = network_details.get("speed", {})
         if speed:
@@ -391,15 +379,11 @@ class EeroCollector:
                     from datetime import datetime
 
                     dt = datetime.fromisoformat(speed["date"].replace("Z", "+00:00"))
-                    SPEED_TEST_TIMESTAMP.labels(network_id=network_id).set(
-                        dt.timestamp()
-                    )
+                    SPEED_TEST_TIMESTAMP.labels(network_id=network_id).set(dt.timestamp())
                 except (ValueError, TypeError):
                     pass
 
-        await self._collect_network_feature_flags(
-            client, network_id, network_name, network_details
-        )
+        await self._collect_network_feature_flags(client, network_id, network_name, network_details)
         await self._collect_sqm_metrics(client, network_id)
         await self._collect_eero_metrics(client, network_id, network_name)
 
@@ -427,9 +411,7 @@ class EeroCollector:
             EXPORTER_API_REQUESTS.labels(endpoint="eeros", status="error").inc()
             return
 
-        NETWORK_EEROS_COUNT.labels(network_id=network_id, name=network_name).set(
-            len(eeros)
-        )
+        NETWORK_EEROS_COUNT.labels(network_id=network_id, name=network_name).set(len(eeros))
 
         for eero in eeros:
             eero_url = eero.get("url", "")
@@ -442,9 +424,7 @@ class EeroCollector:
             if not eero_id:
                 continue
 
-            EERO_INFO.labels(
-                network_id=network_id, eero_id=eero_id, serial=serial
-            ).info(
+            EERO_INFO.labels(network_id=network_id, eero_id=eero_id, serial=serial).info(
                 {
                     "location": location,
                     "model": model,
@@ -461,9 +441,9 @@ class EeroCollector:
             ).set(is_online)
 
             is_gateway = 1 if eero.get("gateway", False) else 0
-            EERO_IS_GATEWAY.labels(
-                network_id=network_id, eero_id=eero_id, location=location
-            ).set(is_gateway)
+            EERO_IS_GATEWAY.labels(network_id=network_id, eero_id=eero_id, location=location).set(
+                is_gateway
+            )
 
             clients_count = eero.get("connected_clients_count", 0)
             EERO_CONNECTED_CLIENTS.labels(
@@ -499,9 +479,9 @@ class EeroCollector:
 
             led_on = eero.get("led_on")
             if led_on is not None:
-                EERO_LED_ON.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
-                ).set(1 if led_on else 0)
+                EERO_LED_ON.labels(network_id=network_id, eero_id=eero_id, location=location).set(
+                    1 if led_on else 0
+                )
 
             update_available = eero.get("update_available")
             if update_available is not None:
@@ -517,9 +497,9 @@ class EeroCollector:
 
             wired = eero.get("wired")
             if wired is not None:
-                EERO_WIRED.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
-                ).set(1 if wired else 0)
+                EERO_WIRED.labels(network_id=network_id, eero_id=eero_id, location=location).set(
+                    1 if wired else 0
+                )
 
             memory_usage = eero.get("memory_usage")
             if memory_usage is not None:
@@ -560,9 +540,7 @@ class EeroCollector:
                 ).set(1 if backup_connection else 0)
 
             if self._include_ethernet:
-                await self._collect_ethernet_port_metrics(
-                    network_id, eero_id, location, eero
-                )
+                await self._collect_ethernet_port_metrics(network_id, eero_id, location, eero)
 
             nightlight = eero.get("nightlight", {})
             if nightlight and isinstance(nightlight, dict):
@@ -607,9 +585,7 @@ class EeroCollector:
             return
 
         connected_count = sum(1 for d in devices if d.get("connected", False))
-        NETWORK_CLIENTS_COUNT.labels(network_id=network_id, name=network_name).set(
-            connected_count
-        )
+        NETWORK_CLIENTS_COUNT.labels(network_id=network_id, name=network_name).set(connected_count)
 
         for device in devices:
             device_url = device.get("url", "")
@@ -630,15 +606,13 @@ class EeroCollector:
             device_type = _normalize_device_type(device.get("device_type"))
             connection_type = _get_connection_type(device)
             source_eero = _get_source_eero_location(device)
-            
+
             # Get frequency for band label
             connectivity = device.get("connectivity", {})
             frequency = connectivity.get("frequency") if connectivity else None
             band = _frequency_to_band(frequency)
 
-            DEVICE_INFO.labels(
-                network_id=network_id, device_id=device_id, mac=mac
-            ).info(
+            DEVICE_INFO.labels(network_id=network_id, device_id=device_id, mac=mac).info(
                 {
                     "name": name,
                     "manufacturer": manufacturer,
@@ -884,9 +858,7 @@ class EeroCollector:
                         connection_type=connection_type,
                     ).set(1 if source_is_gateway else 0)
 
-    async def _collect_profile_metrics(
-        self, client: EeroClient, network_id: str
-    ) -> None:
+    async def _collect_profile_metrics(self, client: EeroClient, network_id: str) -> None:
         """Collect metrics for profiles."""
         try:
             profiles = await client.get_profiles(network_id)
@@ -909,9 +881,9 @@ class EeroCollector:
                 continue
 
             paused = profile.get("paused", False)
-            PROFILE_PAUSED.labels(
-                network_id=network_id, profile_id=profile_id, name=name
-            ).set(1 if paused else 0)
+            PROFILE_PAUSED.labels(network_id=network_id, profile_id=profile_id, name=name).set(
+                1 if paused else 0
+            )
 
             devices_data = profile.get("devices", [])
             if isinstance(devices_data, dict):
@@ -929,7 +901,7 @@ class EeroCollector:
         client: EeroClient,
         network_id: str,
         network_name: str,
-        network_details: Dict[str, Any],
+        network_details: dict[str, Any],
     ) -> None:
         """Collect network feature flag metrics."""
         wpa3 = network_details.get("wpa3")
@@ -940,9 +912,9 @@ class EeroCollector:
 
         band_steering = network_details.get("band_steering")
         if band_steering is not None:
-            NETWORK_BAND_STEERING_ENABLED.labels(
-                network_id=network_id, name=network_name
-            ).set(1 if band_steering else 0)
+            NETWORK_BAND_STEERING_ENABLED.labels(network_id=network_id, name=network_name).set(
+                1 if band_steering else 0
+            )
 
         sqm = network_details.get("sqm")
         if sqm is not None:
@@ -973,15 +945,15 @@ class EeroCollector:
         if dns_caching is None and isinstance(settings, dict):
             dns_caching = settings.get("dns_caching")
         if dns_caching is not None:
-            NETWORK_DNS_CACHING_ENABLED.labels(
-                network_id=network_id, name=network_name
-            ).set(1 if dns_caching else 0)
+            NETWORK_DNS_CACHING_ENABLED.labels(network_id=network_id, name=network_name).set(
+                1 if dns_caching else 0
+            )
 
         power_saving = network_details.get("power_saving")
         if power_saving is not None:
-            NETWORK_POWER_SAVING_ENABLED.labels(
-                network_id=network_id, name=network_name
-            ).set(1 if power_saving else 0)
+            NETWORK_POWER_SAVING_ENABLED.labels(network_id=network_id, name=network_name).set(
+                1 if power_saving else 0
+            )
 
         guest_enabled = network_details.get("guest_network_enabled")
         if guest_enabled is not None:
@@ -991,9 +963,9 @@ class EeroCollector:
 
         backup_enabled = network_details.get("backup_internet_enabled")
         if backup_enabled is not None:
-            NETWORK_BACKUP_INTERNET_ENABLED.labels(
-                network_id=network_id, name=network_name
-            ).set(1 if backup_enabled else 0)
+            NETWORK_BACKUP_INTERNET_ENABLED.labels(network_id=network_id, name=network_name).set(
+                1 if backup_enabled else 0
+            )
 
     async def _collect_sqm_metrics(self, client: EeroClient, network_id: str) -> None:
         """Collect SQM (Smart Queue Management) metrics."""
@@ -1014,7 +986,7 @@ class EeroCollector:
             EXPORTER_API_REQUESTS.labels(endpoint="sqm", status="error").inc()
 
     async def _collect_ethernet_port_metrics(
-        self, network_id: str, eero_id: str, location: str, eero: Dict[str, Any]
+        self, network_id: str, eero_id: str, location: str, eero: dict[str, Any]
     ) -> None:
         """Collect ethernet port metrics for an eero device."""
         ethernet_status = eero.get("ethernet_status", {})
@@ -1096,9 +1068,9 @@ class EeroCollector:
         try:
             is_premium = await client.is_premium(network_id)
             self._is_premium = is_premium
-            NETWORK_PREMIUM_ENABLED.labels(
-                network_id=network_id, name=network_name
-            ).set(1 if is_premium else 0)
+            NETWORK_PREMIUM_ENABLED.labels(network_id=network_id, name=network_name).set(
+                1 if is_premium else 0
+            )
             EXPORTER_API_REQUESTS.labels(endpoint="premium", status="success").inc()
         except EeroAPIError as e:
             _LOGGER.debug(f"Failed to get premium status: {e}")
@@ -1111,9 +1083,7 @@ class EeroCollector:
         await self._collect_activity_metrics(client, network_id)
         await self._collect_backup_metrics(client, network_id)
 
-    async def _collect_activity_metrics(
-        self, client: EeroClient, network_id: str
-    ) -> None:
+    async def _collect_activity_metrics(self, client: EeroClient, network_id: str) -> None:
         """Collect activity metrics (Eero Plus feature)."""
         try:
             activity = await client.get_activity(network_id)
@@ -1124,9 +1094,7 @@ class EeroCollector:
 
             total_usage = activity.get("total_usage", {})
             if total_usage:
-                download = total_usage.get("download") or total_usage.get(
-                    "download_bytes", 0
-                )
+                download = total_usage.get("download") or total_usage.get("download_bytes", 0)
                 if download:
                     ACTIVITY_DOWNLOAD_BYTES.labels(network_id=network_id).set(download)
 
@@ -1136,9 +1104,7 @@ class EeroCollector:
 
             active_clients = activity.get("active_client_count")
             if active_clients is not None:
-                ACTIVITY_ACTIVE_CLIENTS.labels(network_id=network_id).set(
-                    active_clients
-                )
+                ACTIVITY_ACTIVE_CLIENTS.labels(network_id=network_id).set(active_clients)
 
             top_clients = activity.get("top_clients", [])
             for client_act in top_clients:
@@ -1156,7 +1122,7 @@ class EeroCollector:
                     or client_act.get("hostname")
                     or device_id
                 )
-                
+
                 # Extract additional labels from activity data
                 manufacturer = _normalize_manufacturer(client_act.get("manufacturer"))
                 device_type = _normalize_device_type(client_act.get("device_type"))
@@ -1188,9 +1154,7 @@ class EeroCollector:
 
         try:
             categories = await client.get_activity_categories(network_id)
-            EXPORTER_API_REQUESTS.labels(
-                endpoint="activity_categories", status="success"
-            ).inc()
+            EXPORTER_API_REQUESTS.labels(endpoint="activity_categories", status="success").inc()
 
             for category in categories:
                 if not isinstance(category, dict):
@@ -1206,13 +1170,9 @@ class EeroCollector:
 
         except EeroAPIError as e:
             _LOGGER.debug(f"Failed to get activity categories: {e}")
-            EXPORTER_API_REQUESTS.labels(
-                endpoint="activity_categories", status="error"
-            ).inc()
+            EXPORTER_API_REQUESTS.labels(endpoint="activity_categories", status="error").inc()
 
-    async def _collect_backup_metrics(
-        self, client: EeroClient, network_id: str
-    ) -> None:
+    async def _collect_backup_metrics(self, client: EeroClient, network_id: str) -> None:
         """Collect backup network metrics (Eero Plus feature)."""
         try:
             backup_config = await client.get_backup_network(network_id)
@@ -1229,9 +1189,7 @@ class EeroCollector:
 
         try:
             backup_status = await client.get_backup_status(network_id)
-            EXPORTER_API_REQUESTS.labels(
-                endpoint="backup_status", status="success"
-            ).inc()
+            EXPORTER_API_REQUESTS.labels(endpoint="backup_status", status="success").inc()
 
             active = backup_status.get("active") or backup_status.get("using_backup")
             if active is not None:
@@ -1239,9 +1197,7 @@ class EeroCollector:
 
             connected = backup_status.get("connected")
             if connected is not None:
-                BACKUP_CONNECTED.labels(network_id=network_id).set(
-                    1 if connected else 0
-                )
+                BACKUP_CONNECTED.labels(network_id=network_id).set(1 if connected else 0)
 
             signal = backup_status.get("signal_strength")
             if signal is not None:
@@ -1251,9 +1207,7 @@ class EeroCollector:
             _LOGGER.debug(f"Failed to get backup status: {e}")
             EXPORTER_API_REQUESTS.labels(endpoint="backup_status", status="error").inc()
 
-    async def _collect_thread_metrics(
-        self, client: EeroClient, network_id: str
-    ) -> None:
+    async def _collect_thread_metrics(self, client: EeroClient, network_id: str) -> None:
         """Collect Thread network metrics."""
         try:
             thread_data = await client.get_thread(network_id)
@@ -1268,9 +1222,7 @@ class EeroCollector:
 
             border_routers = thread_data.get("border_routers", [])
             if isinstance(border_routers, list):
-                THREAD_BORDER_ROUTER.labels(network_id=network_id).set(
-                    len(border_routers)
-                )
+                THREAD_BORDER_ROUTER.labels(network_id=network_id).set(len(border_routers))
 
         except EeroAPIError as e:
             _LOGGER.debug(f"Failed to get Thread data: {e}")

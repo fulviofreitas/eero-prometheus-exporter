@@ -2,9 +2,7 @@
 
 import asyncio
 import logging
-import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -14,9 +12,9 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from . import __version__
-from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
 from .collector import EeroCollector
-from .config import DEFAULT_CONFIG_FILE, DEFAULT_SESSION_FILE, ExporterConfig
+from .config import DEFAULT_SESSION_FILE, ExporterConfig
+from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
 from .server import run_server
 
 app = typer.Typer(
@@ -44,7 +42,7 @@ def login(
         ...,
         help="Email address or phone number for your eero account",
     ),
-    session_file: Optional[Path] = typer.Option(
+    session_file: Path | None = typer.Option(
         None,
         "--session-file",
         "-s",
@@ -52,7 +50,7 @@ def login(
     ),
 ) -> None:
     """Login to your eero account and save the session.
-    
+
     This will send a verification code to your email or phone.
     """
     setup_logging()
@@ -80,7 +78,9 @@ def login(
                     raise typer.Exit(1)
 
             console.print("[green]✓[/green] Verification code sent!")
-            console.print(f"\nCheck your {'email' if '@' in identifier else 'phone'} for the code.\n")
+            console.print(
+                f"\nCheck your {'email' if '@' in identifier else 'phone'} for the code.\n"
+            )
 
             # Get verification code
             code = typer.prompt("Enter verification code")
@@ -93,7 +93,7 @@ def login(
                 task = progress.add_task("Verifying code...", total=None)
 
                 try:
-                    session_data = await client.verify(code)
+                    await client.verify(code)
                     progress.remove_task(task)
                 except EeroAuthError as e:
                     progress.remove_task(task)
@@ -108,7 +108,7 @@ def login(
 
 @app.command()
 def logout(
-    session_file: Optional[Path] = typer.Option(
+    session_file: Path | None = typer.Option(
         None,
         "--session-file",
         "-s",
@@ -128,7 +128,7 @@ def logout(
 
 @app.command()
 def validate(
-    session_file: Optional[Path] = typer.Option(
+    session_file: Path | None = typer.Option(
         None,
         "--session-file",
         "-s",
@@ -142,7 +142,7 @@ def validate(
     ),
 ) -> None:
     """Validate session credentials by testing API connectivity.
-    
+
     Useful for health checks and CI/CD pipelines.
     Exit codes: 0 = valid, 1 = invalid/expired, 2 = no session file
     """
@@ -158,7 +158,7 @@ def validate(
         if not session_path.exists():
             if not quiet:
                 console.print("[bold red]✗[/bold red] Session file not found")
-                console.print(f"\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
+                console.print("\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
             raise typer.Exit(2)
 
         if not quiet:
@@ -168,7 +168,7 @@ def validate(
         async with EeroClient() as client:
             try:
                 networks = await client.get_networks()
-                
+
                 if not quiet:
                     console.print("[green]✓[/green] Session is valid!")
                     console.print(f"[green]✓[/green] Found {len(networks)} network(s)")
@@ -177,15 +177,15 @@ def validate(
                         status = net.get("status", "unknown")
                         console.print(f"    • {name}: {status}")
                     console.print()
-                
+
                 # Success
                 raise typer.Exit(0)
-                
+
             except EeroAuthError as e:
                 if not quiet:
-                    console.print(f"[bold red]✗[/bold red] Session expired or invalid")
+                    console.print("[bold red]✗[/bold red] Session expired or invalid")
                     console.print(f"[dim]Error: {e}[/dim]")
-                    console.print(f"\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
+                    console.print("\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
                 raise typer.Exit(1)
             except EeroAPIError as e:
                 if not quiet:
@@ -197,7 +197,7 @@ def validate(
 
 @app.command()
 def status(
-    session_file: Optional[Path] = typer.Option(
+    session_file: Path | None = typer.Option(
         None,
         "--session-file",
         "-s",
@@ -213,7 +213,7 @@ def status(
 
         if not session_path.exists():
             console.print("[yellow]Not authenticated.[/yellow]")
-            console.print(f"\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
+            console.print("\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
             raise typer.Exit(1)
 
         console.print("[green]✓[/green] Authenticated\n")
@@ -260,7 +260,7 @@ def status(
 
 @app.command()
 def test(
-    session_file: Optional[Path] = typer.Option(
+    session_file: Path | None = typer.Option(
         None,
         "--session-file",
         "-s",
@@ -276,7 +276,7 @@ def test(
 
         if not session_path.exists():
             console.print("[yellow]Not authenticated.[/yellow]")
-            console.print(f"\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
+            console.print("\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
             raise typer.Exit(1)
 
         collector = EeroCollector(
@@ -323,13 +323,13 @@ def serve(
         "-i",
         help="Collection interval in seconds",
     ),
-    session_file: Optional[Path] = typer.Option(
+    session_file: Path | None = typer.Option(
         None,
         "--session-file",
         "-s",
         help="Path to session file",
     ),
-    config_file: Optional[Path] = typer.Option(
+    config_file: Path | None = typer.Option(
         None,
         "--config",
         "-c",
@@ -375,15 +375,17 @@ def serve(
     # Check session file exists
     if not config.session_file.exists():
         console.print("[bold red]Not authenticated.[/bold red]")
-        console.print(f"\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
+        console.print("\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
         raise typer.Exit(1)
 
-    console.print(Panel.fit(
-        f"[bold blue]Eero Prometheus Exporter v{__version__}[/bold blue]\n\n"
-        f"Listening on: [green]http://{host}:{port}/metrics[/green]\n"
-        f"Collection interval: [cyan]{interval}s[/cyan]",
-        title="Starting Exporter",
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold blue]Eero Prometheus Exporter v{__version__}[/bold blue]\n\n"
+            f"Listening on: [green]http://{host}:{port}/metrics[/green]\n"
+            f"Collection interval: [cyan]{interval}s[/cyan]",
+            title="Starting Exporter",
+        )
+    )
 
     # Run server
     run_server(config)

@@ -4,10 +4,8 @@ import asyncio
 import json
 import logging
 import signal
-import sys
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from threading import Thread
-from typing import Optional
 
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 
@@ -77,9 +75,7 @@ class MetricsHandler(SimpleHTTPRequestHandler):
         Use this for monitoring the actual health of the exporter.
         Returns 503 if session is invalid or collections are failing.
         """
-        is_healthy = (
-            _health_state["session_valid"] and _health_state["last_collection_success"]
-        )
+        is_healthy = _health_state["session_valid"] and _health_state["last_collection_success"]
 
         response_data = {
             "status": "healthy" if is_healthy else "unhealthy",
@@ -149,14 +145,14 @@ class MetricsHandler(SimpleHTTPRequestHandler):
 <body>
     <h1>Eero Prometheus Exporter</h1>
     <p>Prometheus metrics exporter for eero mesh WiFi networks.</p>
-    
+
     <div class="links">
         <ul>
             <li><a href="/metrics">Metrics</a> - Prometheus metrics endpoint</li>
             <li><a href="/health">Health</a> - Health check endpoint</li>
         </ul>
     </div>
-    
+
     <div class="footer">
         <p>Add this target to your Prometheus configuration:</p>
         <code>- targets: ['localhost:9118']</code>
@@ -196,9 +192,7 @@ async def collection_loop(
                 _health_state["last_error"] = None
             else:
                 _health_state["collections_failed"] += 1
-                _health_state["last_error"] = (
-                    "Collection failed - check logs for details"
-                )
+                _health_state["last_error"] = "Collection failed - check logs for details"
         except Exception as e:
             _health_state["last_collection_success"] = False
             _health_state["session_valid"] = False
@@ -241,7 +235,7 @@ def run_server(config: ExporterConfig) -> None:
 
     # Create stop event for graceful shutdown
     stop_event = asyncio.Event()
-    loop: Optional[asyncio.AbstractEventLoop] = None
+    loop: asyncio.AbstractEventLoop | None = None
 
     def signal_handler(signum, frame) -> None:
         """Handle shutdown signals."""

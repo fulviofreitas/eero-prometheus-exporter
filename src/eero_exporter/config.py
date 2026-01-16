@@ -6,7 +6,6 @@ import os
 import stat
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -65,7 +64,7 @@ class ExporterConfig:
             _LOGGER.warning(f"Error loading config from {path}: {e}, using defaults")
             return cls()
 
-    def save(self, path: Optional[Path] = None) -> None:
+    def save(self, path: Path | None = None) -> None:
         """Save configuration to a YAML file."""
         save_path = path or DEFAULT_CONFIG_FILE
         save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -94,12 +93,12 @@ class ExporterConfig:
 class SessionData:
     """Session data for eero authentication."""
 
-    user_token: Optional[str] = None
-    session_id: Optional[str] = None
-    refresh_token: Optional[str] = None
-    user_id: Optional[str] = None
-    preferred_network_id: Optional[str] = None
-    session_expiry: Optional[str] = None
+    user_token: str | None = None
+    session_id: str | None = None
+    refresh_token: str | None = None
+    user_id: str | None = None
+    preferred_network_id: str | None = None
+    session_expiry: str | None = None
 
     @property
     def is_valid(self) -> bool:
@@ -153,5 +152,3 @@ class SessionData:
         if path.exists():
             path.unlink()
             _LOGGER.info(f"Session file deleted: {path}")
-
-
