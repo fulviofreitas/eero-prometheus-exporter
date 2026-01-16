@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.0.1](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v1.0.0...v1.0.1) (2026-01-16)
+
+### 🐛 Bug Fixes
+
+* **release:** prevent sed from modifying tool config versions ([e13afce](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/e13afced29b6b5bce6a91292afc13861a339c579))
+
 ## 1.0.0 (2026-01-16)
 
 ### ✨ Features
