@@ -54,7 +54,7 @@ where = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "1.0.0"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "B", "UP"]
@@ -64,7 +64,7 @@ ignore = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "1.0.0"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
