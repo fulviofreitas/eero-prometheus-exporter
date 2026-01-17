@@ -83,11 +83,11 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 🔑 Generate GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
           private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
@@ -105,7 +105,7 @@ jobs:
       # ========================================================================
       - name: 📥 Download cache artifact
         if: github.event.inputs.reset_cache != 'true'
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v12
         continue-on-error: true
         with:
           name: ${{ env.cache_key }}
@@ -144,13 +144,15 @@ jobs:
       # 🔄 Run Renovate
       # ========================================================================
       - name: 🔄 Run Renovate
-        uses: renovatebot/github-action@v44.2.3
+        uses: renovatebot/github-action@v44.2.4
         with:
           configurationFile: .github/renovate.json5
           token: ${{ steps.app-token.outputs.token }}
         env:
           LOG_LEVEL: ${{ github.event.inputs.log_level || 'info' }}
           RENOVATE_DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && 'full' || 'null' }}
+          # Tell Renovate which repository to process
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
           # Enable repository cache
           RENOVATE_REPOSITORY_CACHE: enabled
 
@@ -170,7 +172,7 @@ jobs:
 
       - name: 📤 Upload cache artifact
         if: always() && github.event.inputs.reset_cache != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         continue-on-error: true
         with:
           name: ${{ env.cache_key }}
@@ -218,6 +220,13 @@ jobs:
           - **Schedule**: Weekly on Mondays at 3 AM UTC
           - **Key dependency**: `eero-client` (git-tags tracking)
           - **Caching**: Enabled (7-day retention)
+
+          ### ⚡ Performance
+
+          Repository caching speeds up subsequent runs by preserving:
+          - Changelogs and release notes
+          - Dependency metadata
+          - Previous scan results
 
           ---
 

@@ -38,9 +38,6 @@ permissions:
   issues: write
   pull-requests: write
 
-env:
-  PYTHON_VERSION: "3.12"
-
 jobs:
   # ============================================================================
   # 🚀 Semantic Release
@@ -57,26 +54,17 @@ jobs:
       !contains(github.event.workflow_run.head_commit.message, '[skip ci]') &&
       !contains(github.event.workflow_run.head_commit.message, 'chore(release)'))
 
-    outputs:
-      released: ${{ steps.check-release.outputs.released }}
-      version: ${{ steps.check-release.outputs.version }}
-
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: 📦 Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
-
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: 🔧 Install semantic-release
         run: |
@@ -98,20 +86,6 @@ jobs:
             semantic-release --dry-run
           else
             semantic-release
-          fi
-
-      - name: 🔍 Check if release was created
-        id: check-release
-        run: |
-          if [ -f VERSION ]; then
-            VERSION=$(cat VERSION)
-            echo "released=true" >> $GITHUB_OUTPUT
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
-            echo "✅ Release v${VERSION} was created"
-          else
-            echo "released=false" >> $GITHUB_OUTPUT
-            echo "version=" >> $GITHUB_OUTPUT
-            echo "📭 No release created"
           fi
 
       - name: 📝 Generate release summary
@@ -170,9 +144,9 @@ jobs:
           > No releasable changes detected since the last release.
           >
           > Commits must follow [Conventional Commits](https://conventionalcommits.org) to trigger releases:
-          > - `feat:` → Minor release (1.0.0 → 1.1.0)
-          > - `fix:` → Patch release (1.0.0 → 1.0.1)
-          > - `feat!:` or `BREAKING CHANGE:` → Major release (1.0.0 → 2.0.0)
+          > - `feat:` → Minor release
+          > - `fix:` → Patch release
+          > - `feat!:` or `BREAKING CHANGE:` → Major release
 
           EOF
           fi

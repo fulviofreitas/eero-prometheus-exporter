@@ -54,7 +54,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -92,6 +92,7 @@ jobs:
             org.opencontainers.image.description=Modern Prometheus exporter for eero mesh WiFi networks
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
             org.opencontainers.image.licenses=Apache-2.0
             org.opencontainers.image.vendor=${{ github.repository_owner }}
           tags: |
@@ -118,15 +119,16 @@ jobs:
             type=gha,scope=${{ github.ref_name }}-${{ runner.arch }}
             type=gha,scope=main-${{ runner.arch }}
             type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          # Registry cache disabled for PRs (no auth available)
           cache-to: |
             type=gha,mode=max,scope=${{ github.ref_name }}-${{ runner.arch }}
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max,image-manifest=true
+            ${{ github.event_name != 'pull_request' && format('type=registry,ref=ghcr.io/{0}:buildcache,mode=max,image-manifest=true', github.repository) || '' }}
           provenance: mode=min
           sbom: true
 
       - name: 🔏 Generate artifact attestation
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.push.outputs.digest }}
