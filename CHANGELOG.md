@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.1.1](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v1.1.0...v1.1.1) (2026-01-17)
+
+### 🐛 Bug Fixes
+
+* **ci:** remove dead repository_dispatch code from CI workflow ([f1cb82d](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/f1cb82dff31f5f9d770ad3971fca648b798aadb2))
+
 ## [1.1.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v1.0.1...v1.1.0) (2026-01-17)
 
 ### ✨ Features
