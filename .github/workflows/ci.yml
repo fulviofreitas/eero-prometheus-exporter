@@ -86,7 +86,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: lint
-    continue-on-error: true
 
     steps:
       - name: 📥 Checkout repository
@@ -119,7 +118,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: lint
-    continue-on-error: true
 
     steps:
       - name: 📥 Checkout code
@@ -226,9 +224,9 @@ jobs:
         run: |
           COMMITLINT="${{ needs.commitlint.result }}"
           LINT="${{ needs.lint.result }}"
-          TYPECHECK="${{ needs.type-check.outcome }}"
+          TYPECHECK="${{ needs.type-check.result }}"
           TEST="${{ needs.test.result }}"
-          SECURITY="${{ needs.security.outcome }}"
+          SECURITY="${{ needs.security.result }}"
           DOCKER="${{ needs.docker-build.result }}"
 
           cat >> $GITHUB_STEP_SUMMARY << EOF
@@ -245,9 +243,8 @@ jobs:
 
           EOF
 
-          # Required: commitlint, lint, test, docker-build
-          # Allowed to fail: type-check, security (informational)
-          if [[ "$COMMITLINT" == "success" && "$LINT" == "success" && "$TEST" == "success" && "$DOCKER" == "success" ]]; then
+          # All jobs are required to pass
+          if [[ "$COMMITLINT" == "success" && "$LINT" == "success" && "$TYPECHECK" == "success" && "$TEST" == "success" && "$SECURITY" == "success" && "$DOCKER" == "success" ]]; then
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
 
           > [!NOTE]
