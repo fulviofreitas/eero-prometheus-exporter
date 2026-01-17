@@ -88,24 +88,23 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
+      - name: 📦 Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
-          cache-dependency-path: "pyproject.toml"
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
 
-      - name: 📦 Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: 🐍 Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: 📚 Install dependencies
+        run: uv sync --extra dev
 
       - name: 🔎 Run MyPy type checker
         uses: fulviofreitas/eero-client/.github/actions/python-typecheck@master
         with:
           src-path: "src/eero_exporter/"
           fail-on-error: "true"
-          use-uv: "false"
 
   # ============================================================================
   # 3️⃣ Security Scan (Parallel - depends on Lint)
@@ -122,19 +121,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
+      - name: 📦 Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
-          cache-dependency-path: "pyproject.toml"
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: 🐍 Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: 🛡️ Run security scan
         uses: fulviofreitas/eero-client/.github/actions/security-bandit@master
         with:
           src-path: "src/"
           fail-on-findings: "true"
-          use-uv: "false"
 
   # ============================================================================
   # 3️⃣ Test Matrix (Parallel - depends on Lint)
@@ -153,34 +153,25 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
+      - name: 📦 Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
       - name: 🐍 Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: 📚 Install dependencies
+        run: uv sync --extra dev
+
+      - name: 🧪 Run tests
+        uses: fulviofreitas/eero-client/.github/actions/python-test@master
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: "pip"
-          cache-dependency-path: "pyproject.toml"
-
-      - name: 📦 Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: 🧪 Run tests with coverage
-        run: |
-          if [ -d "tests" ] && find tests -name "test_*.py" -o -name "*_test.py" 2>/dev/null | grep -q .; then
-            pytest --cov=src/eero_exporter --cov-report=xml --cov-report=term-missing -v
-          else
-            echo "⚠️ No tests found - skipping test execution"
-            echo "::warning::No test files found in tests/ directory"
-          fi
-
-      - name: 📊 Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: matrix.python-version == '3.12' && hashFiles('coverage.xml') != ''
-        with:
-          name: coverage-report
-          path: coverage.xml
-          retention-days: 30
+          test-path: "tests/"
+          src-path: "src/eero_exporter"
+          upload-coverage: ${{ matrix.python-version == '3.12' }}
+          codecov-token: ${{ secrets.CODECOV_TOKEN }}
 
   # ============================================================================
   # 3️⃣ Docker Build Test (Parallel - depends on Lint)
