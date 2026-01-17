@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.1.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v2.0.0...v2.1.0) (2026-01-17)
+
+### ✨ Features
+
+* **security:** migrate from Bandit to Semgrep ([7ea08a6](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/7ea08a672ec65184f69319f2c49116a6c59482d2))
+
 ## [2.0.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v1.1.2...v2.0.0) (2026-01-17)
 
 ### ⚠ BREAKING CHANGES
