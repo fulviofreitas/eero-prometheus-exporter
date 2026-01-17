@@ -5,7 +5,7 @@ description = "Modern Prometheus exporter for eero mesh WiFi networks"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Eero Exporter Team" }]
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 keywords = ["eero", "prometheus", "exporter", "metrics", "mesh", "wifi", "monitoring"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -14,9 +14,9 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: System :: Monitoring",
     "Topic :: System :: Networking :: Monitoring",
 ]
@@ -54,7 +54,7 @@ where = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "B", "UP"]
@@ -64,7 +64,7 @@ ignore = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

@@ -4,7 +4,7 @@
 
 **Keep an eye on your mesh network like never before**
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-22c55e?style=for-the-badge)](LICENSE)
 [![Prometheus](https://img.shields.io/badge/prometheus-ready-e6522c?style=for-the-badge&logo=prometheus&logoColor=white)](https://prometheus.io)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ed?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
@@ -45,7 +45,7 @@ This exporter gives you **real-time insights** into your network's performance, 
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.12 or higher
 - An eero account with at least one network
 
 ### Installation
