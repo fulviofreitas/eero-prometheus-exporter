@@ -244,19 +244,6 @@ jobs:
 
           EOF
 
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            cat >> $GITHUB_STEP_SUMMARY << EOF
-
-          ### 📦 Triggered by eero-client Release
-
-          | Property | Value |
-          |:---------|:------|
-          | 🏷️ Version | \`${{ github.event.client_payload.version || 'unknown' }}\` |
-          | 🔖 Tag | \`${{ github.event.client_payload.tag || 'unknown' }}\` |
-
-          EOF
-          fi
-
           # Required: commitlint, lint, test, docker-build
           # Allowed to fail: type-check, security (informational)
           if [[ "$COMMITLINT" == "success" && "$LINT" == "success" && "$TEST" == "success" && "$DOCKER" == "success" ]]; then
