@@ -178,7 +178,7 @@ jobs:
           fi
 
       - name: 📊 Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: matrix.python-version == '3.12' && hashFiles('coverage.xml') != ''
         with:
           name: coverage-report
