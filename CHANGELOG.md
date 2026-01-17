@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.0.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v1.1.2...v2.0.0) (2026-01-17)
+
+### ⚠ BREAKING CHANGES
+
+* Python 3.10 and 3.11 are no longer supported
+
+- Update requires-python to >=3.12
+- Update classifiers to 3.12, 3.13, 3.14
+- Update mypy python_version to 3.12
+- Update ruff target-version to py312
+- Update CI test matrix to 3.12, 3.13, 3.14
+- Update README badge and requirements
+
+### ✨ Features
+
+* require Python 3.12 minimum ([736e07b](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/736e07bd6b0beadaa463a9d2ef59240f2b0274f8))
+
+### 🐛 Bug Fixes
+
+* **ci:** require ALL jobs to pass for CI Success ([b7a7d07](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/b7a7d07412c44aa36ebf0e603bf18fe569bf0a8a))
+* replace asyncio.TimeoutError with built-in TimeoutError ([88ee0f1](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/88ee0f1b923cc3927f62d63619d92e7ae4e3fda2))
+* resolve lint, format, and type-check CI failures ([7f1b68a](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/7f1b68afc8c61b1d83c399614d6b0c5edfa3e7aa))
+* suppress bandit B104 security warnings for intentional 0.0.0.0 binding ([18504de](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/18504de9b43c3266d357b2fed82186cb63f16a9a))
+
+### ♻️ Refactoring
+
+* update repository_dispatch event type name ([d74fe03](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/d74fe0372d2d8886359fd5afc1255df5ad09073f))
+
 ## [1.1.2](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v1.1.1...v1.1.2) (2026-01-17)
 
 ### 🐛 Bug Fixes
