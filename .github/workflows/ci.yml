@@ -1,8 +1,8 @@
 # ============================================================================
 # 🧪 Continuous Integration Pipeline
 # ============================================================================
-# Comprehensive CI that runs all checks: linting, tests, and type checking.
-# This is the single source of truth for code quality before release.
+# Comprehensive CI using reusable actions from eero-client.
+# All reusable actions are defined in fulviofreitas/eero-client/.github/actions/
 #
 # Chain: CI → Release → Docker
 # ============================================================================
@@ -15,9 +15,6 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
-  # Triggered when eero-client releases a new version
-  repository_dispatch:
-    types: [eero-client-release]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -41,28 +38,15 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 📦 Set up Node.js
-        uses: actions/setup-node@v6
+      - name: 📝 Validate commits
+        uses: fulviofreitas/eero-client/.github/actions/commitlint@main
         with:
-          node-version: "20"
-
-      - name: 🔧 Install commitlint
-        run: npm install -g @commitlint/cli @commitlint/config-conventional
-
-      - name: 🔍 Validate commits
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            npx commitlint \
-              --from ${{ github.event.pull_request.base.sha }} \
-              --to ${{ github.event.pull_request.head.sha }} \
-              --verbose
-          else
-            npx commitlint --last --verbose
-          fi
+          from-sha: ${{ github.event.pull_request.base.sha }}
+          to-sha: ${{ github.event.pull_request.head.sha }}
 
   # ============================================================================
   # 🧹 Lint & Type Check
@@ -74,10 +58,10 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: 🐍 Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
@@ -95,8 +79,11 @@ jobs:
         run: ruff format --check src/ --diff
 
       - name: 🔎 Run MyPy type checker
-        run: mypy src/eero_exporter/ --ignore-missing-imports
-        continue-on-error: true  # Type hints are advisory for now
+        uses: fulviofreitas/eero-client/.github/actions/python-typecheck@main
+        with:
+          src-path: "src/eero_exporter/"
+          fail-on-error: "false"
+          use-uv: "false"
 
   # ============================================================================
   # 🧪 Tests
@@ -113,10 +100,10 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: 🐍 Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
@@ -129,7 +116,6 @@ jobs:
 
       - name: 🧪 Run tests with coverage
         run: |
-          # Check if tests directory exists and has test files
           if [ -d "tests" ] && find tests -name "test_*.py" -o -name "*_test.py" 2>/dev/null | grep -q .; then
             pytest --cov=src/eero_exporter --cov-report=xml --cov-report=term-missing -v
           else
@@ -138,7 +124,7 @@ jobs:
           fi
 
       - name: 📊 Upload coverage report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         if: matrix.python-version == '3.12' && hashFiles('coverage.xml') != ''
         with:
           name: coverage-report
@@ -155,7 +141,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: 🛠️ Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -211,22 +197,12 @@ jobs:
           EOF
           fi
 
-          # All must pass
           if [[ "$COMMITLINT" == "success" && "$LINT" == "success" && "$TEST" == "success" && "$DOCKER" == "success" ]]; then
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
 
           > [!NOTE]
           > ### ✅ All Checks Passed
           > CI pipeline completed successfully. Ready for release!
-
-          ---
-
-          ```
-          📝 Commit Lint  ──┐
-          🧹 Lint         ──┼──→  ✅ CI Success  ──→  🚀 Release  ──→  🐳 Docker
-          🧪 Tests        ──┤
-          🐳 Docker Build ──┘
-          ```
 
           EOF
             exit 0
@@ -235,7 +211,7 @@ jobs:
 
           > [!CAUTION]
           > ### ❌ Some Checks Failed
-          > Review the failed jobs above and fix any issues before merging.
+          > Review the failed jobs above and fix any issues.
 
           EOF
             exit 1
