@@ -312,7 +312,7 @@ def serve(
         help="Port to listen on",
     ),
     host: str = typer.Option(
-        "0.0.0.0",
+        "0.0.0.0",  # nosec B104 - intentional for Docker/container deployments
         "--host",
         "-h",
         help="Host to bind to",

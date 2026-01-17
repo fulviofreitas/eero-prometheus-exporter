@@ -22,7 +22,7 @@ class ExporterConfig:
 
     # Server settings
     port: int = 9118
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # nosec B104 - intentional for Docker/container deployments
     metrics_path: str = "/metrics"
 
     # Collection settings
