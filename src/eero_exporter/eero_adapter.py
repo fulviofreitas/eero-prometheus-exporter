@@ -9,8 +9,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from eero import EeroClient as BaseEeroClient
-from eero.exceptions import (
+from eero import EeroClient as BaseEeroClient  # type: ignore[import-untyped]
+from eero.exceptions import (  # type: ignore[import-untyped]
     EeroAPIException,
     EeroAuthenticationException,
 )
@@ -44,12 +44,14 @@ def _model_to_dict(model: Any) -> dict[str, Any]:
     if model is None:
         return {}
     if isinstance(model, dict):
-        return model
+        return dict(model)
     if hasattr(model, "model_dump"):
         # Use mode='json' to serialize enums to their values (not repr)
-        return model.model_dump(mode="json")
+        result: dict[str, Any] = model.model_dump(mode="json")
+        return result
     if hasattr(model, "dict"):
-        return model.dict()
+        result = model.dict()
+        return dict(result)
     return {}
 
 
@@ -109,7 +111,7 @@ class EeroClient:
     def is_authenticated(self) -> bool:
         """Check if the client is authenticated."""
         if self._client:
-            return self._client.is_authenticated
+            return bool(self._client.is_authenticated)
         return False
 
     async def __aenter__(self) -> "EeroClient":
@@ -278,7 +280,10 @@ class EeroClient:
         # Get speed data from network info
         network = await self._client.get_network(network_id)
         network_dict = _model_to_dict(network)
-        return network_dict.get("speed", {})
+        speed_data = network_dict.get("speed", {})
+        if isinstance(speed_data, dict):
+            return speed_data
+        return None
 
     # =========================================================================
     # Transfer Stats
@@ -291,7 +296,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.get_transfer_stats(network_id, device_id)
+        result: dict[str, Any] = await self._client.get_transfer_stats(network_id, device_id)
+        return result
 
     # =========================================================================
     # SQM Settings
@@ -302,7 +308,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.get_sqm_settings(network_id)
+        result: dict[str, Any] = await self._client.get_sqm_settings(network_id)
+        return result
 
     # =========================================================================
     # Security Settings
@@ -313,7 +320,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.get_security_settings(network_id)
+        result: dict[str, Any] = await self._client.get_security_settings(network_id)
+        return result
 
     # =========================================================================
     # Premium Features (Eero Plus)
@@ -324,14 +332,15 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.get_premium_status(network_id)
+        result: dict[str, Any] = await self._client.get_premium_status(network_id)
+        return result
 
     async def is_premium(self, network_id: str) -> bool:
         """Check if the network has an active Eero Plus subscription."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.is_premium(network_id)
+        return bool(await self._client.is_premium(network_id))
 
     # =========================================================================
     # Activity (Eero Plus)
@@ -342,21 +351,24 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.get_activity(network_id)
+        result: dict[str, Any] = await self._client.get_activity(network_id)
+        return result
 
     async def get_activity_clients(self, network_id: str) -> list[dict[str, Any]]:
         """Get per-client activity data (Eero Plus feature)."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.get_activity_clients(network_id)
+        result: list[dict[str, Any]] = await self._client.get_activity_clients(network_id)
+        return result
 
     async def get_activity_categories(self, network_id: str) -> list[dict[str, Any]]:
         """Get activity data grouped by category (Eero Plus feature)."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.get_activity_categories(network_id)
+        result: list[dict[str, Any]] = await self._client.get_activity_categories(network_id)
+        return result
 
     # =========================================================================
     # Backup Network (Eero Plus)
@@ -367,21 +379,23 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.get_backup_network(network_id)
+        result: dict[str, Any] = await self._client.get_backup_network(network_id)
+        return result
 
     async def get_backup_status(self, network_id: str) -> dict[str, Any]:
         """Get current backup network status (Eero Plus feature)."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.get_backup_status(network_id)
+        result: dict[str, Any] = await self._client.get_backup_status(network_id)
+        return result
 
     async def is_using_backup(self, network_id: str) -> bool:
         """Check if the network is currently using backup connection."""
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.is_using_backup(network_id)
+        return bool(await self._client.is_using_backup(network_id))
 
     # =========================================================================
     # Thread
@@ -392,7 +406,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.get_thread(network_id)
+        result: dict[str, Any] = await self._client.get_thread(network_id)
+        return result
 
     # =========================================================================
     # Diagnostics
@@ -403,4 +418,5 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return await self._client.get_diagnostics(network_id)
+        result: dict[str, Any] = await self._client.get_diagnostics(network_id)
+        return result

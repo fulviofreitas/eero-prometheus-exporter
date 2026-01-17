@@ -15,7 +15,7 @@ from .config import ExporterConfig
 _LOGGER = logging.getLogger(__name__)
 
 # Global state for health checks
-_health_state = {
+_health_state: dict[str, bool | int | str | None] = {
     "session_valid": False,
     "last_collection_success": False,
     "last_error": None,
@@ -27,7 +27,7 @@ _health_state = {
 class MetricsHandler(SimpleHTTPRequestHandler):
     """HTTP handler for Prometheus metrics endpoint."""
 
-    def log_message(self, format: str, *args) -> None:
+    def log_message(self, format: str, *args: object) -> None:
         """Override to use our logger."""
         _LOGGER.debug(f"HTTP: {format % args}")
 
@@ -75,9 +75,7 @@ class MetricsHandler(SimpleHTTPRequestHandler):
         Use this for monitoring the actual health of the exporter.
         Returns 503 if session is invalid or collections are failing.
         """
-        is_healthy = (
-            _health_state["session_valid"] and _health_state["last_collection_success"]
-        )
+        is_healthy = _health_state["session_valid"] and _health_state["last_collection_success"]
 
         response_data = {
             "status": "healthy" if is_healthy else "unhealthy",
@@ -185,7 +183,9 @@ async def collection_loop(
 
     async def do_collection() -> None:
         """Perform collection and update health state."""
-        _health_state["collections_total"] += 1
+        collections_total = _health_state["collections_total"]
+        if isinstance(collections_total, int):
+            _health_state["collections_total"] = collections_total + 1
         try:
             success = await collector.collect()
             _health_state["last_collection_success"] = success
@@ -193,14 +193,16 @@ async def collection_loop(
             if success:
                 _health_state["last_error"] = None
             else:
-                _health_state["collections_failed"] += 1
-                _health_state["last_error"] = (
-                    "Collection failed - check logs for details"
-                )
+                collections_failed = _health_state["collections_failed"]
+                if isinstance(collections_failed, int):
+                    _health_state["collections_failed"] = collections_failed + 1
+                _health_state["last_error"] = "Collection failed - check logs for details"
         except Exception as e:
             _health_state["last_collection_success"] = False
             _health_state["session_valid"] = False
-            _health_state["collections_failed"] += 1
+            collections_failed = _health_state["collections_failed"]
+            if isinstance(collections_failed, int):
+                _health_state["collections_failed"] = collections_failed + 1
             _health_state["last_error"] = str(e)
 
     # Initial collection
@@ -241,7 +243,7 @@ def run_server(config: ExporterConfig) -> None:
     stop_event = asyncio.Event()
     loop: asyncio.AbstractEventLoop | None = None
 
-    def signal_handler(signum, frame) -> None:
+    def signal_handler(signum: int, frame: object) -> None:
         """Handle shutdown signals."""
         _LOGGER.info(f"Received signal {signum}, shutting down...")
         if loop:

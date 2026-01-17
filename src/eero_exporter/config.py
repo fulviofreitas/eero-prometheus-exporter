@@ -7,7 +7,7 @@ import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 _LOGGER = logging.getLogger(__name__)
 

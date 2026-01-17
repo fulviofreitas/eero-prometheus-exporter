@@ -63,6 +63,16 @@ ignore = [
     "B904",  # Within except clause, raise with from (not always needed for CLI exits)
 ]
 
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_gitignore = true
+known_first_party = ["eero_exporter"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
 [tool.mypy]
 python_version = "3.12"
 warn_return_any = true
