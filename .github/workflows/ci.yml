@@ -1,10 +1,9 @@
 # ============================================================================
 # 🧪 Continuous Integration Pipeline
 # ============================================================================
-# Comprehensive CI using reusable actions from eero-client.
-# All reusable actions are defined in fulviofreitas/eero-client/.github/actions/
+# Chain: Commit Lint → Lint & Format → [Type Check ‖ Security ‖ Tests ‖ Docker] → CI Success
 #
-# Chain: CI → Release → Docker
+# All reusable actions are sourced from fulviofreitas/eero-client/.github/actions/
 # ============================================================================
 
 name: 🧪 CI Pipeline
@@ -29,7 +28,7 @@ env:
 
 jobs:
   # ============================================================================
-  # 📝 Commit Lint
+  # 1️⃣ Commit Lint (Gate 1)
   # ============================================================================
   commitlint:
     name: 📝 Commit Lint
@@ -43,18 +42,19 @@ jobs:
           fetch-depth: 0
 
       - name: 📝 Validate commits
-        uses: fulviofreitas/eero-client/.github/actions/commitlint@main
+        uses: fulviofreitas/eero-client/.github/actions/commitlint@master
         with:
           from-sha: ${{ github.event.pull_request.base.sha }}
           to-sha: ${{ github.event.pull_request.head.sha }}
 
   # ============================================================================
-  # 🧹 Lint & Type Check
+  # 2️⃣ Lint & Format (Gate 2 - depends on Commit Lint)
   # ============================================================================
   lint:
-    name: 🧹 Lint & Type Check
+    name: 🧹 Lint & Format
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: commitlint
 
     steps:
       - name: 📥 Checkout repository
@@ -78,21 +78,76 @@ jobs:
       - name: 🔍 Run Ruff formatter check
         run: ruff format --check src/ --diff
 
+  # ============================================================================
+  # 3️⃣ Type Check (Parallel - depends on Lint)
+  # ============================================================================
+  type-check:
+    name: 🔍 Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint
+    continue-on-error: true
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "pyproject.toml"
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
       - name: 🔎 Run MyPy type checker
-        uses: fulviofreitas/eero-client/.github/actions/python-typecheck@main
+        uses: fulviofreitas/eero-client/.github/actions/python-typecheck@master
         with:
           src-path: "src/eero_exporter/"
           fail-on-error: "false"
           use-uv: "false"
 
   # ============================================================================
-  # 🧪 Tests
+  # 3️⃣ Security Scan (Parallel - depends on Lint)
+  # ============================================================================
+  security:
+    name: 🛡️ Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: lint
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "pyproject.toml"
+
+      - name: 🛡️ Run security scan
+        uses: fulviofreitas/eero-client/.github/actions/security-bandit@master
+        with:
+          src-path: "src/"
+          fail-on-findings: "false"
+          use-uv: "false"
+
+  # ============================================================================
+  # 3️⃣ Test Matrix (Parallel - depends on Lint)
   # ============================================================================
   test:
     name: 🧪 Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
+    needs: lint
     strategy:
       fail-fast: false
       matrix:
@@ -132,12 +187,13 @@ jobs:
           retention-days: 30
 
   # ============================================================================
-  # 🐳 Docker Build Test
+  # 3️⃣ Docker Build Test (Parallel - depends on Lint)
   # ============================================================================
   docker-build:
     name: 🐳 Docker Build Test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: lint
 
     steps:
       - name: 📥 Checkout repository
@@ -156,12 +212,12 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ============================================================================
-  # ✅ CI Success Gate
+  # 4️⃣ CI Success Gate (Final - depends on all parallel jobs)
   # ============================================================================
   ci-success:
     name: ✅ CI Success
     runs-on: ubuntu-latest
-    needs: [commitlint, lint, test, docker-build]
+    needs: [commitlint, lint, type-check, test, security, docker-build]
     if: always()
 
     steps:
@@ -169,18 +225,22 @@ jobs:
         run: |
           COMMITLINT="${{ needs.commitlint.result }}"
           LINT="${{ needs.lint.result }}"
+          TYPECHECK="${{ needs.type-check.result }}"
           TEST="${{ needs.test.result }}"
+          SECURITY="${{ needs.security.result }}"
           DOCKER="${{ needs.docker-build.result }}"
 
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🧪 CI Pipeline Summary
 
-          | Job | Status |
-          |:----|:-------|
-          | 📝 Commit Lint | ${COMMITLINT} |
-          | 🧹 Lint & Type Check | ${LINT} |
-          | 🧪 Tests | ${TEST} |
-          | 🐳 Docker Build | ${DOCKER} |
+          | Stage | Job | Status |
+          |:------|:----|:-------|
+          | 1️⃣ | 📝 Commit Lint | ${COMMITLINT} |
+          | 2️⃣ | 🧹 Lint & Format | ${LINT} |
+          | 3️⃣ | 🔍 Type Check | ${TYPECHECK} |
+          | 3️⃣ | 🛡️ Security | ${SECURITY} |
+          | 3️⃣ | 🧪 Tests | ${TEST} |
+          | 3️⃣ | 🐳 Docker Build | ${DOCKER} |
 
           EOF
 
@@ -197,12 +257,29 @@ jobs:
           EOF
           fi
 
+          # Required: commitlint, lint, test, docker-build
+          # Allowed to fail: type-check, security (informational)
           if [[ "$COMMITLINT" == "success" && "$LINT" == "success" && "$TEST" == "success" && "$DOCKER" == "success" ]]; then
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
 
           > [!NOTE]
-          > ### ✅ All Checks Passed
+          > ### ✅ All Required Checks Passed
           > CI pipeline completed successfully. Ready for release!
+
+          ---
+
+          ```
+          1️⃣ 📝 Commit Lint
+                 ↓
+          2️⃣ 🧹 Lint & Format
+                 ↓
+               ┌─┴─┬─────┬─────────┐
+          3️⃣   │   │     │         │
+          🔍 Type 🛡️ Sec 🧪 Test 🐳 Docker
+               └─┬─┴─────┴─────────┘
+                 ↓
+          4️⃣ ✅ CI Success → 🚀 Release
+          ```
 
           EOF
             exit 0
@@ -210,8 +287,8 @@ jobs:
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
 
           > [!CAUTION]
-          > ### ❌ Some Checks Failed
-          > Review the failed jobs above and fix any issues.
+          > ### ❌ Some Required Checks Failed
+          > Review the failed jobs above and fix any issues before merging.
 
           EOF
             exit 1
