@@ -75,7 +75,9 @@ class MetricsHandler(SimpleHTTPRequestHandler):
         Use this for monitoring the actual health of the exporter.
         Returns 503 if session is invalid or collections are failing.
         """
-        is_healthy = _health_state["session_valid"] and _health_state["last_collection_success"]
+        is_healthy = (
+            _health_state["session_valid"] and _health_state["last_collection_success"]
+        )
 
         response_data = {
             "status": "healthy" if is_healthy else "unhealthy",
@@ -192,7 +194,9 @@ async def collection_loop(
                 _health_state["last_error"] = None
             else:
                 _health_state["collections_failed"] += 1
-                _health_state["last_error"] = "Collection failed - check logs for details"
+                _health_state["last_error"] = (
+                    "Collection failed - check logs for details"
+                )
         except Exception as e:
             _health_state["last_collection_success"] = False
             _health_state["session_valid"] = False
@@ -209,7 +213,7 @@ async def collection_loop(
                 stop_event.wait(),
                 timeout=interval,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Interval elapsed, collect metrics
             await do_collection()
 
