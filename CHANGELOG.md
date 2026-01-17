@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.1.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v1.0.1...v1.1.0) (2026-01-17)
+
+### ✨ Features
+
+* **ci:** migrate workflows to use reusable actions from eero-client ([9b19b33](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/9b19b33b27bf77305e8e74175334bc037273c9f8))
+
+### 🐛 Bug Fixes
+
+* **ci:** use master branch consistently in all workflows ([0167833](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/016783363160d4286957b0978728bca8d78ee428))
+* **ci:** use master branch only in triggers ([f152d71](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/f152d71f788539e49fc0abc78396c1a20b64a6e0))
+
+### ♻️ Refactoring
+
+* **ci:** standardize pipeline chain format ([ab4d473](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/ab4d4737dfc240232ac570e5747c1584b43aaa82))
+
 ## [1.0.1](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v1.0.0...v1.0.1) (2026-01-16)
 
 ### 🐛 Bug Fixes
