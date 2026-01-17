@@ -108,7 +108,7 @@ jobs:
         uses: fulviofreitas/eero-client/.github/actions/python-typecheck@master
         with:
           src-path: "src/eero_exporter/"
-          fail-on-error: "false"
+          fail-on-error: "true"
           use-uv: "false"
 
   # ============================================================================
@@ -119,6 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: lint
+    continue-on-error: true
 
     steps:
       - name: 📥 Checkout code
@@ -137,7 +138,7 @@ jobs:
         uses: fulviofreitas/eero-client/.github/actions/security-bandit@master
         with:
           src-path: "src/"
-          fail-on-findings: "false"
+          fail-on-findings: "true"
           use-uv: "false"
 
   # ============================================================================
@@ -225,9 +226,9 @@ jobs:
         run: |
           COMMITLINT="${{ needs.commitlint.result }}"
           LINT="${{ needs.lint.result }}"
-          TYPECHECK="${{ needs.type-check.result }}"
+          TYPECHECK="${{ needs.type-check.outcome }}"
           TEST="${{ needs.test.result }}"
-          SECURITY="${{ needs.security.result }}"
+          SECURITY="${{ needs.security.outcome }}"
           DOCKER="${{ needs.docker-build.result }}"
 
           cat >> $GITHUB_STEP_SUMMARY << EOF
