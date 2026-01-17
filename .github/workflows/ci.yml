@@ -60,23 +60,20 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
+      - name: 📦 Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
-          cache-dependency-path: "pyproject.toml"
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
 
-      - name: 📦 Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: 🐍 Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
 
-      - name: 🧹 Run Ruff linter
-        run: ruff check src/ --output-format=github
-
-      - name: 🔍 Run Ruff formatter check
-        run: ruff format --check src/ --diff
+      - name: 🧹 Run Python lint
+        uses: fulviofreitas/eero-client/.github/actions/python-lint@master
+        with:
+          src-path: "src/"
+          tests-path: "tests/"
 
   # ============================================================================
   # 3️⃣ Type Check (Parallel - depends on Lint)
