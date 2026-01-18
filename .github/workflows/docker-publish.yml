@@ -2,7 +2,7 @@
 # 🐳 Docker Image Build & Publish
 # ============================================================================
 # Builds multi-platform Docker images and publishes to GitHub Container Registry.
-# Uses reusable actions from eero-client for maintainability.
+# Uses reusable actions from eero-api for maintainability.
 #
 # Chain: CI → Release → Docker
 # ============================================================================

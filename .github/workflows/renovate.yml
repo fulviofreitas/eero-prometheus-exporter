@@ -2,12 +2,12 @@
 # 🔄 Renovate - Automated Dependency Updates
 # ============================================================================
 # Runs Renovate to check for dependency updates and create PRs.
-# Uses the reusable renovate action from eero-client.
+# Uses the reusable renovate action from eero-api.
 #
 # Triggers:
 # - Scheduled: Every 6 hours (4 times daily)
 # - Manual: workflow_dispatch
-# - On eero-client release: repository_dispatch
+# - On eero-api release: repository_dispatch
 # ============================================================================
 
 name: 🔄 Renovate
@@ -45,7 +45,7 @@ on:
           - "true"
 
   repository_dispatch:
-    types: [eero-client-dependency-update-available]
+    types: [eero-api-dependency-update-available]
 
 concurrency:
   group: renovate
@@ -68,8 +68,8 @@ jobs:
         run: |
           echo "🎯 Trigger: ${{ github.event_name }}"
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "📦 eero-client version: ${{ github.event.client_payload.version }}"
-            echo "🔖 eero-client tag: ${{ github.event.client_payload.tag }}"
+            echo "📦 eero-api version: ${{ github.event.client_payload.version }}"
+            echo "🔖 eero-api tag: ${{ github.event.client_payload.tag }}"
           fi
 
       - name: 🔄 Run Renovate
@@ -98,7 +98,7 @@ jobs:
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             cat >> $GITHUB_STEP_SUMMARY << EOF
 
-          ### 📦 Triggered by eero-client Release
+          ### 📦 Triggered by eero-api Release
 
           | Property | Value |
           |:---------|:------|

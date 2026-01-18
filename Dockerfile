@@ -32,7 +32,7 @@ WORKDIR /app
 RUN groupadd -r eero && useradd -r -g eero eero
 
 # Install dependencies with cache mounts for speed
-# Git is required for pip to install eero-client from GitHub
+# Git is required for pip to install eero-api from GitHub
 COPY --from=builder /app/dist/*.whl ./
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \

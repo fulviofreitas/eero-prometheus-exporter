@@ -1,6 +1,6 @@
-"""Adapter to bridge eero-client library with the Prometheus exporter.
+"""Adapter to bridge eero-api library with the Prometheus exporter.
 
-This module provides a compatibility layer that wraps the eero-client
+This module provides a compatibility layer that wraps the eero-api
 library, converting its Pydantic models to dictionaries for backward compatibility
 with the exporter's metrics collection logic.
 """
@@ -27,7 +27,7 @@ __all__ = [
 
 _LOGGER = logging.getLogger(__name__)
 
-# Default session file path - used as cookie storage for eero-client
+# Default session file path - used as cookie storage for eero-api
 # This keeps backward compatibility with existing Docker setups using session.json
 DEFAULT_SESSION_FILE = Path.home() / ".config" / "eero-exporter" / "session.json"
 
@@ -70,13 +70,13 @@ def _models_to_dicts(models: list[Any]) -> list[dict[str, Any]]:
 
 
 class EeroClient:
-    """Adapter wrapping eero-client for the Prometheus exporter.
+    """Adapter wrapping eero-api for the Prometheus exporter.
 
     This class provides the same interface as the original embedded API client,
-    but delegates to the eero-client library internally. Responses are
+    but delegates to the eero-api library internally. Responses are
     converted from Pydantic models to dictionaries for compatibility.
 
-    The eero-client library handles authentication via:
+    The eero-api library handles authentication via:
     - System keyring (default, for desktop use)
     - Cookie file (for Docker/headless environments)
 
@@ -100,7 +100,7 @@ class EeroClient:
             cookie_file: Path to cookie file for credential storage
             use_keyring: Whether to use system keyring (default: False for Docker)
         """
-        # Note: session_id and user_token are ignored - eero-client manages auth internally
+        # Note: session_id and user_token are ignored - eero-api manages auth internally
         self._timeout = timeout
         self._cookie_file = cookie_file or str(DEFAULT_SESSION_FILE)
         self._use_keyring = use_keyring
@@ -144,7 +144,7 @@ class EeroClient:
             identifier: Email address or phone number
 
         Returns:
-            A placeholder token (actual auth is managed by eero-client)
+            A placeholder token (actual auth is managed by eero-api)
         """
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -153,7 +153,7 @@ class EeroClient:
         if not success:
             raise EeroAuthError("Login request failed")
 
-        # Return a placeholder - actual token management is internal to eero-client
+        # Return a placeholder - actual token management is internal to eero-api
         return "pending_verification"
 
     async def verify(self, code: str) -> dict[str, Any]:
@@ -271,7 +271,7 @@ class EeroClient:
     async def get_speed_test(self, network_id: str) -> dict[str, Any] | None:
         """Get the latest speed test results.
 
-        Note: eero-client uses run_speed_test() to trigger new tests.
+        Note: eero-api uses run_speed_test() to trigger new tests.
         This method gets the last known speed data from network info.
         """
         if not self._client:

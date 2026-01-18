@@ -2,7 +2,7 @@
 # 🚀 Automated Semantic Release
 # ============================================================================
 # Automatically creates releases based on conventional commit messages.
-# Uses reusable actions from eero-client for maintainability.
+# Uses reusable actions from eero-api for maintainability.
 #
 # Chain: CI → Release → Docker
 # Triggers: After CI Pipeline succeeds on main/master

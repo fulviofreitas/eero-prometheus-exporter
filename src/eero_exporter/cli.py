@@ -60,7 +60,7 @@ def login(
         console.print(f"\n[bold blue]Eero Prometheus Exporter v{__version__}[/bold blue]\n")
 
         # Use a single client context for the entire login flow
-        # (eero-client manages cookies internally)
+        # (eero-api manages cookies internally)
         async with EeroClient() as client:
             with Progress(
                 SpinnerColumn(),
