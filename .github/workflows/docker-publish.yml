@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
 
       - name: 🐳 Build and push Docker image
-        uses: fulviofreitas/eero-client/.github/actions/docker-build@master
+        uses: fulviofreitas/eero-api/.github/actions/docker-build@master
         with:
           image-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           context: "."

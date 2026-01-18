@@ -32,7 +32,7 @@ This exporter gives you **real-time insights** into your network's performance, 
 | -------------------------- | ------------------------------------------------------------------------- |
 | 📊 **90+ Metrics**         | Network, eero hardware, devices, Ethernet ports, Thread, Eero Plus & more |
 | ⚡ **Async Architecture**  | Non-blocking I/O for efficient, lightweight collection                    |
-| 🔗 **Async API Client**    | Powered by [eero-client](https://github.com/fulviofreitas/eero-client)    |
+| 🔗 **Async API Client**    | Powered by [eero-client](https://github.com/fulviofreitas/eero-api)    |
 | 🔐 **Secure Auth**         | Session-based authentication with secure local storage                    |
 | 🐳 **Docker Ready**        | Multi-stage build with minimal image footprint                            |
 | 🎨 **Beautiful CLI**       | Rich terminal output with colors and progress indicators                  |
@@ -507,7 +507,7 @@ eero_eero_update_available == 1
 | -------------------- | -------------------------------------------------------------------------------- |
 | **Token Storage**    | Restricted file permissions (0600)                                               |
 | **Default Location** | `~/.config/eero-exporter/session.json`                                           |
-| **Auth Library**     | Uses [eero-client](https://github.com/fulviofreitas/eero-client) for secure auth |
+| **Auth Library**     | Uses [eero-client](https://github.com/fulviofreitas/eero-api) for secure auth |
 | **Logging**          | Tokens are never logged in plain text                                            |
 | **API Connection**   | HTTPS only (TLS 1.2+)                                                            |
 
@@ -594,7 +594,7 @@ ruff check src/
 
 ## 🔗 Dependencies
 
-This project uses the **[eero-client](https://github.com/fulviofreitas/eero-client)** library for communicating with eero's cloud services. The eero-client provides:
+This project uses the **[eero-client](https://github.com/fulviofreitas/eero-api)** library for communicating with eero's cloud services. The eero-client provides:
 
 - 🚀 **Async-first** — Built on `aiohttp` for non-blocking operations
 - 📦 **Type-safe** — Pydantic models with full type hints
@@ -606,7 +606,7 @@ This project uses the **[eero-client](https://github.com/fulviofreitas/eero-clie
 
 This project is a **complete revamp** inspired by and building upon the excellent work of:
 
-- **[fulviofreitas/eero-client](https://github.com/fulviofreitas/eero-client)** — The modern, async Python client for the eero API that powers this exporter. Built on the foundation laid by [@343max](https://github.com/343max/eero-client).
+- **[fulviofreitas/eero-api](https://github.com/fulviofreitas/eero-api)** — The modern, async Python client for the eero API that powers this exporter. Built on the foundation laid by [@343max](https://github.com/343max/eero-client).
 
 - **[brmurphy/eero-exporter](https://github.com/brmurphy/eero-exporter)** — The original eero Prometheus exporter that started it all. Huge thanks to [@brmurphy](https://github.com/brmurphy) for pioneering this concept.
 

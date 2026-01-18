@@ -3,7 +3,7 @@
 # ============================================================================
 # Chain: Commit Lint → Lint & Format → [Type Check ‖ Security ‖ Tests ‖ Docker] → CI Success
 #
-# All reusable actions are sourced from fulviofreitas/eero-client/.github/actions/
+# All reusable actions are sourced from fulviofreitas/eero-api/.github/actions/
 # ============================================================================
 
 name: 🧪 CI Pipeline
@@ -43,7 +43,7 @@ jobs:
           fetch-depth: 0
 
       - name: 📝 Validate commits
-        uses: fulviofreitas/eero-client/.github/actions/commitlint@master
+        uses: fulviofreitas/eero-api/.github/actions/commitlint@master
         with:
           from-sha: ${{ github.event.pull_request.base.sha }}
           to-sha: ${{ github.event.pull_request.head.sha }}
@@ -71,7 +71,7 @@ jobs:
         run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: 🧹 Run Python lint
-        uses: fulviofreitas/eero-client/.github/actions/python-lint@master
+        uses: fulviofreitas/eero-api/.github/actions/python-lint@master
         with:
           src-path: "src/"
           tests-path: "tests/"
@@ -102,7 +102,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: 🔎 Run MyPy type checker
-        uses: fulviofreitas/eero-client/.github/actions/python-typecheck@master
+        uses: fulviofreitas/eero-api/.github/actions/python-typecheck@master
         with:
           src-path: "src/eero_exporter/"
           fail-on-error: "true"
@@ -132,7 +132,7 @@ jobs:
         run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: 🛡️ Run security scan
-        uses: fulviofreitas/eero-client/.github/actions/security-semgrep@master
+        uses: fulviofreitas/eero-api/.github/actions/security-semgrep@master
         with:
           config: "p/python p/security-audit"
           target-path: "src/"
@@ -168,7 +168,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: 🧪 Run tests
-        uses: fulviofreitas/eero-client/.github/actions/python-test@master
+        uses: fulviofreitas/eero-api/.github/actions/python-test@master
         with:
           test-path: "tests/"
           src-path: "src/eero_exporter"
