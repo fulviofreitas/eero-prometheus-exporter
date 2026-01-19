@@ -15,9 +15,33 @@ from eero.exceptions import (  # type: ignore[import-untyped]
     EeroAuthenticationException,
 )
 
-# Re-export exceptions with legacy names for backward compatibility
-EeroAPIError = EeroAPIException
-EeroAuthError = EeroAuthenticationException
+
+# Define local exception classes for stable API.
+# This decouples the adapter from upstream exception signature changes
+# (e.g., eero-api v1.3.0+ changed EeroAPIException to require status_code).
+class EeroAPIError(Exception):
+    """API error raised by the eero adapter.
+
+    This is a local exception class that provides a stable interface,
+    independent of upstream eero-api exception signatures.
+    """
+
+    pass
+
+
+class EeroAuthError(Exception):
+    """Authentication error raised by the eero adapter.
+
+    This is a local exception class that provides a stable interface,
+    independent of upstream eero-api exception signatures.
+    """
+
+    pass
+
+
+# Keep references to upstream exceptions for catching in try/except blocks
+_UpstreamAPIException = EeroAPIException
+_UpstreamAuthException = EeroAuthenticationException
 
 __all__ = [
     "EeroClient",
