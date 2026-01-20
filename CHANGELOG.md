@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.2.2](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v2.2.1...v2.2.2) (2026-01-20)
+
+### 🐛 Bug Fixes
+
+* **ci:** prevent commitlint body-max-line-length failures on Renovate PRs ([583e451](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/583e451aff7ef72741262b65012c051309816eba))
+
 ## [2.2.1](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v2.2.0...v2.2.1) (2026-01-20)
 
 ### 🐛 Bug Fixes
