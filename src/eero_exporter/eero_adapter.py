@@ -51,6 +51,34 @@ __all__ = [
 
 _LOGGER = logging.getLogger(__name__)
 
+
+def _wrap_api_call(message: str = "API call failed") -> Any:
+    """Decorator to wrap API calls and convert upstream exceptions to local ones.
+
+    This ensures that any EeroAPIException or EeroAuthenticationException raised
+    by the eero-api library is converted to our local EeroAPIError or EeroAuthError.
+    """
+    from collections.abc import Callable
+    from functools import wraps
+    from typing import TypeVar
+
+    F = TypeVar("F", bound=Callable[..., Any])
+
+    def decorator(func: F) -> F:
+        @wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return await func(*args, **kwargs)
+            except _UpstreamAuthException as e:
+                raise EeroAuthError(str(e)) from e
+            except _UpstreamAPIException as e:
+                raise EeroAPIError(str(e)) from e
+
+        return wrapper  # type: ignore[return-value]
+
+    return decorator
+
+
 # Default session file path - used as cookie storage for eero-api
 # This keeps backward compatibility with existing Docker setups using session.json
 DEFAULT_SESSION_FILE = Path.home() / ".config" / "eero-exporter" / "session.json"
@@ -149,7 +177,12 @@ class EeroClient:
             cookie_file=self._cookie_file,
             use_keyring=self._use_keyring,
         )
-        await self._client.__aenter__()
+        try:
+            await self._client.__aenter__()
+        except _UpstreamAuthException as e:
+            raise EeroAuthError(str(e)) from e
+        except _UpstreamAPIException as e:
+            raise EeroAPIError(str(e)) from e
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -161,6 +194,7 @@ class EeroClient:
     # Authentication
     # =========================================================================
 
+    @_wrap_api_call("Login failed")
     async def login(self, identifier: str) -> str:
         """Start login flow by requesting a verification code.
 
@@ -180,6 +214,7 @@ class EeroClient:
         # Return a placeholder - actual token management is internal to eero-api
         return "pending_verification"
 
+    @_wrap_api_call("Verification failed")
     async def verify(self, code: str) -> dict[str, Any]:
         """Verify login with the code sent to the user.
 
@@ -219,6 +254,7 @@ class EeroClient:
     # Account & Networks
     # =========================================================================
 
+    @_wrap_api_call("Failed to get account")
     async def get_account(self) -> dict[str, Any]:
         """Get account information."""
         if not self._client:
@@ -227,6 +263,7 @@ class EeroClient:
         account = await self._client.get_account()
         return _model_to_dict(account)
 
+    @_wrap_api_call("Failed to get networks")
     async def get_networks(self) -> list[dict[str, Any]]:
         """Get list of networks."""
         if not self._client:
@@ -244,6 +281,7 @@ class EeroClient:
 
         return result
 
+    @_wrap_api_call("Failed to get network")
     async def get_network(self, network_id: str) -> dict[str, Any]:
         """Get detailed network information."""
         if not self._client:
@@ -256,6 +294,7 @@ class EeroClient:
     # Eero Devices
     # =========================================================================
 
+    @_wrap_api_call("Failed to get eeros")
     async def get_eeros(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of eero devices in a network."""
         if not self._client:
@@ -268,6 +307,7 @@ class EeroClient:
     # Client Devices
     # =========================================================================
 
+    @_wrap_api_call("Failed to get devices")
     async def get_devices(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of client devices in a network."""
         if not self._client:
@@ -280,6 +320,7 @@ class EeroClient:
     # Profiles
     # =========================================================================
 
+    @_wrap_api_call("Failed to get profiles")
     async def get_profiles(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of profiles in a network."""
         if not self._client:
@@ -292,6 +333,7 @@ class EeroClient:
     # Speed Test
     # =========================================================================
 
+    @_wrap_api_call("Failed to get speed test")
     async def get_speed_test(self, network_id: str) -> dict[str, Any] | None:
         """Get the latest speed test results.
 
@@ -313,6 +355,7 @@ class EeroClient:
     # Transfer Stats
     # =========================================================================
 
+    @_wrap_api_call("Failed to get transfer stats")
     async def get_transfer_stats(
         self, network_id: str, device_id: str | None = None
     ) -> dict[str, Any]:
@@ -327,6 +370,7 @@ class EeroClient:
     # SQM Settings
     # =========================================================================
 
+    @_wrap_api_call("Failed to get SQM settings")
     async def get_sqm_settings(self, network_id: str) -> dict[str, Any]:
         """Get SQM (Smart Queue Management) settings."""
         if not self._client:
@@ -339,6 +383,7 @@ class EeroClient:
     # Security Settings
     # =========================================================================
 
+    @_wrap_api_call("Failed to get security settings")
     async def get_security_settings(self, network_id: str) -> dict[str, Any]:
         """Get security settings for the network."""
         if not self._client:
@@ -351,6 +396,7 @@ class EeroClient:
     # Premium Features (Eero Plus)
     # =========================================================================
 
+    @_wrap_api_call("Failed to get premium status")
     async def get_premium_status(self, network_id: str) -> dict[str, Any]:
         """Get Eero Plus/Secure subscription status."""
         if not self._client:
@@ -359,6 +405,7 @@ class EeroClient:
         result: dict[str, Any] = await self._client.get_premium_status(network_id)
         return result
 
+    @_wrap_api_call("Failed to check premium status")
     async def is_premium(self, network_id: str) -> bool:
         """Check if the network has an active Eero Plus subscription."""
         if not self._client:
@@ -370,6 +417,7 @@ class EeroClient:
     # Activity (Eero Plus)
     # =========================================================================
 
+    @_wrap_api_call("Failed to get activity")
     async def get_activity(self, network_id: str) -> dict[str, Any]:
         """Get network activity summary (Eero Plus feature)."""
         if not self._client:
@@ -378,6 +426,7 @@ class EeroClient:
         result: dict[str, Any] = await self._client.get_activity(network_id)
         return result
 
+    @_wrap_api_call("Failed to get activity clients")
     async def get_activity_clients(self, network_id: str) -> list[dict[str, Any]]:
         """Get per-client activity data (Eero Plus feature)."""
         if not self._client:
@@ -386,6 +435,7 @@ class EeroClient:
         result: list[dict[str, Any]] = await self._client.get_activity_clients(network_id)
         return result
 
+    @_wrap_api_call("Failed to get activity categories")
     async def get_activity_categories(self, network_id: str) -> list[dict[str, Any]]:
         """Get activity data grouped by category (Eero Plus feature)."""
         if not self._client:
@@ -398,6 +448,7 @@ class EeroClient:
     # Backup Network (Eero Plus)
     # =========================================================================
 
+    @_wrap_api_call("Failed to get backup network")
     async def get_backup_network(self, network_id: str) -> dict[str, Any]:
         """Get backup network configuration (Eero Plus feature)."""
         if not self._client:
@@ -406,6 +457,7 @@ class EeroClient:
         result: dict[str, Any] = await self._client.get_backup_network(network_id)
         return result
 
+    @_wrap_api_call("Failed to get backup status")
     async def get_backup_status(self, network_id: str) -> dict[str, Any]:
         """Get current backup network status (Eero Plus feature)."""
         if not self._client:
@@ -414,6 +466,7 @@ class EeroClient:
         result: dict[str, Any] = await self._client.get_backup_status(network_id)
         return result
 
+    @_wrap_api_call("Failed to check backup status")
     async def is_using_backup(self, network_id: str) -> bool:
         """Check if the network is currently using backup connection."""
         if not self._client:
@@ -425,6 +478,7 @@ class EeroClient:
     # Thread
     # =========================================================================
 
+    @_wrap_api_call("Failed to get thread data")
     async def get_thread(self, network_id: str) -> dict[str, Any]:
         """Get Thread network information."""
         if not self._client:
@@ -437,6 +491,7 @@ class EeroClient:
     # Diagnostics
     # =========================================================================
 
+    @_wrap_api_call("Failed to get diagnostics")
     async def get_diagnostics(self, network_id: str) -> dict[str, Any]:
         """Get network diagnostics information."""
         if not self._client:
