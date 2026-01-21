@@ -5,6 +5,7 @@
 **Keep an eye on your mesh network like never before**
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![PyPI](https://img.shields.io/pypi/v/eero-prometheus-exporter?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/eero-prometheus-exporter/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-22c55e?style=for-the-badge)](LICENSE)
 [![Prometheus](https://img.shields.io/badge/prometheus-ready-e6522c?style=for-the-badge&logo=prometheus&logoColor=white)](https://prometheus.io)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ed?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
@@ -49,6 +50,14 @@ This exporter gives you **real-time insights** into your network's performance, 
 - An eero account with at least one network
 
 ### Installation
+
+#### Option 1: Install from PyPI (Recommended)
+
+```bash
+pip install eero-prometheus-exporter
+```
+
+#### Option 2: Install from Source
 
 ```bash
 # Clone the repository
@@ -115,10 +124,8 @@ Your metrics are now live at **http://localhost:9118/metrics** 🚀
 **1. Authenticate locally** (one-time setup):
 
 ```bash
-# Clone and install
-git clone https://github.com/fulviofreitas/eero-prometheus-exporter.git
-cd eero-prometheus-exporter
-pip install -e .
+# Install from PyPI
+pip install eero-prometheus-exporter
 
 # Login with your eero account
 eero-exporter login your-email@example.com
@@ -594,11 +601,13 @@ ruff check src/
 
 ## 🔗 Dependencies
 
-This project uses the **[eero-api](https://github.com/fulviofreitas/eero-api)** library for communicating with eero's cloud services. The eero-api library provides:
+This project uses the **[eero-api](https://pypi.org/project/eero-api/)** library for communicating with eero's cloud services. The eero-api library provides:
 
 - 🚀 **Async-first** — Built on `aiohttp` for non-blocking operations
 - 📦 **Type-safe** — Pydantic models with full type hints
 - 🔒 **Secure** — System keyring integration for credential storage
+
+Install from PyPI: `pip install eero-api` ([GitHub](https://github.com/fulviofreitas/eero-api))
 
 ---
 
