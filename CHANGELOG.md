@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.3.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v2.2.3...v2.3.0) (2026-01-21)
+
+### ✨ Features
+
+* **ci:** add PyPI publishing to release workflow ([6ff1f2c](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/6ff1f2cb2131632dc80cdf1a8243a380b47682af))
+
+### 🐛 Bug Fixes
+
+* **deps:** pin eero-api to exact version ([b773b54](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/b773b54072e24ca7c65a4418da5fb96bc0fd82dd))
+
 ## [2.2.3](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v2.2.2...v2.2.3) (2026-01-20)
 
 ### 🐛 Bug Fixes
