@@ -233,6 +233,7 @@ def run_server(config: ExporterConfig) -> None:
         include_devices=config.include_devices,
         include_profiles=config.include_profiles,
         timeout=config.timeout,
+        cookie_file=str(config.session_file),
     )
 
     # Create HTTP server

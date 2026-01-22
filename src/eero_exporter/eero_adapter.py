@@ -344,9 +344,10 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         # Get speed data from network info
+        # eero-api returns "speed_test", but check "speed" as fallback for compatibility
         network = await self._client.get_network(network_id)
         network_dict = _model_to_dict(network)
-        speed_data = network_dict.get("speed", {})
+        speed_data = network_dict.get("speed_test") or network_dict.get("speed", {})
         if isinstance(speed_data, dict):
             return speed_data
         return None
