@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.3.1](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v2.3.0...v2.3.1) (2026-01-22)
+
+### 🐛 Bug Fixes
+
+* pass session_file to collector and fix speedtest field name ([01c4d54](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/01c4d5489403b5178c86bbff80707df12555eebd))
+
 ## [2.3.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v2.2.3...v2.3.0) (2026-01-21)
 
 ### ✨ Features
