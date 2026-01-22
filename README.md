@@ -647,4 +647,10 @@ Standing on the shoulders of giants 💪
 
 _If this helps you, consider giving it a ⭐_
 
+---
+
+## 📊 Repository Metrics
+
+![Repository Metrics](./metrics.repository.svg)
+
 </div>

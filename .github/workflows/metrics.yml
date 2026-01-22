@@ -1,0 +1,82 @@
+name: 📊 Repository Metrics
+
+on:
+  # Generate on schedule (daily at 00:00 UTC)
+  schedule:
+    - cron: "0 0 * * *"
+  # Generate on push to main
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - ".github/workflows/metrics.yml"
+  # Allow manual trigger
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate-metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 📊 Generate Repository Metrics
+        uses: lowlighter/metrics@latest
+        with:
+          # Repository configuration
+          template: repository
+          repo: eero-prometheus-exporter
+          user: ${{ github.repository_owner }}
+          
+          # Output configuration
+          filename: metrics.repository.svg
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+          # Base content
+          base: header, activity, community, repositories, metadata
+          
+          # Repository-specific options
+          repositories_forks: false
+          
+          # Plugin: Languages
+          plugin_languages: true
+          plugin_languages_indepth: true
+          plugin_languages_analysis_timeout: 15
+          plugin_languages_categories: markup, programming
+          plugin_languages_colors: github
+          plugin_languages_limit: 8
+          plugin_languages_sections: most-used
+          plugin_languages_details: percentage
+          
+          # Plugin: Lines of code
+          plugin_lines: true
+          plugin_lines_sections: base
+          
+          # Plugin: Contributors
+          plugin_contributors: true
+          plugin_contributors_head: main
+          plugin_contributors_sections: contributors
+          plugin_contributors_categories: |
+            {
+              "🧑‍💻 Developers": ["author", "coauthor"],
+              "📝 Documentation": ["documentation"],
+              "🐛 Bug reports": ["bug"]
+            }
+          
+          # Plugin: License
+          plugin_licenses: true
+          plugin_licenses_setup: npm ci || true
+          
+          # Plugin: Traffic
+          plugin_traffic: true
+          
+          # Output settings
+          config_timezone: UTC
+          config_display: regular
+          config_padding: 0, 8 + 11%
