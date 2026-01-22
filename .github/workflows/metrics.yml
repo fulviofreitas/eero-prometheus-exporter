@@ -24,7 +24,7 @@ concurrency:
 jobs:
   generate-metrics:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: 🔑 Generate GitHub App token
         id: app-token
@@ -44,46 +44,28 @@ jobs:
           # Output configuration
           filename: metrics.repository.svg
           token: ${{ steps.app-token.outputs.token }}
+          committer_token: ${{ steps.app-token.outputs.token }}
           
-          # Base content
+          # Base content for repository template
           base: header, activity, community, repositories, metadata
           
-          # Repository-specific options
-          repositories_forks: false
-          
-          # Plugin: Languages
+          # Plugin: Languages (basic, no indepth to avoid clone issues)
           plugin_languages: true
-          plugin_languages_indepth: true
-          plugin_languages_analysis_timeout: 15
-          plugin_languages_categories: markup, programming
           plugin_languages_colors: github
           plugin_languages_limit: 8
           plugin_languages_sections: most-used
           plugin_languages_details: percentage
           
-          # Plugin: Lines of code
-          plugin_lines: true
-          plugin_lines_sections: base
+          # Plugin: Stargazers
+          plugin_stargazers: true
+          plugin_stargazers_charts_type: classic
           
-          # Plugin: Contributors
-          plugin_contributors: true
-          plugin_contributors_head: main
-          plugin_contributors_sections: contributors
-          plugin_contributors_categories: |
-            {
-              "🧑‍💻 Developers": ["author", "coauthor"],
-              "📝 Documentation": ["documentation"],
-              "🐛 Bug reports": ["bug"]
-            }
-          
-          # Plugin: License
-          plugin_licenses: true
-          plugin_licenses_setup: npm ci || true
-          
-          # Plugin: Traffic
-          plugin_traffic: true
+          # Plugin: Follow-up (issues/PRs)
+          plugin_followup: true
+          plugin_followup_sections: repositories
           
           # Output settings
           config_timezone: UTC
-          config_display: regular
-          config_padding: 0, 8 + 11%
+          config_output: svg
+          retries: 3
+          retries_delay: 300
