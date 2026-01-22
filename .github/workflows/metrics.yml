@@ -45,6 +45,8 @@ jobs:
           filename: metrics.repository.svg
           token: ${{ steps.app-token.outputs.token }}
           committer_token: ${{ steps.app-token.outputs.token }}
+          committer_message: "chore: update repository metrics [skip ci]"
+          committer_branch: master
           
           # Base content for repository template
           base: header, activity, community, repositories, metadata
