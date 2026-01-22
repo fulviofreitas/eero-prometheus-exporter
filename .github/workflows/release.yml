@@ -4,7 +4,7 @@
 # Automatically creates releases based on conventional commit messages.
 # Uses reusable actions from eero-api for maintainability.
 #
-# Chain: CI → Release → Publish TestPyPI → Publish PyPI → Docker
+# Chain: CI → Release → Publish TestPyPI → Publish PyPI → Notify eero-ui
 # Triggers: After CI Pipeline succeeds on main/master
 # ============================================================================
 
@@ -186,3 +186,57 @@ jobs:
         with:
           attestations: false
           verbose: true
+
+  # ============================================================================
+  # 🔔 Notify Dependent Repositories
+  # ============================================================================
+  notify-eero-ui:
+    name: 🔔 Notify eero-ui
+    runs-on: ubuntu-latest
+    needs: [release, publish-pypi]
+    if: |
+      success() &&
+      needs.release.outputs.released == 'true' &&
+      needs.release.outputs.version != '' &&
+      github.event.inputs.dry_run != 'true'
+    timeout-minutes: 5
+
+    steps:
+      - name: 🔑 Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          owner: fulviofreitas
+          repositories: eero-ui
+
+      - name: 🔔 Trigger dependency update
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          repository: fulviofreitas/eero-ui
+          event-type: eero-prometheus-exporter-dependency-update-available
+          client-payload: |
+            {
+              "version": "${{ needs.release.outputs.version }}",
+              "tag": "v${{ needs.release.outputs.version }}",
+              "repository": "${{ github.repository }}",
+              "triggered_by": "${{ github.actor }}"
+            }
+
+      - name: 📝 Summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🔔 Dependency Update Notification Sent
+
+          | Property | Value |
+          |:---------|:------|
+          | 📦 Repository | \`${{ github.repository }}\` |
+          | 🏷️ Version | \`${{ needs.release.outputs.version }}\` |
+          | 🔖 Tag | \`v${{ needs.release.outputs.version }}\` |
+          | 🎯 Notified | \`fulviofreitas/eero-ui\` |
+          | 👤 Triggered by | \`${{ github.actor }}\` |
+
+          The eero-ui repository has been notified of the new release.
+          EOF
