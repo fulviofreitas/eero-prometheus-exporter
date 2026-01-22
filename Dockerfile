@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.20
+# syntax=docker/dockerfile:1.21
 # Eero Prometheus Exporter
 # Multi-stage build for minimal image size
 
