@@ -355,19 +355,41 @@ class EeroCollector:
             EXPORTER_API_REQUESTS.labels(endpoint="network", status="error").inc()
             network_details = network_data
 
+        # Extract status - may be nested {"status": "online"} or just "online"
+        raw_status = network_details.get("status", "unknown")
+        if isinstance(raw_status, dict):
+            status_str = raw_status.get("status", "unknown")
+        else:
+            status_str = str(raw_status)
+
+        # Extract ISP - may be in geo_ip.isp or isp.name or isp_name
+        isp_name = network_details.get("isp_name")
+        if not isp_name:
+            geo_ip = network_details.get("geo_ip", {})
+            if isinstance(geo_ip, dict):
+                isp_name = geo_ip.get("isp")
+        if not isp_name:
+            isp_data = network_details.get("isp", {})
+            if isinstance(isp_data, dict):
+                isp_name = isp_data.get("name")
+            elif isp_data:
+                isp_name = str(isp_data)
+
+        # Extract public_ip - may be in public_ip or wan_ip
+        public_ip = network_details.get("public_ip") or network_details.get("wan_ip")
+
         NETWORK_INFO.labels(network_id=network_id).info(
             {
                 "name": network_name,
-                "status": network_details.get("status", "unknown"),
-                "isp": network_details.get("isp_name") or "unknown",
-                "public_ip": network_details.get("public_ip") or "unknown",
+                "status": status_str,
+                "isp": isp_name or "unknown",
+                "public_ip": public_ip or "unknown",
                 "wan_type": network_details.get("wan_type") or "unknown",
                 "gateway_ip": network_details.get("gateway_ip") or "unknown",
             }
         )
 
-        status = network_details.get("status", "").lower()
-        is_online = 1 if status in ("connected", "online") else 0
+        is_online = 1 if status_str.lower() in ("connected", "online") else 0
         NETWORK_STATUS.labels(network_id=network_id, name=network_name).set(is_online)
 
         health = network_details.get("health", {})
