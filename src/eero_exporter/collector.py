@@ -260,14 +260,26 @@ class EeroCollector:
         include_ethernet: bool = True,
         include_thread: bool = True,
         timeout: int = 30,
+        cookie_file: str | None = None,
     ) -> None:
-        """Initialize the collector."""
+        """Initialize the collector.
+
+        Args:
+            include_devices: Whether to collect device metrics
+            include_profiles: Whether to collect profile metrics
+            include_premium: Whether to collect premium features metrics
+            include_ethernet: Whether to collect ethernet port metrics
+            include_thread: Whether to collect Thread network metrics
+            timeout: Request timeout in seconds
+            cookie_file: Path to session/cookie file for authentication
+        """
         self._include_devices = include_devices
         self._include_profiles = include_profiles
         self._include_premium = include_premium
         self._include_ethernet = include_ethernet
         self._include_thread = include_thread
         self._timeout = timeout
+        self._cookie_file = cookie_file
         self._last_collection_time: float = 0
         self._cached_data: dict[str, Any] = {}
         self._is_premium: bool = False
@@ -278,7 +290,10 @@ class EeroCollector:
         success = False
 
         try:
-            async with EeroClient(timeout=self._timeout) as client:
+            async with EeroClient(
+                timeout=self._timeout,
+                cookie_file=self._cookie_file,
+            ) as client:
                 networks = await client.get_networks()
                 EXPORTER_API_REQUESTS.labels(endpoint="networks", status="success").inc()
 
@@ -366,7 +381,9 @@ class EeroCollector:
                 is_healthy = 1 if eero_health.get("status") == "connected" else 0
                 HEALTH_STATUS.labels(network_id=network_id, source="eero_network").set(is_healthy)
 
-        speed = network_details.get("speed", {})
+        # Check for speedtest data - eero-api returns "speed_test", but older versions
+        # or direct API calls may return "speed"
+        speed = network_details.get("speed_test") or network_details.get("speed", {})
         if speed:
             upload = speed.get("up", {})
             download = speed.get("down", {})
