@@ -458,7 +458,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        raw_response = await self._client.is_premium(network_id)
+        # TODO: is_premium method not yet implemented in eero-api
+        raw_response = await self._client.is_premium(network_id)  # type: ignore[attr-defined]
         # is_premium may return raw response or bool
         if isinstance(raw_response, bool):
             return raw_response
@@ -526,7 +527,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        raw_response = await self._client.is_using_backup(network_id)
+        # TODO: is_using_backup method not yet implemented in eero-api
+        raw_response = await self._client.is_using_backup(network_id)  # type: ignore[attr-defined]
         if isinstance(raw_response, bool):
             return raw_response
         if isinstance(raw_response, dict):
