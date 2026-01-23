@@ -4,24 +4,32 @@
 
 ---
 
-The exporter provides **90+ metrics** across 15 categories. Click each section to expand.
+The exporter provides **115+ metrics** across 20+ categories. Click each section to expand.
 
 ## Table of Contents
 
 - [Network Metrics](#-network-metrics)
 - [Network Feature Flags](#-network-feature-flags)
+- [Guest Network Metrics](#-guest-network-metrics)
+- [DNS Configuration Metrics](#-dns-configuration-metrics)
+- [Port Forwarding Metrics](#-port-forwarding-metrics)
+- [DHCP & Blacklist Metrics](#-dhcp--blacklist-metrics)
 - [Speed Test Metrics](#-speed-test-metrics)
 - [Health Metrics](#-health-metrics)
+- [Diagnostics Metrics](#-diagnostics-metrics)
+- [Insights Metrics](#-insights-metrics)
 - [Eero Device Metrics](#-eero-device-metrics)
 - [Eero Hardware Metrics](#️-eero-hardware-metrics)
 - [Ethernet Port Metrics](#-ethernet-port-metrics)
 - [Nightlight Metrics](#-nightlight-metrics-eero-beacon)
 - [Client Device Metrics](#-client-device-metrics)
 - [Device Wireless Metrics](#-device-wireless-metrics)
+- [Device Extended Metrics](#-device-extended-metrics)
 - [Profile Metrics](#-profile-metrics)
 - [SQM Metrics](#️-sqm-smart-queue-management-metrics)
 - [Thread Metrics](#-thread-metrics-iot)
 - [Eero Plus Metrics](#-eero-plus-metrics)
+- [Account Metrics](#-account-metrics)
 - [Exporter Metrics](#-exporter-metrics)
 
 ---
@@ -52,6 +60,48 @@ The exporter provides **90+ metrics** across 15 categories. Click each section t
 | `eero_network_guest_enabled`          | Gauge | Guest network enabled               |
 | `eero_network_premium_enabled`        | Gauge | Eero Plus/Secure active             |
 | `eero_network_backup_internet_enabled`| Gauge | Backup internet enabled             |
+| `eero_network_auto_update_enabled`    | Gauge | Auto firmware update enabled        |
+| `eero_network_updates_available`      | Gauge | Eeros with updates available        |
+| `eero_network_ad_block_enabled`       | Gauge | Network-wide ad blocking enabled    |
+
+---
+
+## 👥 Guest Network Metrics
+
+| Metric                                     | Type  | Description                         |
+| ------------------------------------------ | ----- | ----------------------------------- |
+| `eero_guest_network_info`                  | Info  | Guest network name and status       |
+| `eero_guest_network_connected_clients`     | Gauge | Clients on guest network            |
+| `eero_guest_network_access_duration_enabled` | Gauge | Time-limited access enabled       |
+
+---
+
+## 🌐 DNS Configuration Metrics
+
+| Metric                           | Type  | Description                         |
+| -------------------------------- | ----- | ----------------------------------- |
+| `eero_dns_config_info`           | Info  | DNS mode and server configuration   |
+| `eero_network_custom_dns_enabled`| Gauge | Custom DNS configured (1=yes, 0=no) |
+| `eero_network_dns_server_count`  | Gauge | Number of DNS servers configured    |
+
+---
+
+## 🔀 Port Forwarding Metrics
+
+| Metric                             | Type  | Description                         |
+| ---------------------------------- | ----- | ----------------------------------- |
+| `eero_network_port_forwards_count` | Gauge | Total port forwarding rules         |
+| `eero_port_forward_info`           | Info  | Port forward rule details           |
+| `eero_port_forward_enabled`        | Gauge | Port forward enabled (1=yes, 0=no)  |
+
+---
+
+## 📍 DHCP & Blacklist Metrics
+
+| Metric                                   | Type  | Description                     |
+| ---------------------------------------- | ----- | ------------------------------- |
+| `eero_network_dhcp_reservations_count`   | Gauge | DHCP reservations configured    |
+| `eero_network_blacklisted_devices_count` | Gauge | Blocked/blacklisted devices     |
 
 ---
 
@@ -73,6 +123,26 @@ The exporter provides **90+ metrics** across 15 categories. Click each section t
 
 ---
 
+## 🔍 Diagnostics Metrics
+
+| Metric                                      | Type  | Description                    |
+| ------------------------------------------- | ----- | ------------------------------ |
+| `eero_diagnostics_internet_latency_ms`      | Gauge | Internet latency in ms         |
+| `eero_diagnostics_dns_latency_ms`           | Gauge | DNS resolution latency in ms   |
+| `eero_diagnostics_gateway_latency_ms`       | Gauge | Gateway response latency in ms |
+| `eero_diagnostics_last_run_timestamp_seconds` | Gauge | Last diagnostic run timestamp |
+
+---
+
+## 💡 Insights Metrics
+
+| Metric                              | Type  | Description                         |
+| ----------------------------------- | ----- | ----------------------------------- |
+| `eero_insights_recommendations_count` | Gauge | Pending network recommendations   |
+| `eero_insights_issues_count`        | Gauge | Detected network issues             |
+
+---
+
 ## 📶 Eero Device Metrics
 
 | Metric                                       | Type  | Description                            |
@@ -89,6 +159,7 @@ The exporter provides **90+ metrics** across 15 categories. Click each section t
 | `eero_eero_update_available`                 | Gauge | Firmware update available              |
 | `eero_eero_heartbeat_ok`                     | Gauge | Heartbeat status                       |
 | `eero_eero_wired`                            | Gauge | Wired backhaul connection              |
+| `eero_eero_os_version_info`                  | Info  | Firmware version per eero              |
 
 ---
 
@@ -170,6 +241,17 @@ Labels include `band` (2.4GHz, 5GHz, 6GHz) and `source_eero` (connected eero loc
 
 ---
 
+## 📊 Device Extended Metrics
+
+| Metric                                     | Type  | Description                         |
+| ------------------------------------------ | ----- | ----------------------------------- |
+| `eero_device_last_active_timestamp_seconds`| Gauge | Last time device was active         |
+| `eero_device_first_seen_timestamp_seconds` | Gauge | When device was first seen          |
+| `eero_device_wifi_generation`              | Gauge | WiFi standard (4/5/6/7)             |
+| `eero_device_adblock_enabled`              | Gauge | Ad blocking enabled for device      |
+
+---
+
 ## 👥 Profile Metrics
 
 | Metric                       | Type  | Description               |
@@ -221,6 +303,15 @@ These metrics require an active Eero Plus/Secure subscription.
 | `eero_activity_category_bytes`       | Gauge | Usage by category              |
 | `eero_device_activity_download_bytes`| Gauge | Device download (period)       |
 | `eero_device_activity_upload_bytes`  | Gauge | Device upload (period)         |
+
+---
+
+## 👤 Account Metrics
+
+| Metric                                           | Type  | Description                    |
+| ------------------------------------------------ | ----- | ------------------------------ |
+| `eero_account_networks_count`                    | Gauge | Total networks in account      |
+| `eero_account_premium_expiration_timestamp_seconds` | Gauge | Premium subscription expiry |
 
 ---
 

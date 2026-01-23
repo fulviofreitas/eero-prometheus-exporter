@@ -564,6 +564,71 @@ class EeroClient:
         return dict(_extract_data(raw_response))
 
     # =========================================================================
+    # Port Forwards
+    # =========================================================================
+
+    @_wrap_api_call("Failed to get port forwards")
+    async def get_forwards(self, network_id: str) -> list[dict[str, Any]]:
+        """Get list of port forwarding rules."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_forwards(network_id)
+        return _extract_list(raw_response, "forwards")
+
+    # =========================================================================
+    # DHCP Reservations
+    # =========================================================================
+
+    @_wrap_api_call("Failed to get DHCP reservations")
+    async def get_reservations(self, network_id: str) -> list[dict[str, Any]]:
+        """Get list of DHCP reservations."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_reservations(network_id)
+        return _extract_list(raw_response, "reservations")
+
+    # =========================================================================
+    # Blacklist
+    # =========================================================================
+
+    @_wrap_api_call("Failed to get blacklist")
+    async def get_blacklist(self, network_id: str) -> list[dict[str, Any]]:
+        """Get list of blacklisted devices."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_blacklist(network_id)
+        return _extract_list(raw_response, "blacklist")
+
+    # =========================================================================
+    # Updates
+    # =========================================================================
+
+    @_wrap_api_call("Failed to get updates")
+    async def get_updates(self, network_id: str) -> dict[str, Any]:
+        """Get firmware update information."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_updates(network_id)
+        return dict(_extract_data(raw_response))
+
+    # =========================================================================
+    # Insights
+    # =========================================================================
+
+    @_wrap_api_call("Failed to get insights")
+    async def get_insights(self, network_id: str) -> dict[str, Any]:
+        """Get network insights and recommendations."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_insights(network_id)
+        return dict(_extract_data(raw_response))
+
+    # =========================================================================
     # Diagnostics
     # =========================================================================
 

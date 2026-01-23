@@ -666,6 +666,239 @@ THREAD_BORDER_ROUTER = Gauge(
 )
 
 # =============================================================================
+# GUEST NETWORK METRICS
+# =============================================================================
+
+GUEST_NETWORK_CONNECTED_CLIENTS = Gauge(
+    f"{PREFIX}_guest_network_connected_clients",
+    "Number of clients connected to guest network",
+    labelnames=["network_id", "name"],
+)
+
+GUEST_NETWORK_INFO = Info(
+    f"{PREFIX}_guest_network",
+    "Guest network information",
+    labelnames=["network_id"],
+)
+
+GUEST_NETWORK_ACCESS_DURATION_ENABLED = Gauge(
+    f"{PREFIX}_guest_network_access_duration_enabled",
+    "Whether time-limited guest access is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+# =============================================================================
+# FIRMWARE/UPDATES METRICS
+# =============================================================================
+
+NETWORK_UPDATES_AVAILABLE = Gauge(
+    f"{PREFIX}_network_updates_available",
+    "Number of eeros with firmware updates available",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_AUTO_UPDATE_ENABLED = Gauge(
+    f"{PREFIX}_network_auto_update_enabled",
+    "Whether auto-update is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+EERO_OS_VERSION_INFO = Info(
+    f"{PREFIX}_eero_os_version",
+    "Eero firmware version information",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+# =============================================================================
+# PORT FORWARDING METRICS
+# =============================================================================
+
+NETWORK_PORT_FORWARDS_COUNT = Gauge(
+    f"{PREFIX}_network_port_forwards_count",
+    "Total number of port forwarding rules",
+    labelnames=["network_id", "name"],
+)
+
+PORT_FORWARD_INFO = Info(
+    f"{PREFIX}_port_forward",
+    "Port forward rule information",
+    labelnames=["network_id", "forward_id"],
+)
+
+PORT_FORWARD_ENABLED = Gauge(
+    f"{PREFIX}_port_forward_enabled",
+    "Whether the port forward is enabled (1=yes, 0=no)",
+    labelnames=["network_id", "forward_id", "port", "protocol"],
+)
+
+# =============================================================================
+# BLACKLIST METRICS
+# =============================================================================
+
+NETWORK_BLACKLISTED_DEVICES_COUNT = Gauge(
+    f"{PREFIX}_network_blacklisted_devices_count",
+    "Number of blacklisted/blocked devices",
+    labelnames=["network_id", "name"],
+)
+
+# =============================================================================
+# DNS CONFIGURATION METRICS
+# =============================================================================
+
+NETWORK_CUSTOM_DNS_ENABLED = Gauge(
+    f"{PREFIX}_network_custom_dns_enabled",
+    "Whether custom DNS is configured (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+NETWORK_DNS_SERVER_COUNT = Gauge(
+    f"{PREFIX}_network_dns_server_count",
+    "Number of DNS servers configured",
+    labelnames=["network_id", "name"],
+)
+
+DNS_CONFIG_INFO = Info(
+    f"{PREFIX}_dns_config",
+    "DNS configuration information",
+    labelnames=["network_id"],
+)
+
+# =============================================================================
+# DIAGNOSTICS METRICS
+# =============================================================================
+
+DIAGNOSTICS_INTERNET_LATENCY = Gauge(
+    f"{PREFIX}_diagnostics_internet_latency_ms",
+    "Internet latency in milliseconds",
+    labelnames=["network_id"],
+)
+
+DIAGNOSTICS_DNS_LATENCY = Gauge(
+    f"{PREFIX}_diagnostics_dns_latency_ms",
+    "DNS resolution latency in milliseconds",
+    labelnames=["network_id"],
+)
+
+DIAGNOSTICS_GATEWAY_LATENCY = Gauge(
+    f"{PREFIX}_diagnostics_gateway_latency_ms",
+    "Gateway response latency in milliseconds",
+    labelnames=["network_id"],
+)
+
+DIAGNOSTICS_LAST_RUN_TIMESTAMP = Gauge(
+    f"{PREFIX}_diagnostics_last_run_timestamp_seconds",
+    "Timestamp of last diagnostic run (Unix epoch)",
+    labelnames=["network_id"],
+)
+
+# =============================================================================
+# ACCOUNT METRICS
+# =============================================================================
+
+ACCOUNT_NETWORKS_COUNT = Gauge(
+    f"{PREFIX}_account_networks_count",
+    "Total number of networks in account",
+)
+
+ACCOUNT_PREMIUM_EXPIRATION = Gauge(
+    f"{PREFIX}_account_premium_expiration_timestamp_seconds",
+    "Premium subscription expiration date (Unix epoch)",
+    labelnames=["network_id"],
+)
+
+# =============================================================================
+# DEVICE CONNECTION DETAILS METRICS
+# =============================================================================
+
+DEVICE_LAST_ACTIVE_TIMESTAMP = Gauge(
+    f"{PREFIX}_device_last_active_timestamp_seconds",
+    "Last time device was active (Unix epoch)",
+    labelnames=["network_id", "device_id", "name", "manufacturer"],
+)
+
+DEVICE_FIRST_SEEN_TIMESTAMP = Gauge(
+    f"{PREFIX}_device_first_seen_timestamp_seconds",
+    "When device was first seen on network (Unix epoch)",
+    labelnames=["network_id", "device_id", "name", "manufacturer"],
+)
+
+DEVICE_WIFI_GENERATION = Gauge(
+    f"{PREFIX}_device_wifi_generation",
+    "WiFi standard (4=WiFi 4, 5=WiFi 5, 6=WiFi 6, 7=WiFi 7)",
+    labelnames=["network_id", "device_id", "name", "manufacturer"],
+)
+
+DEVICE_ADBLOCK_ENABLED = Gauge(
+    f"{PREFIX}_device_adblock_enabled",
+    "Whether ad blocking is enabled for device (1=yes, 0=no)",
+    labelnames=["network_id", "device_id", "name", "manufacturer"],
+)
+
+# =============================================================================
+# EERO SECURITY METRICS (Eero Plus)
+# =============================================================================
+
+SECURITY_THREATS_BLOCKED = Counter(
+    f"{PREFIX}_security_threats_blocked_total",
+    "Total threats blocked by Eero Secure",
+    labelnames=["network_id"],
+)
+
+SECURITY_SCANS_BLOCKED = Counter(
+    f"{PREFIX}_security_scans_blocked_total",
+    "Network scans blocked",
+    labelnames=["network_id"],
+)
+
+NETWORK_AD_BLOCK_ENABLED = Gauge(
+    f"{PREFIX}_network_ad_block_enabled",
+    "Whether ad blocking is enabled network-wide (1=yes, 0=no)",
+    labelnames=["network_id", "name"],
+)
+
+# =============================================================================
+# INSIGHTS METRICS
+# =============================================================================
+
+INSIGHTS_RECOMMENDATIONS_COUNT = Gauge(
+    f"{PREFIX}_insights_recommendations_count",
+    "Number of pending network recommendations",
+    labelnames=["network_id"],
+)
+
+INSIGHTS_ISSUES_COUNT = Gauge(
+    f"{PREFIX}_insights_issues_count",
+    "Number of detected network issues",
+    labelnames=["network_id"],
+)
+
+# =============================================================================
+# DHCP RESERVATIONS METRICS
+# =============================================================================
+
+NETWORK_DHCP_RESERVATIONS_COUNT = Gauge(
+    f"{PREFIX}_network_dhcp_reservations_count",
+    "Number of DHCP reservations configured",
+    labelnames=["network_id", "name"],
+)
+
+# =============================================================================
+# EERO TRANSFER METRICS
+# =============================================================================
+
+EERO_RX_BYTES = Counter(
+    f"{PREFIX}_eero_rx_bytes_total",
+    "Total bytes received by eero device",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+EERO_TX_BYTES = Counter(
+    f"{PREFIX}_eero_tx_bytes_total",
+    "Total bytes transmitted by eero device",
+    labelnames=["network_id", "eero_id", "location"],
+)
+
+# =============================================================================
 # EXPORTER METRICS
 # =============================================================================
 
