@@ -1,8 +1,13 @@
 """Adapter to bridge eero-api library with the Prometheus exporter.
 
 This module provides a compatibility layer that wraps the eero-api
-library, converting its Pydantic models to dictionaries for backward compatibility
-with the exporter's metrics collection logic.
+library, extracting data from raw API responses for the exporter's
+metrics collection logic.
+
+As of eero-api v2.0.0, all responses are raw JSON in the format:
+    {"meta": {...}, "data": {...}}
+
+This adapter handles data extraction from the envelope.
 """
 
 import logging
@@ -84,41 +89,79 @@ def _wrap_api_call(message: str = "API call failed") -> Any:
 DEFAULT_SESSION_FILE = Path.home() / ".config" / "eero-exporter" / "session.json"
 
 
-def _model_to_dict(model: Any) -> dict[str, Any]:
-    """Convert a Pydantic model to a dictionary.
+def _extract_data(raw_response: Any) -> Any:
+    """Extract data from raw API response envelope.
+
+    eero-api v2.0.0 returns raw responses in format: {"meta": {...}, "data": {...}}
 
     Args:
-        model: A Pydantic model instance or any object
+        raw_response: Raw response from eero-api
 
     Returns:
-        Dictionary representation of the model
+        Extracted data, or the original value if not in envelope format
     """
-    if model is None:
+    if raw_response is None:
         return {}
-    if isinstance(model, dict):
-        return dict(model)
-    if hasattr(model, "model_dump"):
-        # Use mode='json' to serialize enums to their values (not repr)
-        result: dict[str, Any] = model.model_dump(mode="json")
-        return result
-    if hasattr(model, "dict"):
-        result = model.dict()
-        return dict(result)
-    return {}
+    if not isinstance(raw_response, dict):
+        return raw_response
+    # If it has "meta" and "data" keys, it's an envelope - extract data
+    if "meta" in raw_response and "data" in raw_response:
+        return raw_response.get("data", {})
+    # Otherwise return as-is (already extracted or different format)
+    return raw_response
 
 
-def _models_to_dicts(models: list[Any]) -> list[dict[str, Any]]:
-    """Convert a list of Pydantic models to dictionaries.
+def _extract_list(raw_response: Any, list_key: str | None = None) -> list[dict[str, Any]]:
+    """Extract a list from raw API response.
+
+    Handles various nested structures from the Eero API:
+    - {"meta": {...}, "data": [...]}
+    - {"meta": {...}, "data": {"networks": {"data": [...]}}}
+    - {"meta": {...}, "data": {"eeros": [...]}}
+    - {"meta": {...}, "data": {"devices": [...]}}
 
     Args:
-        models: List of Pydantic model instances
+        raw_response: Raw response from eero-api
+        list_key: Optional key for the list within data (e.g., "networks", "eeros")
 
     Returns:
-        List of dictionary representations
+        Extracted list of dictionaries
     """
-    if not models:
+    if raw_response is None:
         return []
-    return [_model_to_dict(m) for m in models]
+    if isinstance(raw_response, list):
+        return list(raw_response)
+
+    data = _extract_data(raw_response)
+
+    if isinstance(data, list):
+        return list(data)
+
+    if isinstance(data, dict):
+        # Try specific list_key first
+        if list_key and list_key in data:
+            result = data[list_key]
+            # Handle nested {"key": {"data": [...]}} structure
+            if isinstance(result, dict) and "data" in result:
+                nested = result["data"]
+                if isinstance(nested, list):
+                    return list(nested)
+            if isinstance(result, list):
+                return list(result)
+
+        # Try common list keys
+        for key in ["data", "networks", "eeros", "devices", "profiles"]:
+            if key in data:
+                result = data[key]
+                # Handle nested structure
+                if isinstance(result, dict) and "data" in result:
+                    nested = result["data"]
+                    if isinstance(nested, list):
+                        return list(nested)
+                if isinstance(result, list):
+                    return list(result)
+
+    return []
 
 
 class EeroClient:
@@ -126,7 +169,9 @@ class EeroClient:
 
     This class provides the same interface as the original embedded API client,
     but delegates to the eero-api library internally. Responses are
-    converted from Pydantic models to dictionaries for compatibility.
+    extracted from the raw API envelope format.
+
+    eero-api v2.0.0 returns raw responses in format: {"meta": {...}, "data": {...}}
 
     The eero-api library handles authentication via:
     - System keyring (default, for desktop use)
@@ -231,14 +276,15 @@ class EeroClient:
         if not success:
             raise EeroAuthError("Verification failed")
 
-        # Get preferred network ID
+        # Get preferred network ID from raw response
         try:
-            networks = await self._client.get_networks()
+            raw_networks = await self._client.get_networks()
+            networks = _extract_list(raw_networks, "networks")
             if networks:
                 network = networks[0]
-                if hasattr(network, "url"):
-                    url = str(network.url)
-                    parts = url.rstrip("/").split("/")
+                url = network.get("url", "")
+                if url:
+                    parts = str(url).rstrip("/").split("/")
                     if parts:
                         self._preferred_network_id = parts[-1]
         except Exception:
@@ -260,8 +306,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        account = await self._client.get_account()
-        return _model_to_dict(account)
+        raw_response = await self._client.get_account()
+        return dict(_extract_data(raw_response))
 
     @_wrap_api_call("Failed to get networks")
     async def get_networks(self) -> list[dict[str, Any]]:
@@ -269,8 +315,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        networks = await self._client.get_networks()
-        result = _models_to_dicts(networks)
+        raw_response = await self._client.get_networks()
+        result = _extract_list(raw_response, "networks")
 
         # Set preferred network if not set
         if not self._preferred_network_id and result:
@@ -287,8 +333,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        network = await self._client.get_network(network_id)
-        return _model_to_dict(network)
+        raw_response = await self._client.get_network(network_id)
+        return dict(_extract_data(raw_response))
 
     # =========================================================================
     # Eero Devices
@@ -300,8 +346,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        eeros = await self._client.get_eeros(network_id)
-        return _models_to_dicts(eeros)
+        raw_response = await self._client.get_eeros(network_id)
+        return _extract_list(raw_response, "eeros")
 
     # =========================================================================
     # Client Devices
@@ -313,8 +359,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        devices = await self._client.get_devices(network_id)
-        return _models_to_dicts(devices)
+        raw_response = await self._client.get_devices(network_id)
+        return _extract_list(raw_response, "devices")
 
     # =========================================================================
     # Profiles
@@ -326,8 +372,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        profiles = await self._client.get_profiles(network_id)
-        return _models_to_dicts(profiles)
+        raw_response = await self._client.get_profiles(network_id)
+        return _extract_list(raw_response, "profiles")
 
     # =========================================================================
     # Speed Test
@@ -344,10 +390,10 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         # Get speed data from network info
+        raw_response = await self._client.get_network(network_id)
+        network_data = _extract_data(raw_response)
         # eero-api returns "speed_test", but check "speed" as fallback for compatibility
-        network = await self._client.get_network(network_id)
-        network_dict = _model_to_dict(network)
-        speed_data = network_dict.get("speed_test") or network_dict.get("speed", {})
+        speed_data = network_data.get("speed_test") or network_data.get("speed", {})
         if isinstance(speed_data, dict):
             return speed_data
         return None
@@ -364,8 +410,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result: dict[str, Any] = await self._client.get_transfer_stats(network_id, device_id)
-        return result
+        raw_response = await self._client.get_transfer_stats(network_id, device_id)
+        return dict(_extract_data(raw_response))
 
     # =========================================================================
     # SQM Settings
@@ -377,8 +423,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result: dict[str, Any] = await self._client.get_sqm_settings(network_id)
-        return result
+        raw_response = await self._client.get_sqm_settings(network_id)
+        return dict(_extract_data(raw_response))
 
     # =========================================================================
     # Security Settings
@@ -390,8 +436,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result: dict[str, Any] = await self._client.get_security_settings(network_id)
-        return result
+        raw_response = await self._client.get_security_settings(network_id)
+        return dict(_extract_data(raw_response))
 
     # =========================================================================
     # Premium Features (Eero Plus)
@@ -403,8 +449,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result: dict[str, Any] = await self._client.get_premium_status(network_id)
-        return result
+        raw_response = await self._client.get_premium_status(network_id)
+        return dict(_extract_data(raw_response))
 
     @_wrap_api_call("Failed to check premium status")
     async def is_premium(self, network_id: str) -> bool:
@@ -412,7 +458,15 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return bool(await self._client.is_premium(network_id))
+        # TODO: is_premium method not yet implemented in eero-api
+        raw_response = await self._client.is_premium(network_id)  # type: ignore[attr-defined]
+        # is_premium may return raw response or bool
+        if isinstance(raw_response, bool):
+            return raw_response
+        if isinstance(raw_response, dict):
+            data = _extract_data(raw_response)
+            return bool(data.get("premium", False))
+        return bool(raw_response)
 
     # =========================================================================
     # Activity (Eero Plus)
@@ -424,8 +478,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result: dict[str, Any] = await self._client.get_activity(network_id)
-        return result
+        raw_response = await self._client.get_activity(network_id)
+        return dict(_extract_data(raw_response))
 
     @_wrap_api_call("Failed to get activity clients")
     async def get_activity_clients(self, network_id: str) -> list[dict[str, Any]]:
@@ -433,8 +487,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result: list[dict[str, Any]] = await self._client.get_activity_clients(network_id)
-        return result
+        raw_response = await self._client.get_activity_clients(network_id)
+        return _extract_list(raw_response, "clients")
 
     @_wrap_api_call("Failed to get activity categories")
     async def get_activity_categories(self, network_id: str) -> list[dict[str, Any]]:
@@ -442,8 +496,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result: list[dict[str, Any]] = await self._client.get_activity_categories(network_id)
-        return result
+        raw_response = await self._client.get_activity_categories(network_id)
+        return _extract_list(raw_response, "categories")
 
     # =========================================================================
     # Backup Network (Eero Plus)
@@ -455,8 +509,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result: dict[str, Any] = await self._client.get_backup_network(network_id)
-        return result
+        raw_response = await self._client.get_backup_network(network_id)
+        return dict(_extract_data(raw_response))
 
     @_wrap_api_call("Failed to get backup status")
     async def get_backup_status(self, network_id: str) -> dict[str, Any]:
@@ -464,8 +518,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result: dict[str, Any] = await self._client.get_backup_status(network_id)
-        return result
+        raw_response = await self._client.get_backup_status(network_id)
+        return dict(_extract_data(raw_response))
 
     @_wrap_api_call("Failed to check backup status")
     async def is_using_backup(self, network_id: str) -> bool:
@@ -473,7 +527,14 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        return bool(await self._client.is_using_backup(network_id))
+        # TODO: is_using_backup method not yet implemented in eero-api
+        raw_response = await self._client.is_using_backup(network_id)  # type: ignore[attr-defined]
+        if isinstance(raw_response, bool):
+            return raw_response
+        if isinstance(raw_response, dict):
+            data = _extract_data(raw_response)
+            return bool(data.get("using_backup", False))
+        return bool(raw_response)
 
     # =========================================================================
     # Thread
@@ -485,8 +546,8 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result: dict[str, Any] = await self._client.get_thread(network_id)
-        return result
+        raw_response = await self._client.get_thread(network_id)
+        return dict(_extract_data(raw_response))
 
     # =========================================================================
     # Diagnostics
@@ -498,5 +559,5 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        result: dict[str, Any] = await self._client.get_diagnostics(network_id)
-        return result
+        raw_response = await self._client.get_diagnostics(network_id)
+        return dict(_extract_data(raw_response))
