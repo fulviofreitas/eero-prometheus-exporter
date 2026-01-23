@@ -458,14 +458,23 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        # TODO: is_premium method not yet implemented in eero-api
-        raw_response = await self._client.is_premium(network_id)  # type: ignore[attr-defined]
-        # is_premium may return raw response or bool
+        # get_premium_status returns network data with premium status fields
+        raw_response = await self._client.get_premium_status(network_id)
         if isinstance(raw_response, bool):
             return raw_response
         if isinstance(raw_response, dict):
             data = _extract_data(raw_response)
-            return bool(data.get("premium", False))
+            # Check various fields that indicate premium status
+            # eero_plus, premium_status, premium_dns, or premium
+            if data.get("eero_plus"):
+                return True
+            if data.get("premium_status"):
+                return True
+            if data.get("premium_dns"):
+                return True
+            if data.get("premium"):
+                return True
+            return False
         return bool(raw_response)
 
     # =========================================================================
@@ -527,13 +536,18 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        # TODO: is_using_backup method not yet implemented in eero-api
-        raw_response = await self._client.is_using_backup(network_id)  # type: ignore[attr-defined]
+        # get_backup_status returns backup status data
+        raw_response = await self._client.get_backup_status(network_id)
         if isinstance(raw_response, bool):
             return raw_response
         if isinstance(raw_response, dict):
             data = _extract_data(raw_response)
-            return bool(data.get("using_backup", False))
+            # Check for active or using_backup fields
+            if data.get("active"):
+                return True
+            if data.get("using_backup"):
+                return True
+            return False
         return bool(raw_response)
 
     # =========================================================================
