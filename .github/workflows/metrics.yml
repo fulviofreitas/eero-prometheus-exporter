@@ -4,70 +4,23 @@ on:
   # Generate on schedule (daily at 00:00 UTC)
   schedule:
     - cron: "0 0 * * *"
-  # Generate on push to main
+  # Generate on push to master
   push:
     branches:
-      - main
       - master
     paths:
       - ".github/workflows/metrics.yml"
   # Allow manual trigger
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  generate-metrics:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: 🔑 Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.RENOVATE_APP_ID }}
-          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
-
-      - name: 📊 Generate Repository Metrics
-        uses: lowlighter/metrics@latest
-        with:
-          # Repository configuration
-          template: repository
-          repo: eero-prometheus-exporter
-          user: ${{ github.repository_owner }}
-          
-          # Output configuration
-          filename: metrics.repository.svg
-          token: ${{ steps.app-token.outputs.token }}
-          committer_token: ${{ steps.app-token.outputs.token }}
-          committer_message: "chore: update repository metrics [skip ci]"
-          committer_branch: master
-          
-          # Base content for repository template
-          base: header, activity, community, repositories, metadata
-          
-          # Plugin: Languages (basic, no indepth to avoid clone issues)
-          plugin_languages: true
-          plugin_languages_colors: github
-          plugin_languages_limit: 8
-          plugin_languages_sections: most-used
-          plugin_languages_details: percentage
-          
-          # Plugin: Stargazers
-          plugin_stargazers: true
-          plugin_stargazers_charts_type: classic
-          
-          # Plugin: Follow-up (issues/PRs)
-          plugin_followup: true
-          plugin_followup_sections: repositories
-          
-          # Output settings
-          config_timezone: UTC
-          config_output: svg
-          retries: 3
-          retries_delay: 300
+  metrics:
+    uses: fulviofreitas/eero-api/.github/workflows/reusable-metrics.yml@master
+    with:
+      repo: eero-prometheus-exporter
+      branch: master
+    secrets: inherit
