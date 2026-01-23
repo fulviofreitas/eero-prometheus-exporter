@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.0.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v2.5.0...v3.0.0) (2026-01-23)
+
+### ⚠ BREAKING CHANGES
+
+* migrate to eero-api v2.0.0 raw response architecture
+
+### ✨ Features
+
+* **ci:** standardize workflows with reusable actions from eero-api ([1c37c64](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/1c37c6429027d76351392071e031219fa267cca2))
+* migrate to eero-api v2.0.0 raw response architecture ([9df8294](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/9df8294c24d9312b3c48082d9b0ed705652e0102))
+* **renovate:** treat eero-api as feature release for minor version bumps ([a2b8e52](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/a2b8e522bf4d8994b9db0e543e744d9825c55002))
+
+### 🐛 Bug Fixes
+
+* **renovate:** ensure consistent config matching all Python managers ([a17f403](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/a17f403596d093fbeff705e5355046f4b16a4fad))
+* **renovate:** restore critical and needs-review labels for eero packages ([ae9ca82](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/ae9ca82dd8bc206e69620da8f5fbc6c450255f52))
+
 ## [2.5.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v2.4.2...v2.5.0) (2026-01-22)
 
 ### ✨ Features
