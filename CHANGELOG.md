@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.1.1](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.1.0...v3.1.1) (2026-01-23)
+
+### 🐛 Bug Fixes
+
+* **renovate:** migrate from deprecated prTitle to commitMessage ([5fc06aa](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/5fc06aabc6342b95c163fbf0321d58457992658c))
+
 ## [3.1.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.0.1...v3.1.0) (2026-01-23)
 
 ### ✨ Features
