@@ -21,6 +21,27 @@ _Monitor network health, device connectivity, speed tests, and 115+ metrics with
 
 ---
 
+## ✨ Why This Project?
+
+Your eero mesh network is the backbone of your connected home. Shouldn't you be able to monitor it properly?
+
+This exporter gives you **real-time insights** into your network's performance, device health, and connectivity—all exposed as Prometheus metrics ready for your favorite dashboards.
+
+### What You Get
+
+| Feature | Description |
+|---------|-------------|
+| 📊 **115+ Metrics** | Network, eero hardware, devices, Ethernet ports, Thread, Eero Plus & more |
+| ⚡ **Async Architecture** | Non-blocking I/O for efficient, lightweight collection |
+| 🔗 **Async API Client** | Powered by [eero-api](https://github.com/fulviofreitas/eero-api) |
+| 🔐 **Secure Auth** | Session-based authentication with secure local storage |
+| 🐳 **Docker Ready** | Multi-stage build with minimal image footprint |
+| 🎨 **Beautiful CLI** | Rich terminal output with colors and progress indicators |
+| 📈 **Grafana Compatible** | Perfect for building stunning dashboards |
+| 💎 **Eero Plus Support** | Activity tracking, backup network, and premium feature metrics |
+
+---
+
 ## 🚀 Quick Start
 
 ```bash
