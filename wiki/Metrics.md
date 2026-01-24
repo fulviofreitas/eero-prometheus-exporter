@@ -315,8 +315,9 @@ These metrics require an active Eero Plus/Secure subscription.
 
 | Metric | Type | Description |
 |--------|------|-------------|
+| `eero_up` | Gauge | **Standard "up" metric**: 1 if eero API is reachable, 0 if down |
 | `eero_exporter_scrape_duration_seconds` | Gauge | Collection duration |
-| `eero_exporter_scrape_success` | Gauge | Last scrape success |
+| `eero_exporter_scrape_success` | Gauge | Last scrape success (deprecated, use `eero_up`) |
 | `eero_exporter_scrape_errors_total` | Counter | Total scrape errors |
 | `eero_exporter_api_requests_total` | Counter | API requests by endpoint |
 
@@ -325,6 +326,9 @@ These metrics require an active Eero Plus/Secure subscription.
 ## 📈 Example PromQL Queries
 
 ```promql
+# Is the exporter scraping successfully?
+eero_up == 1
+
 # Is the network online?
 eero_network_status == 1
 

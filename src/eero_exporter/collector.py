@@ -69,6 +69,7 @@ from .metrics import (
     EERO_PROVIDES_WIFI,
     EERO_STATUS,
     EERO_TEMPERATURE,
+    EERO_UP,
     EERO_UPDATE_AVAILABLE,
     EERO_UPTIME_SECONDS,
     EERO_WIRED,
@@ -402,22 +403,27 @@ class EeroCollector:
                     await self._collect_network_metrics(client, network_data)
 
             success = True
-            EXPORTER_SCRAPE_SUCCESS.set(1)
+            # Standard Prometheus "up" metric pattern
+            EERO_UP.set(1)
+            EXPORTER_SCRAPE_SUCCESS.set(1)  # Deprecated, kept for compatibility
 
         except EeroAuthError as e:
             _LOGGER.error(f"Authentication error: {e}")
             EXPORTER_SCRAPE_ERRORS.labels(error_type="auth").inc()
+            EERO_UP.set(0)
             EXPORTER_SCRAPE_SUCCESS.set(0)
 
         except EeroAPIError as e:
             _LOGGER.error(f"API error during collection: {e}")
             EXPORTER_SCRAPE_ERRORS.labels(error_type="api").inc()
+            EERO_UP.set(0)
             if not self._cached_data:
                 EXPORTER_SCRAPE_SUCCESS.set(0)
 
         except Exception as e:
             _LOGGER.error(f"Unexpected error during collection: {e}", exc_info=True)
             EXPORTER_SCRAPE_ERRORS.labels(error_type="unknown").inc()
+            EERO_UP.set(0)
             EXPORTER_SCRAPE_SUCCESS.set(0)
 
         finally:

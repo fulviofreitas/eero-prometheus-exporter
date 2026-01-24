@@ -902,6 +902,13 @@ EERO_TX_BYTES = Counter(
 # EXPORTER METRICS
 # =============================================================================
 
+# Standard "up" metric following Prometheus exporter conventions
+# See: https://prometheus.io/docs/instrumenting/writing_exporters/#failed-scrapes
+EERO_UP = Gauge(
+    f"{PREFIX}_up",
+    "Whether the eero API is reachable and the last scrape was successful (1=up, 0=down)",
+)
+
 EXPORTER_SCRAPE_DURATION = Gauge(
     f"{PREFIX}_exporter_scrape_duration_seconds",
     "Time taken to collect metrics from eero API",
@@ -909,7 +916,7 @@ EXPORTER_SCRAPE_DURATION = Gauge(
 
 EXPORTER_SCRAPE_SUCCESS = Gauge(
     f"{PREFIX}_exporter_scrape_success",
-    "Whether the last scrape was successful (1=yes, 0=no)",
+    "Whether the last scrape was successful (1=yes, 0=no). Deprecated: use eero_up instead.",
 )
 
 EXPORTER_SCRAPE_ERRORS = Counter(
