@@ -31,18 +31,12 @@ WORKDIR /app
 # Create non-root user
 RUN groupadd -r eero && useradd -r -g eero eero
 
-# Install dependencies with cache mounts for speed
-# Git is required for pip to install eero-api from GitHub
+# Install uv (fast Python package installer) and dependencies
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
 COPY --from=builder /app/dist/*.whl ./
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    --mount=type=cache,target=/root/.cache/pip \
-    apt-get update && \
-    apt-get install -y --no-install-recommends git && \
-    pip install *.whl && \
-    rm *.whl && \
-    apt-get purge -y git && \
-    apt-get autoremove -y
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system *.whl && \
+    rm *.whl
 
 # Create config directory with proper permissions
 RUN mkdir -p /home/eero/.config/eero-exporter && \
