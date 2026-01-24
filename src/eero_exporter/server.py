@@ -235,6 +235,8 @@ def run_server(config: ExporterConfig) -> None:
         timeout=config.timeout,
         cookie_file=str(config.session_file),
     )
+    # Set collection interval for caching metrics
+    collector._collection_interval = config.collection_interval
 
     # Create HTTP server
     server = HTTPServer((config.host, config.port), MetricsHandler)

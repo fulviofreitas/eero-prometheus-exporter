@@ -317,9 +317,15 @@ These metrics require an active Eero Plus/Secure subscription.
 |--------|------|-------------|
 | `eero_up` | Gauge | **Standard "up" metric**: 1 if eero API is reachable, 0 if down |
 | `eero_exporter_scrape_duration_seconds` | Gauge | Collection duration |
+| `eero_exporter_last_collection_timestamp_seconds` | Gauge | Unix timestamp of last successful collection |
+| `eero_exporter_collection_interval_seconds` | Gauge | Configured collection interval (for cache monitoring) |
 | `eero_exporter_scrape_success` | Gauge | Last scrape success (deprecated, use `eero_up`) |
 | `eero_exporter_scrape_errors_total` | Counter | Total scrape errors |
 | `eero_exporter_api_requests_total` | Counter | API requests by endpoint |
+
+> **Note on Caching**: Per Prometheus guidelines for expensive APIs, metrics are collected on a
+> configurable interval (default 60s) rather than on every scrape. Use
+> `eero_exporter_last_collection_timestamp_seconds` to monitor data freshness.
 
 ---
 

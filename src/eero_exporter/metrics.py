@@ -919,6 +919,17 @@ EXPORTER_SCRAPE_SUCCESS = Gauge(
     "Whether the last scrape was successful (1=yes, 0=no). Deprecated: use eero_up instead.",
 )
 
+EXPORTER_LAST_COLLECTION_TIMESTAMP = Gauge(
+    f"{PREFIX}_exporter_last_collection_timestamp_seconds",
+    "Unix timestamp of the last successful metrics collection. "
+    "Metrics are cached between collections per Prometheus guidelines for expensive APIs.",
+)
+
+EXPORTER_COLLECTION_INTERVAL = Gauge(
+    f"{PREFIX}_exporter_collection_interval_seconds",
+    "Configured collection interval in seconds. Prometheus scrapes may receive cached data.",
+)
+
 EXPORTER_SCRAPE_ERRORS = Counter(
     f"{PREFIX}_exporter_scrape_errors_total",
     "Total number of scrape errors",

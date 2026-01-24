@@ -80,6 +80,8 @@ from .metrics import (
     ETHERNET_PORT_POWER_SAVING,
     ETHERNET_PORT_SPEED,
     EXPORTER_API_REQUESTS,
+    EXPORTER_COLLECTION_INTERVAL,
+    EXPORTER_LAST_COLLECTION_TIMESTAMP,
     EXPORTER_SCRAPE_DURATION,
     EXPORTER_SCRAPE_ERRORS,
     EXPORTER_SCRAPE_SUCCESS,
@@ -377,6 +379,7 @@ class EeroCollector:
         self._cached_data: dict[str, Any] = {}
         self._is_premium: bool = False
         self._networks_count: int = 0
+        self._collection_interval: int = 60  # Default, can be overridden
 
     async def collect(self) -> bool:
         """Collect metrics from the eero API."""
@@ -430,6 +433,9 @@ class EeroCollector:
             duration = time.monotonic() - start_time
             EXPORTER_SCRAPE_DURATION.set(duration)
             self._last_collection_time = time.time()
+            # Set timestamp metrics for cache monitoring
+            EXPORTER_LAST_COLLECTION_TIMESTAMP.set(self._last_collection_time)
+            EXPORTER_COLLECTION_INTERVAL.set(self._collection_interval)
             _LOGGER.info(f"Collection completed in {duration:.2f}s (success={success})")
 
         return success
