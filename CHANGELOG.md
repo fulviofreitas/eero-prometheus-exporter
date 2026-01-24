@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.8.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.7.0...v3.8.0) (2026-01-24)
+
+### ✨ Features
+
+* **metrics:** add collection timestamp metrics for cache monitoring ([9dd18eb](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/9dd18ebd7cbe73d125df2b8f6538595ef421c18f))
+* **metrics:** add standard eero_up metric for failed scrape signaling ([1287aab](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/1287aab6131207eac14e8c87e006042a233c0411))
+* **port:** change default port from 9118 to 10052 ([57f5ded](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/57f5ded214bc0b87d7b182e839bd31ce5be2d179))
+* **server:** enhance landing page with version and status info ([b978a42](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/b978a427a7e087cf4483b0fc11dda43bb2e77b76))
+
+### 📚 Documentation
+
+* **config:** add cardinality considerations and tuning guidance ([31b13b3](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/31b13b3ce4f03120623ee6562c93779a37883f2e))
+* **metrics:** add source context to HELP strings ([438cd11](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/438cd1125b26bd358145e89a53becf5bbcafe3c3))
+* **metrics:** enhance HELP strings with unit clarifications ([bb98a8b](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/bb98a8bd45221921c7b470a707da4ebf5095e260))
+* **wiki:** add Prometheus compliance documentation ([7c9c420](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/7c9c42061d78840cfea3452d2224e8d6fc6e45d7))
+
 ## [3.7.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.6.0...v3.7.0) (2026-01-23)
 
 ### ✨ Features
