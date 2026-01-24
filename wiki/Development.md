@@ -37,6 +37,62 @@ This project uses:
 - **MyPy** for type checking
 - **Pytest** for testing
 
+## Prometheus Compliance
+
+This exporter follows the [official Prometheus exporter guidelines](https://prometheus.io/docs/instrumenting/writing_exporters/):
+
+### Standards Implemented
+
+| Guideline | Implementation |
+|-----------|----------------|
+| **Port Allocation** | Port 10052 registered in [Prometheus wiki](https://github.com/prometheus/prometheus/wiki/Default-port-allocations) |
+| **Up Metric** | `eero_up` gauge (1=success, 0=failure) for alerting |
+| **Metric Naming** | `eero_` prefix, snake_case, base units documented |
+| **Labels** | Minimal labels, no target label conflicts |
+| **Help Strings** | Include units, source API fields, typical ranges |
+| **Landing Page** | Version, status, links at `/` |
+| **Caching** | Collection interval with timestamp metrics |
+| **Health Endpoint** | `/health` for detailed status, `/ready` for probes |
+
+### Key Metrics for Monitoring the Exporter
+
+```promql
+# Is the exporter working?
+eero_up == 1
+
+# How stale is the data?
+time() - eero_exporter_last_collection_timestamp_seconds
+
+# Scrape success rate
+rate(eero_exporter_scrape_errors_total[5m])
+
+# API call patterns
+rate(eero_exporter_api_requests_total[5m])
+```
+
+### Alerting Examples
+
+```yaml
+groups:
+  - name: eero-exporter
+    rules:
+      - alert: EeroExporterDown
+        expr: eero_up == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Eero exporter is not scraping successfully"
+
+      - alert: EeroDataStale
+        expr: time() - eero_exporter_last_collection_timestamp_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Eero metrics data is stale (>5min old)"
+```
+
 ## Dependencies
 
 This project uses the **[eero-api](https://pypi.org/project/eero-api/)** library for communicating with eero's cloud services. The eero-api library provides:
