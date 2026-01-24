@@ -61,13 +61,15 @@ NETWORK_EEROS_COUNT = Gauge(
 
 SPEED_UPLOAD_MBPS = Gauge(
     f"{PREFIX}_speed_upload_mbps",
-    "Latest speed test upload result in Mbps",
+    "Latest speed test upload result in megabits per second (Mbps). "
+    "Note: Uses Mbps as industry-standard unit for network speeds.",
     labelnames=["network_id"],
 )
 
 SPEED_DOWNLOAD_MBPS = Gauge(
     f"{PREFIX}_speed_download_mbps",
-    "Latest speed test download result in Mbps",
+    "Latest speed test download result in megabits per second (Mbps). "
+    "Note: Uses Mbps as industry-standard unit for network speeds.",
     labelnames=["network_id"],
 )
 
@@ -163,7 +165,7 @@ EERO_WIRED = Gauge(
 
 EERO_MEMORY_USAGE = Gauge(
     f"{PREFIX}_eero_memory_usage_percent",
-    "Eero memory usage percentage",
+    "Eero memory usage as percentage (0-100). Divide by 100 for ratio.",
     labelnames=["network_id", "eero_id", "location"],
 )
 
@@ -209,7 +211,8 @@ ETHERNET_PORT_CARRIER = Gauge(
 
 ETHERNET_PORT_SPEED = Gauge(
     f"{PREFIX}_ethernet_port_speed_mbps",
-    "Ethernet port negotiated speed in Mbps",
+    "Ethernet port negotiated speed in megabits per second (Mbps). "
+    "Common values: 100 (Fast Ethernet), 1000 (Gigabit), 2500 (2.5G).",
     labelnames=["network_id", "eero_id", "location", "port_number", "port_name"],
 )
 
@@ -371,7 +374,8 @@ DEVICE_CHANNEL = Gauge(
 
 DEVICE_RX_BITRATE = Gauge(
     f"{PREFIX}_device_rx_bitrate_mbps",
-    "Device receive bitrate in Mbps",
+    "Device receive (download) bitrate in megabits per second (Mbps). "
+    "PHY layer rate, actual throughput may be lower.",
     labelnames=["network_id", "device_id", "name", "manufacturer", "band", "source_eero"],
 )
 
@@ -401,7 +405,8 @@ DEVICE_RX_BANDWIDTH = Gauge(
 
 DEVICE_TX_BITRATE = Gauge(
     f"{PREFIX}_device_tx_bitrate_mbps",
-    "Device transmit bitrate in Mbps",
+    "Device transmit (upload) bitrate in megabits per second (Mbps). "
+    "PHY layer rate, actual throughput may be lower.",
     labelnames=["network_id", "device_id", "name", "manufacturer", "band", "source_eero"],
 )
 
@@ -565,13 +570,13 @@ NETWORK_UPLOAD_BYTES = Counter(
 
 SQM_UPLOAD_BANDWIDTH = Gauge(
     f"{PREFIX}_sqm_upload_bandwidth_mbps",
-    "SQM upload bandwidth limit in Mbps",
+    "SQM (Smart Queue Management) upload bandwidth limit in megabits per second (Mbps).",
     labelnames=["network_id"],
 )
 
 SQM_DOWNLOAD_BANDWIDTH = Gauge(
     f"{PREFIX}_sqm_download_bandwidth_mbps",
-    "SQM download bandwidth limit in Mbps",
+    "SQM (Smart Queue Management) download bandwidth limit in megabits per second (Mbps).",
     labelnames=["network_id"],
 )
 
