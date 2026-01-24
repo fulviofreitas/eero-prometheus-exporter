@@ -7,7 +7,7 @@ services:
     hostname: eero-exporter
     restart: unless-stopped
     ports:
-      - "9118:9118"
+      - "10052:10052"
     volumes:
       # Mount session file for authentication (read-only)
       - ./session.json:/home/eero/.config/eero-exporter/session.json:ro
@@ -23,7 +23,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:9118/ready')",
+          "import urllib.request; urllib.request.urlopen('http://localhost:10052/ready')",
         ]
       interval: 30s
       timeout: 10s

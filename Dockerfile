@@ -52,13 +52,13 @@ RUN mkdir -p /home/eero/.config/eero-exporter && \
 USER eero
 
 # Expose metrics port
-EXPOSE 9118
+EXPOSE 10052
 
 # Health check - use /ready for container liveness (always 200 if server running)
 # Use /health endpoint for detailed status monitoring
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9118/ready')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:10052/ready')" || exit 1
 
 # Default command
 ENTRYPOINT ["eero-exporter"]
-CMD ["serve", "--host", "0.0.0.0", "--port", "9118"]
+CMD ["serve", "--host", "0.0.0.0", "--port", "10052"]

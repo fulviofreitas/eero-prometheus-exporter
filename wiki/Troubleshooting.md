@@ -29,7 +29,7 @@ eero-exporter serve --log-level DEBUG
 Check the `/health` endpoint for details:
 
 ```bash
-curl http://localhost:9118/health | jq
+curl http://localhost:10052/health | jq
 ```
 
 Common issues:
@@ -49,7 +49,7 @@ healthcheck:
       "CMD",
       "python",
       "-c",
-      "import urllib.request; urllib.request.urlopen('http://localhost:9118/ready')",
+      "import urllib.request; urllib.request.urlopen('http://localhost:10052/ready')",
     ]
 ```
 
@@ -63,7 +63,7 @@ eero-exporter serve --interval 120
 
 ## Prometheus Not Scraping?
 
-1. Check that the exporter is running: `curl http://localhost:9118/metrics`
+1. Check that the exporter is running: `curl http://localhost:10052/metrics`
 2. Verify Prometheus configuration targets the correct host/port
 3. Check Prometheus targets page for errors: `http://prometheus:9090/targets`
 

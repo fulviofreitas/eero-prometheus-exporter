@@ -155,7 +155,7 @@ class MetricsHandler(SimpleHTTPRequestHandler):
 
     <div class="footer">
         <p>Add this target to your Prometheus configuration:</p>
-        <code>- targets: ['localhost:9118']</code>
+        <code>- targets: ['localhost:10052']</code>
     </div>
 </body>
 </html>

@@ -50,7 +50,7 @@ eero-exporter login your-email@example.com
 eero-exporter serve
 ```
 
-Metrics live at **http://localhost:9118/metrics**
+Metrics live at **http://localhost:10052/metrics**
 
 ---
 

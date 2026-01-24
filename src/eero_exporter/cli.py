@@ -13,7 +13,7 @@ from rich.table import Table
 
 from . import __version__
 from .collector import EeroCollector
-from .config import DEFAULT_SESSION_FILE, ExporterConfig
+from .config import DEFAULT_PORT, DEFAULT_SESSION_FILE, ExporterConfig
 from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
 from .server import run_server
 
@@ -306,10 +306,10 @@ def test(
 @app.command()
 def serve(
     port: int = typer.Option(
-        9118,
+        DEFAULT_PORT,
         "--port",
         "-p",
-        help="Port to listen on",
+        help="Port to listen on (default: 10052, registered in Prometheus wiki)",
     ),
     host: str = typer.Option(
         "0.0.0.0",  # nosec B104 - intentional for Docker/container deployments

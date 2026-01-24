@@ -8,7 +8,7 @@ Add to your `prometheus.yml`:
 scrape_configs:
   - job_name: "eero"
     static_configs:
-      - targets: ["localhost:9118"]
+      - targets: ["localhost:10052"]
     scrape_interval: 60s
     scrape_timeout: 30s
 ```
@@ -19,7 +19,7 @@ Create `~/.config/eero-exporter/config.yml`:
 
 ```yaml
 # Server
-port: 9118
+port: 10052
 host: "0.0.0.0"
 
 # Collection
@@ -42,7 +42,7 @@ You can also configure the exporter using environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `EERO_EXPORTER_PORT` | Port to listen on | `9118` |
+| `EERO_EXPORTER_PORT` | Port to listen on | `10052` |
 | `EERO_EXPORTER_HOST` | Host to bind to | `0.0.0.0` |
 | `EERO_EXPORTER_INTERVAL` | Collection interval (seconds) | `60` |
 | `EERO_EXPORTER_LOG_LEVEL` | Log level | `INFO` |

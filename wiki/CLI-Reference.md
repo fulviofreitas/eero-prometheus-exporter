@@ -42,7 +42,7 @@ eero-exporter serve [OPTIONS]
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-p, --port INTEGER` | Port to listen on | `9118` |
+| `-p, --port INTEGER` | Port to listen on | `10052` |
 | `-h, --host TEXT` | Host to bind to | `0.0.0.0` |
 | `-i, --interval INTEGER` | Collection interval in seconds | `60` |
 | `-s, --session-file PATH` | Custom session file path | `~/.config/eero-exporter/session.json` |

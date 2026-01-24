@@ -47,10 +47,10 @@ Check your email or SMS for the verification code and enter it when prompted. Th
 eero-exporter serve
 
 # Or customize it
-eero-exporter serve --port 9118 --interval 60
+eero-exporter serve --port 10052 --interval 60
 ```
 
-Your metrics are now live at **http://localhost:9118/metrics** 🚀
+Your metrics are now live at **http://localhost:10052/metrics** 🚀
 
 ## Available Endpoints
 

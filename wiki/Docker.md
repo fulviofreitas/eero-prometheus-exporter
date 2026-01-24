@@ -37,7 +37,7 @@ docker-compose --profile monitoring up -d
 ```bash
 # Run the exporter
 docker run -d \
-  -p 9118:9118 \
+  -p 10052:10052 \
   -v ./session.json:/home/eero/.config/eero-exporter/session.json:ro \
   --name eero-exporter \
   ghcr.io/fulviofreitas/eero-prometheus-exporter:latest
@@ -47,7 +47,7 @@ docker run -d \
 
 ```bash
 docker build -t eero-exporter .
-docker run -p 9118:9118 \
+docker run -p 10052:10052 \
   -v ./session.json:/home/eero/.config/eero-exporter/session.json:ro \
   eero-exporter
 ```
@@ -100,7 +100,7 @@ global:
 scrape_configs:
   - job_name: 'eero'
     static_configs:
-      - targets: ['eero-exporter:9118']
+      - targets: ['eero-exporter:10052']
     metrics_path: /metrics
 
   - job_name: 'prometheus'
@@ -194,7 +194,7 @@ services:
     container_name: eero-exporter
     restart: unless-stopped
     ports:
-      - "9118:9118"
+      - "10052:10052"
     volumes:
       - /volume1/docker/eero/session.json:/home/eero/.config/eero-exporter/session.json:ro
     healthcheck:
@@ -203,7 +203,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:9118/ready')",
+          "import urllib.request; urllib.request.urlopen('http://localhost:10052/ready')",
         ]
       interval: 30s
       timeout: 10s

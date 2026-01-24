@@ -16,12 +16,18 @@ DEFAULT_SESSION_FILE = DEFAULT_CONFIG_PATH / "session.json"
 DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_PATH / "config.yml"
 
 
+# Default port for the exporter
+# Port 10052 is registered in the Prometheus default port allocations wiki
+# See: https://github.com/prometheus/prometheus/wiki/Default-port-allocations
+DEFAULT_PORT = 10052
+
+
 @dataclass
 class ExporterConfig:
     """Configuration for the Eero Prometheus Exporter."""
 
     # Server settings
-    port: int = 9118
+    port: int = DEFAULT_PORT
     host: str = "0.0.0.0"  # nosec B104 - intentional for Docker/container deployments
     metrics_path: str = "/metrics"
 
