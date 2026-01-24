@@ -5780,12 +5780,12 @@
                 "0": {
                   "color": "red",
                   "index": 1,
-                  "text": "FAILED"
+                  "text": "DOWN"
                 },
                 "1": {
                   "color": "green",
                   "index": 0,
-                  "text": "SUCCESS"
+                  "text": "UP"
                 }
               },
               "type": "value"
@@ -5809,7 +5809,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 3,
         "x": 0,
         "y": 142
       },
@@ -5834,12 +5834,12 @@
       "pluginVersion": "12.3.1",
       "targets": [
         {
-          "expr": "eero_exporter_scrape_success",
+          "expr": "eero_up",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Last Scrape",
+      "title": "API Status",
       "type": "stat"
     },
     {
@@ -5876,8 +5876,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 4,
+        "w": 3,
+        "x": 3,
         "y": 142
       },
       "id": 91,
@@ -5907,6 +5907,135 @@
         }
       ],
       "title": "Scrape Duration",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Time since last successful metrics collection",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 120
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 6,
+        "y": 142
+      },
+      "id": 94,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "expr": "time() - eero_exporter_last_collection_timestamp_seconds",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Cache Age",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Configured metrics collection interval",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "super-light-blue",
+            "mode": "fixed"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 9,
+        "y": 142
+      },
+      "id": 95,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "expr": "eero_exporter_collection_interval_seconds",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Collection Interval",
       "type": "stat"
     },
     {
@@ -5973,8 +6102,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 8,
+        "w": 6,
+        "x": 12,
         "y": 142
       },
       "id": 92,
@@ -6066,8 +6195,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 16,
+        "w": 6,
+        "x": 18,
         "y": 142
       },
       "id": 93,
