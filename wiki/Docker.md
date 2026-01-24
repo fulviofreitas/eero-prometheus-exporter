@@ -54,7 +54,9 @@ docker run -p 10052:10052 \
 
 ---
 
-## 📦 Server Deployment Guide
+## 📦 Full Observability Stack
+
+#### Exporter + Prometheus + Grafana
 
 If you're deploying to a server with Portainer or Docker, follow these steps:
 
@@ -246,10 +248,10 @@ services:
 
 ### Common Issues
 
-| Issue | Solution |
-|-------|----------|
-| Prometheus won't start | Run `chown -R 65534:65534 /volume1/docker/eero/prometheus_data` |
-| Grafana permission denied | Run `chown -R 472:472 /volume1/docker/eero/grafana_data` |
-| Session invalid errors | Re-run login locally and copy new `session.json` to server |
-| Health check failing | Use `/ready` endpoint (always 200) instead of `/health` |
-| Dashboard not showing | Verify `eero-dashboard.json` exists in the grafana folder |
+| Issue                     | Solution                                                        |
+| ------------------------- | --------------------------------------------------------------- |
+| Prometheus won't start    | Run `chown -R 65534:65534 /volume1/docker/eero/prometheus_data` |
+| Grafana permission denied | Run `chown -R 472:472 /volume1/docker/eero/grafana_data`        |
+| Session invalid errors    | Re-run login locally and copy new `session.json` to server      |
+| Health check failing      | Use `/ready` endpoint (always 200) instead of `/health`         |
+| Dashboard not showing     | Verify `eero-dashboard.json` exists in the grafana folder       |
