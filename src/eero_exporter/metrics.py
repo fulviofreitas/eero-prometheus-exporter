@@ -11,19 +11,19 @@ PREFIX = "eero"
 
 NETWORK_INFO = Info(
     f"{PREFIX}_network",
-    "Information about the eero network",
+    "Information about the eero network. Source: eero API /networks endpoint.",
     labelnames=["network_id"],
 )
 
 EERO_INFO = Info(
     f"{PREFIX}_eero",
-    "Information about an eero device",
+    "Information about an eero device. Source: eero API /networks/{id}/eeros endpoint.",
     labelnames=["network_id", "eero_id", "serial"],
 )
 
 DEVICE_INFO = Info(
     f"{PREFIX}_device",
-    "Information about a connected device",
+    "Information about a connected device. Source: eero API /networks/{id}/devices endpoint.",
     labelnames=["network_id", "device_id", "mac"],
 )
 
@@ -125,13 +125,13 @@ EERO_CONNECTED_WIRELESS_CLIENTS = Gauge(
 
 EERO_MESH_QUALITY = Gauge(
     f"{PREFIX}_eero_mesh_quality_bars",
-    "Mesh quality indicator (0-5 bars)",
+    "Mesh quality indicator 0-5 bars. Source: eero API field 'mesh_quality_bars'.",
     labelnames=["network_id", "eero_id", "location", "model"],
 )
 
 EERO_UPTIME_SECONDS = Gauge(
     f"{PREFIX}_eero_uptime_seconds",
-    "Eero device uptime in seconds",
+    "Eero device uptime in seconds since last reboot. Source: eero API field 'uptime'.",
     labelnames=["network_id", "eero_id", "location"],
 )
 
@@ -171,7 +171,8 @@ EERO_MEMORY_USAGE = Gauge(
 
 EERO_TEMPERATURE = Gauge(
     f"{PREFIX}_eero_temperature_celsius",
-    "Eero temperature in Celsius",
+    "Eero internal temperature in Celsius. Source: eero API field 'temperature'. "
+    "Normal range: 30-60°C.",
     labelnames=["network_id", "eero_id", "location"],
 )
 
@@ -317,7 +318,8 @@ DEVICE_IS_GUEST = Gauge(
 
 DEVICE_SIGNAL_STRENGTH = Gauge(
     f"{PREFIX}_device_signal_strength_dbm",
-    "Device signal strength in dBm",
+    "Device signal strength in dBm (decibels relative to 1 milliwatt). "
+    "Source: eero API field 'connectivity.signal'. Range typically -30 (excellent) to -90 (poor).",
     labelnames=[
         "network_id",
         "device_id",
