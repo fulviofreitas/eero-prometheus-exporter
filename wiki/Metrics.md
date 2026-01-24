@@ -1,6 +1,12 @@
 # 📊 Metrics Reference
 
-The exporter provides **115+ metrics** across 20+ categories.
+The exporter provides **120+ metrics** across 20+ categories.
+
+> **Note**: Not all metrics will have data for every network. Some metrics depend on:
+> - **Eero Plus/Secure subscription**: Activity tracking, security metrics, backup network
+> - **API availability**: Certain fields (temperature, memory usage, uptime) may not be exposed by all eero firmware versions
+> - **Network configuration**: SQM metrics only available if Smart Queue Management is enabled
+> - **Device types**: Nightlight metrics only available on Eero Beacon devices
 
 ## Table of Contents
 
@@ -38,6 +44,8 @@ The exporter provides **115+ metrics** across 20+ categories.
 | `eero_network_status` | Gauge | Network status (1=online, 0=offline) |
 | `eero_network_clients_count` | Gauge | Total connected clients |
 | `eero_network_eeros_count` | Gauge | Number of eero devices in mesh |
+| `eero_network_download_bytes_total` | Counter | Total bytes downloaded on the network |
+| `eero_network_upload_bytes_total` | Counter | Total bytes uploaded on the network |
 
 ---
 
@@ -169,6 +177,8 @@ The exporter provides **115+ metrics** across 20+ categories.
 | `eero_eero_last_reboot_timestamp_seconds` | Gauge | Last reboot timestamp |
 | `eero_eero_provides_wifi` | Gauge | Device provides WiFi |
 | `eero_eero_backup_connection` | Gauge | Using backup connection |
+| `eero_eero_rx_bytes_total` | Counter | Total bytes received by eero device |
+| `eero_eero_tx_bytes_total` | Counter | Total bytes transmitted by eero device |
 
 ---
 
@@ -299,6 +309,13 @@ These metrics require an active Eero Plus/Secure subscription.
 | `eero_activity_category_bytes` | Gauge | Usage by category |
 | `eero_device_activity_download_bytes` | Gauge | Device download (period) |
 | `eero_device_activity_upload_bytes` | Gauge | Device upload (period) |
+
+### Security (Eero Secure)
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `eero_security_threats_blocked_total` | Counter | Total threats blocked by Eero Secure |
+| `eero_security_scans_blocked_total` | Counter | Network scans blocked |
 
 ---
 
