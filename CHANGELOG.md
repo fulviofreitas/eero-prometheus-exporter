@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.9.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.8.0...v3.9.0) (2026-01-24)
+
+### ✨ Features
+
+* **grafana:** update exporter health panels for new metrics ([89c1cd1](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/89c1cd13229b9e25005b54601fa4bbbf1d68a7fe))
+
+### 📚 Documentation
+
+* **metrics:** add missing metrics and availability notes ([a8b15cf](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/a8b15cfdb19498316d0b178da5fb66c74117a7a5))
+
 ## [3.8.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.7.0...v3.8.0) (2026-01-24)
 
 ### ✨ Features
