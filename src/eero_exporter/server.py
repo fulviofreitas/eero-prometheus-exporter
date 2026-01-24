@@ -9,6 +9,7 @@ from threading import Thread
 
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 
+from . import __version__
 from .collector import EeroCollector
 from .config import ExporterConfig
 
@@ -99,67 +100,122 @@ class MetricsHandler(SimpleHTTPRequestHandler):
         self.wfile.write(response)
 
     def _serve_index(self) -> None:
-        """Serve index page with links."""
-        html = b"""<!DOCTYPE html>
+        """Serve index page with links.
+
+        Per Prometheus guidelines, provide a simple HTML page with exporter
+        name, version, and links to /metrics.
+        """
+        # Determine status indicators
+        is_healthy = _health_state["session_valid"] and _health_state["last_collection_success"]
+        status_color = "#00d4aa" if is_healthy else "#ff6b6b"
+        status_text = "Healthy" if is_healthy else "Unhealthy"
+        session_status = "Valid" if _health_state["session_valid"] else "Invalid"
+        collections = _health_state["collections_total"]
+
+        html = f"""<!DOCTYPE html>
 <html>
 <head>
     <title>Eero Prometheus Exporter</title>
     <style>
-        body {
+        body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 600px;
+            max-width: 650px;
             margin: 50px auto;
             padding: 20px;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             color: #eee;
             min-height: 100vh;
-        }
-        h1 {
+        }}
+        h1 {{
             color: #00d4aa;
             border-bottom: 2px solid #00d4aa;
             padding-bottom: 10px;
-        }
-        a {
+        }}
+        a {{
             color: #00d4aa;
             text-decoration: none;
-        }
-        a:hover {
+        }}
+        a:hover {{
             text-decoration: underline;
-        }
-        .links {
+        }}
+        .version {{
+            color: #888;
+            font-size: 0.9em;
+        }}
+        .status {{
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            background: {status_color}22;
+            color: {status_color};
+            border: 1px solid {status_color};
+            font-weight: 500;
+        }}
+        .links {{
             background: rgba(255,255,255,0.1);
             padding: 20px;
             border-radius: 8px;
             margin-top: 20px;
-        }
-        .links li {
+        }}
+        .links li {{
             margin: 10px 0;
-        }
-        .footer {
+        }}
+        .info-table {{
+            margin-top: 20px;
+            width: 100%;
+        }}
+        .info-table td {{
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }}
+        .info-table td:first-child {{
+            color: #888;
+            width: 40%;
+        }}
+        .footer {{
             margin-top: 40px;
             color: #888;
             font-size: 0.9em;
-        }
+        }}
+        code {{
+            background: rgba(0,212,170,0.1);
+            padding: 8px 12px;
+            border-radius: 4px;
+            display: block;
+            margin-top: 8px;
+        }}
     </style>
 </head>
 <body>
-    <h1>Eero Prometheus Exporter</h1>
+    <h1>Eero Prometheus Exporter <span class="version">v{__version__}</span></h1>
     <p>Prometheus metrics exporter for eero mesh WiFi networks.</p>
+    <p><span class="status">{status_text}</span></p>
 
     <div class="links">
         <ul>
             <li><a href="/metrics">Metrics</a> - Prometheus metrics endpoint</li>
-            <li><a href="/health">Health</a> - Health check endpoint</li>
+            <li><a href="/health">Health</a> - Health check with detailed status</li>
+            <li><a href="/ready">Ready</a> - Readiness probe (for k8s/docker)</li>
         </ul>
     </div>
+
+    <table class="info-table">
+        <tr><td>Session</td><td>{session_status}</td></tr>
+        <tr><td>Collections</td><td>{collections}</td></tr>
+        <tr><td>Port</td><td>10052 (registered in Prometheus wiki)</td></tr>
+    </table>
 
     <div class="footer">
         <p>Add this target to your Prometheus configuration:</p>
         <code>- targets: ['localhost:10052']</code>
+        <p style="margin-top: 20px;">
+            <a href="https://github.com/fulviofreitas/eero-prometheus-exporter">GitHub</a> ·
+            <a href="https://github.com/fulviofreitas/eero-prometheus-exporter/wiki">Documentation</a>
+        </p>
     </div>
 </body>
 </html>
-"""
+""".encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(html)))
