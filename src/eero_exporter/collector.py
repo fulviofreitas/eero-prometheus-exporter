@@ -1691,7 +1691,11 @@ class EeroCollector:
                 DIAGNOSTICS_GATEWAY_LATENCY.labels(network_id=network_id).set(gateway_latency)
 
             # Last run timestamp
-            last_run = diagnostics.get("last_run") or diagnostics.get("timestamp") or diagnostics.get("updated_at")
+            last_run = (
+                diagnostics.get("last_run")
+                or diagnostics.get("timestamp")
+                or diagnostics.get("updated_at")
+            )
             if last_run:
                 last_run_ts = _parse_timestamp(last_run)
                 if last_run_ts is not None:
