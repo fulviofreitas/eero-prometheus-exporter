@@ -144,15 +144,21 @@ providers:
 EOF
 echo "Created Grafana dashboard provisioning"
 
+# Download the Grafana dashboard
+echo "Downloading Grafana dashboard..."
+curl -fsSL -o "$BASE_DIR/grafana/eero-dashboard.json" \
+  https://raw.githubusercontent.com/fulviofreitas/eero-prometheus-exporter/master/grafana/eero-dashboard.json
+echo "Downloaded eero-dashboard.json"
+
 echo ""
 echo "Done! Directory structure:"
 ls -la "$BASE_DIR"
+ls -la "$BASE_DIR/grafana/"
 echo ""
 echo "Next steps:"
 echo "1. Login locally: eero-exporter login your-email@example.com"
 echo "2. Copy session: scp ~/.config/eero-exporter/session.json user@nas:$BASE_DIR/"
-echo "3. Download dashboard: curl -o $BASE_DIR/grafana/eero-dashboard.json https://raw.githubusercontent.com/fulviofreitas/eero-prometheus-exporter/master/grafana/eero-dashboard.json"
-echo "4. Deploy the stack in Portainer"
+echo "3. Deploy the stack in Portainer"
 ```
 
 Save as `setup-eero-exporter.sh`, make executable (`chmod +x setup-eero-exporter.sh`), and run with `sudo`.
@@ -173,17 +179,9 @@ eero-exporter validate
 scp ~/.config/eero-exporter/session.json user@your-nas:/volume1/docker/eero/
 ```
 
-### 3. Download the Dashboard
+### 3. Deploy the Stack
 
-Download the pre-built Grafana dashboard to your server:
-
-```bash
-# On the server, or via SSH
-curl -o /volume1/docker/eero/grafana/eero-dashboard.json \
-  https://raw.githubusercontent.com/fulviofreitas/eero-prometheus-exporter/master/grafana/eero-dashboard.json
-```
-
-### 4. Example Portainer Stack
+The setup script already downloaded the dashboard. Now deploy using Portainer or Docker Compose.
 
 Use this compose file with absolute paths for server deployment. **Grafana will auto-configure the Prometheus datasource and import the dashboard on startup!**
 
