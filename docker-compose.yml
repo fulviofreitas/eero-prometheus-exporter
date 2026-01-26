@@ -2,7 +2,12 @@ version: "3.8"
 
 services:
   eero-exporter:
-    image: ghcr.io/fulviofreitas/eero-prometheus-exporter:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Use local build for development, or pull from ghcr.io for production:
+    # image: ghcr.io/fulviofreitas/eero-prometheus-exporter:latest
+    image: eero-prometheus-exporter:local
     container_name: eero-exporter
     hostname: eero-exporter
     restart: unless-stopped

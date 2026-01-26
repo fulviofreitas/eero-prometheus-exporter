@@ -21,6 +21,18 @@ _Monitor network health, device connectivity, speed tests, and 115+ metrics with
 
 ---
 
+## 📸 Dashboard Preview
+
+<div align="center">
+
+![Grafana Dashboard](docs/images/grafana-dashboard.png)
+
+*Eero Mesh Network Grafana Dashboard - Real-time monitoring of network status, device health, and connectivity*
+
+</div>
+
+---
+
 ## ✨ Why This Project?
 
 Your eero mesh network is the backbone of your connected home. Shouldn't you be able to monitor it properly?

@@ -616,7 +616,14 @@ class EeroCollector:
                 }
             )
 
-            is_online = 1 if status in ("connected", "online") else 0
+            # Check multiple possible status values indicating online state
+            # API may return: "connected", "online", "green", "up", "active", or boolean-like values
+            online_statuses = ("connected", "online", "green", "up", "active", "ok", "healthy")
+            is_online = 1 if status in online_statuses else 0
+            # If status is empty/unknown but heartbeat is ok, consider it online
+            if is_online == 0 and eero.get("heartbeat_ok", False):
+                is_online = 1
+            _LOGGER.debug(f"Eero {eero_id} status='{status}' -> is_online={is_online}")
             EERO_STATUS.labels(
                 network_id=network_id, eero_id=eero_id, location=location, model=model
             ).set(is_online)
@@ -682,13 +689,31 @@ class EeroCollector:
                     1 if wired else 0
                 )
 
+            # Try multiple field names for memory usage
             memory_usage = eero.get("memory_usage")
+            if memory_usage is None:
+                # Check nested structures
+                resources = eero.get("resources", {})
+                if isinstance(resources, dict):
+                    memory_usage = resources.get("memory_usage") or resources.get("memory_percent")
+                hardware = eero.get("hardware", {})
+                if isinstance(hardware, dict) and memory_usage is None:
+                    memory_usage = hardware.get("memory_usage") or hardware.get("memory_percent")
             if memory_usage is not None:
                 EERO_MEMORY_USAGE.labels(
                     network_id=network_id, eero_id=eero_id, location=location
                 ).set(memory_usage)
 
+            # Try multiple field names for temperature
             temperature = eero.get("temperature")
+            if temperature is None:
+                # Check nested structures
+                resources = eero.get("resources", {})
+                if isinstance(resources, dict):
+                    temperature = resources.get("temperature") or resources.get("temp_celsius")
+                hardware = eero.get("hardware", {})
+                if isinstance(hardware, dict) and temperature is None:
+                    temperature = hardware.get("temperature") or hardware.get("temp_celsius")
             if temperature is not None:
                 EERO_TEMPERATURE.labels(
                     network_id=network_id, eero_id=eero_id, location=location
@@ -1187,11 +1212,20 @@ class EeroCollector:
                 1 if power_saving else 0
             )
 
+        # Try multiple field names for guest network enabled
         guest_enabled = network_details.get("guest_network_enabled")
+        if guest_enabled is None:
+            # Check nested guest_network object
+            guest_net = network_details.get("guest_network", {})
+            if isinstance(guest_net, dict):
+                guest_enabled = guest_net.get("enabled")
         if guest_enabled is not None:
             NETWORK_GUEST_ENABLED.labels(network_id=network_id, name=network_name).set(
                 1 if guest_enabled else 0
             )
+        else:
+            # Default to 0 if not found to avoid "No data" in dashboard
+            NETWORK_GUEST_ENABLED.labels(network_id=network_id, name=network_name).set(0)
 
         backup_enabled = network_details.get("backup_internet_enabled")
         if backup_enabled is not None:
@@ -1605,38 +1639,59 @@ class EeroCollector:
             EXPORTER_API_REQUESTS.labels(endpoint="diagnostics", status="success").inc()
 
             if not diagnostics:
+                _LOGGER.debug("Diagnostics response is empty")
                 return
 
-            # Internet latency
-            internet_latency = diagnostics.get("internet_latency_ms")
-            if internet_latency is None:
-                # Try nested structure
-                internet_data = diagnostics.get("internet", {})
-                if isinstance(internet_data, dict):
-                    internet_latency = internet_data.get("latency_ms")
+            _LOGGER.debug(f"Diagnostics keys: {list(diagnostics.keys())}")
+
+            # Helper to extract latency from various possible structures
+            def _extract_latency(data: dict, *keys: str) -> float | None:
+                for key in keys:
+                    if key in data:
+                        val = data[key]
+                        if isinstance(val, (int, float)):
+                            return float(val)
+                        if isinstance(val, dict):
+                            for nested_key in ("latency_ms", "latency", "ms", "value"):
+                                if nested_key in val and isinstance(val[nested_key], (int, float)):
+                                    return float(val[nested_key])
+                return None
+
+            # Internet latency - try multiple field patterns
+            internet_latency = _extract_latency(
+                diagnostics,
+                "internet_latency_ms",
+                "internet_latency",
+                "internet",
+                "wan_latency_ms",
+                "wan_latency",
+            )
             if internet_latency is not None:
                 DIAGNOSTICS_INTERNET_LATENCY.labels(network_id=network_id).set(internet_latency)
 
             # DNS latency
-            dns_latency = diagnostics.get("dns_latency_ms")
-            if dns_latency is None:
-                dns_data = diagnostics.get("dns", {})
-                if isinstance(dns_data, dict):
-                    dns_latency = dns_data.get("latency_ms")
+            dns_latency = _extract_latency(
+                diagnostics,
+                "dns_latency_ms",
+                "dns_latency",
+                "dns",
+            )
             if dns_latency is not None:
                 DIAGNOSTICS_DNS_LATENCY.labels(network_id=network_id).set(dns_latency)
 
             # Gateway latency
-            gateway_latency = diagnostics.get("gateway_latency_ms")
-            if gateway_latency is None:
-                gateway_data = diagnostics.get("gateway", {})
-                if isinstance(gateway_data, dict):
-                    gateway_latency = gateway_data.get("latency_ms")
+            gateway_latency = _extract_latency(
+                diagnostics,
+                "gateway_latency_ms",
+                "gateway_latency",
+                "gateway",
+                "router_latency_ms",
+            )
             if gateway_latency is not None:
                 DIAGNOSTICS_GATEWAY_LATENCY.labels(network_id=network_id).set(gateway_latency)
 
             # Last run timestamp
-            last_run = diagnostics.get("last_run") or diagnostics.get("timestamp")
+            last_run = diagnostics.get("last_run") or diagnostics.get("timestamp") or diagnostics.get("updated_at")
             if last_run:
                 last_run_ts = _parse_timestamp(last_run)
                 if last_run_ts is not None:
