@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.10.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.9.0...v3.10.0) (2026-01-26)
+
+### ✨ Features
+
+* **dashboard:** reorganize Grafana dashboard and add screenshot ([44b8ce6](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/44b8ce69cc691c8dab5aa8541ac78d6e2e3a242f))
+
+### 📚 Documentation
+
+* add Grafana dashboard import instructions to wiki ([1d45555](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/1d45555d540cd4823656c15d0a17325b5acd0da5))
+* **wiki:** improve Docker deployment section title and formatting ([ab4b49d](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/ab4b49d15c8b93c14894845657f4fe340acf01be))
+
 ## [3.9.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.8.0...v3.9.0) (2026-01-24)
 
 ### ✨ Features
