@@ -75,6 +75,16 @@ Your metrics are now live at **http://localhost:10052/metrics** 🚀
 
 ## Next Steps
 
-- [🐳 Docker Setup](Docker) — Run with Docker Compose
+- [🐳 Docker Setup](Docker) — Run with Docker Compose (includes Grafana dashboard)
 - [⚙️ Configuration](Configuration) — Configure Prometheus scraping
-- [📊 Metrics Reference](Metrics) — Explore all 90+ metrics
+- [📊 Metrics Reference](Metrics) — Explore all 115+ metrics
+
+## Grafana Dashboard
+
+Import the pre-built dashboard for instant visualization:
+
+```bash
+curl -O https://raw.githubusercontent.com/fulviofreitas/eero-prometheus-exporter/master/grafana/eero-dashboard.json
+```
+
+Or use Docker Compose with the `monitoring` profile for automatic setup—see [Docker Setup](Docker).

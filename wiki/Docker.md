@@ -188,8 +188,6 @@ curl -o /volume1/docker/eero/grafana/eero-dashboard.json \
 Use this compose file with absolute paths for server deployment. **Grafana will auto-configure the Prometheus datasource and import the dashboard on startup!**
 
 ```yaml
-version: "3.8"
-
 services:
   eero-exporter:
     image: ghcr.io/fulviofreitas/eero-prometheus-exporter:latest
