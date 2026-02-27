@@ -451,7 +451,9 @@ class EeroCollector:
         network_name = network_data.get("name", "Unknown")
 
         if not network_id:
-            _LOGGER.warning("Could not extract network ID from network data (name=%s)", network_name)
+            _LOGGER.warning(
+                "Could not extract network ID from network data (name=%s)", network_name
+            )
             return
 
         _LOGGER.debug(f"Collecting metrics for network: {network_name} ({network_id})")
