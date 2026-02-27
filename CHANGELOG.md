@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.11.1](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.11.0...v3.11.1) (2026-02-27)
+
+### 🐛 Bug Fixes
+
+* improve network ID extraction to use direct id field with URL fallback ([5d07eb4](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/5d07eb459adde6659372a5f71923161e90d38715)), closes [#33](https://github.com/fulviofreitas/eero-prometheus-exporter/issues/33) [#32](https://github.com/fulviofreitas/eero-prometheus-exporter/issues/32)
+* wrap long warning line to satisfy black/ruff line-length limit ([764d8d8](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/764d8d843be2217608fe9193ceaaf9c199ead3be))
+
 ## [3.11.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.10.0...v3.11.0) (2026-01-26)
 
 ### ✨ Features
