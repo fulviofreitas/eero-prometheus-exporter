@@ -446,16 +446,12 @@ class EeroCollector:
         network_data: dict[str, Any],
     ) -> None:
         """Collect metrics for a single network."""
-        network_url = network_data.get("url", "")
-        #network_id = _extract_id_from_url(network_url)
-        network_id = (
-            network_data.get("id")
-            or _extract_id_from_url(network_data.get("url", ""))
-        )
+        raw_id = network_data.get("id")
+        network_id = str(raw_id) if raw_id else _extract_id_from_url(network_data.get("url", ""))
         network_name = network_data.get("name", "Unknown")
 
         if not network_id:
-            _LOGGER.warning(f"Could not extract network ID from {network_url}")
+            _LOGGER.warning("Could not extract network ID from network data (name=%s)", network_name)
             return
 
         _LOGGER.debug(f"Collecting metrics for network: {network_name} ({network_id})")

@@ -164,6 +164,19 @@ def _extract_list(raw_response: Any, list_key: str | None = None) -> list[dict[s
     return []
 
 
+def _extract_network_id(network: dict[str, Any]) -> str | None:
+    """Extract network ID from a network dict, trying direct id then URL fallback."""
+    net_id = network.get("id")
+    if net_id:
+        return str(net_id)
+    url = network.get("url", "")
+    if url:
+        parts = str(url).rstrip("/").split("/")
+        if parts:
+            return parts[-1]
+    return None
+
+
 class EeroClient:
     """Adapter wrapping eero-api for the Prometheus exporter.
 
@@ -281,12 +294,7 @@ class EeroClient:
             raw_networks = await self._client.get_networks()
             networks = _extract_list(raw_networks, "networks")
             if networks:
-                network = networks[0]
-                url = network.get("url", "")
-                if url:
-                    parts = str(url).rstrip("/").split("/")
-                    if parts:
-                        self._preferred_network_id = parts[-1]
+                self._preferred_network_id = _extract_network_id(networks[0])
         except Exception:
             pass
 
@@ -320,10 +328,7 @@ class EeroClient:
 
         # Set preferred network if not set
         if not self._preferred_network_id and result:
-            network_url = result[0].get("url", "")
-            parts = str(network_url).rstrip("/").split("/")
-            if parts:
-                self._preferred_network_id = parts[-1]
+            self._preferred_network_id = _extract_network_id(result[0])
 
         return result
 
