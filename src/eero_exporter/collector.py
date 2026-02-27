@@ -447,7 +447,11 @@ class EeroCollector:
     ) -> None:
         """Collect metrics for a single network."""
         network_url = network_data.get("url", "")
-        network_id = _extract_id_from_url(network_url)
+        #network_id = _extract_id_from_url(network_url)
+        network_id = (
+            network_data.get("id")
+            or _extract_id_from_url(network_data.get("url", ""))
+        )
         network_name = network_data.get("name", "Unknown")
 
         if not network_id:
