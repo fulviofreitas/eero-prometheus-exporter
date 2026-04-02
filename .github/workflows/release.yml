@@ -2,7 +2,7 @@
 # 🚀 Automated Semantic Release
 # ============================================================================
 # Automatically creates releases based on conventional commit messages.
-# Uses reusable actions from eero-api for maintainability.
+# Uses reusable actions from workflow-arsenal for maintainability.
 #
 # Chain: CI → Release → Publish TestPyPI → Publish PyPI → Notify eero-ui
 # Triggers: After CI Pipeline succeeds on main/master
@@ -64,7 +64,7 @@ jobs:
 
       - name: 🚀 Run semantic-release
         id: release
-        uses: fulviofreitas/eero-api/.github/actions/semantic-release@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/semantic-release@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           dry-run: ${{ github.event.inputs.dry_run || 'false' }}
@@ -203,7 +203,7 @@ jobs:
 
     steps:
       - name: 🔔 Notify eero-ui
-        uses: fulviofreitas/eero-api/.github/actions/notify-downstream@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/notify-downstream@master
         with:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
           app-private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
