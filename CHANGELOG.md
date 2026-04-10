@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.12.1](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.12.0...v3.12.1) (2026-04-10)
+
+### 🐛 Bug Fixes
+
+* remove deprecated matchPackageNames and invalid matchDepTypes from renovate config ([413e5d3](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/413e5d35cb1a5e836f1f452b91a340ee5bb7538d))
+
 ## [3.12.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.11.4...v3.12.0) (2026-04-10)
 
 ### ✨ Features
