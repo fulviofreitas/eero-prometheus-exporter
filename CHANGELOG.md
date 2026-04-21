@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.13.1](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.13.0...v3.13.1) (2026-04-21)
+
+### 🐛 Bug Fixes
+
+* **deps:** replace deprecated app-id with client-id in create-github-app-token ([500e4bc](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/500e4bc10a79e9e68ce1e5010763bcdbd53dc689))
+
 ## [3.13.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.12.1...v3.13.0) (2026-04-11)
 
 ### ✨ Features
