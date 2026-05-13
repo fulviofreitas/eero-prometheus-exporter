@@ -34,7 +34,10 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
-  id-token: write  # Required for PyPI Trusted Publishing
+  # id-token: write is intentionally NOT set at workflow level.
+  # OIDC trusted publishing is scoped only to the publish-testpypi and publish-pypi jobs,
+  # which are bound to GitHub Environments (testpypi/pypi) with branch protection.
+  # See CVE-2026-45321 (Mini Shai-Hulud worm) for the abuse pattern this mitigates.
 
 jobs:
   # ============================================================================

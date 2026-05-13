@@ -43,7 +43,10 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write  # Required for Trusted Publishing
+  # id-token: write is intentionally NOT set at workflow level.
+  # OIDC trusted publishing is scoped only to the test-publish job below,
+  # which is bound to the GitHub testpypi Environment with branch protection.
+  # See CVE-2026-45321 (Mini Shai-Hulud worm) for the abuse pattern this mitigates.
 
 jobs:
   # ============================================================================
@@ -57,6 +60,10 @@ jobs:
     environment:
       name: testpypi
       url: https://test.pypi.org/project/eero-prometheus-exporter/
+
+    permissions:
+      contents: read
+      id-token: write  # Required for TestPyPI Trusted Publishing (scoped to this job + environment)
 
     steps:
       - name: 📥 Checkout repository
