@@ -2,7 +2,9 @@
 
 import logging
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
 from .metrics import (
@@ -24,6 +26,7 @@ from .metrics import (
     DEVICE_CONNECTED_TO_GATEWAY,
     DEVICE_CONNECTION_SCORE,
     DEVICE_CONNECTION_SCORE_BARS,
+    DEVICE_DATA_USAGE_BYTES,
     DEVICE_FIRST_SEEN_TIMESTAMP,
     DEVICE_FREQUENCY,
     DEVICE_INFO,
@@ -53,6 +56,7 @@ from .metrics import (
     EERO_CONNECTED_CLIENTS,
     EERO_CONNECTED_WIRED_CLIENTS,
     EERO_CONNECTED_WIRELESS_CLIENTS,
+    EERO_DATA_USAGE_BYTES,
     EERO_HEARTBEAT_OK,
     EERO_INFO,
     EERO_IS_GATEWAY,
@@ -98,6 +102,7 @@ from .metrics import (
     NETWORK_BLACKLISTED_DEVICES_COUNT,
     NETWORK_CLIENTS_COUNT,
     NETWORK_CUSTOM_DNS_ENABLED,
+    NETWORK_DATA_USAGE_BYTES,
     NETWORK_DHCP_RESERVATIONS_COUNT,
     NETWORK_DNS_CACHING_ENABLED,
     NETWORK_DNS_SERVER_COUNT,
@@ -182,12 +187,84 @@ def _parse_timestamp(timestamp_str: str | None) -> float | None:
     if not timestamp_str:
         return None
     try:
-        from datetime import datetime
-
         dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
         return dt.timestamp()
     except (ValueError, TypeError):
         return None
+
+
+def _get_timezone(timezone_data: Any) -> ZoneInfo:
+    """Extract a network timezone, falling back to UTC."""
+    timezone_name = "UTC"
+    if isinstance(timezone_data, dict):
+        timezone_name = str(timezone_data.get("value") or timezone_data.get("name") or "UTC")
+    elif timezone_data:
+        timezone_name = str(timezone_data)
+
+    try:
+        return ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        _LOGGER.debug("Unknown eero timezone %s; using UTC", timezone_name)
+        return ZoneInfo("UTC")
+
+
+def _data_usage_period_payload(period: str, timezone: ZoneInfo) -> tuple[str, str, dict[str, str]]:
+    """Build the eero data_usage request payload for the current period."""
+    now = datetime.now(timezone)
+    if period == "day":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1) - timedelta(seconds=1)
+        cadence = "hourly"
+    elif period == "week":
+        # eero activity weeks start on Sunday, matching the official app behavior.
+        start = now - timedelta(days=now.weekday() + 1)
+        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(weeks=1) - timedelta(seconds=1)
+        cadence = "daily"
+    elif period == "month":
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if start.month == 12:
+            next_month = start.replace(year=start.year + 1, month=1)
+        else:
+            next_month = start.replace(month=start.month + 1)
+        end = next_month - timedelta(seconds=1)
+        cadence = "daily"
+    else:
+        raise ValueError(f"Unsupported data usage period: {period}")
+
+    payload = {
+        "start": start.astimezone(UTC).replace(tzinfo=None).isoformat() + "Z",
+        "end": end.astimezone(UTC).replace(tzinfo=None).isoformat() + "Z",
+        "cadence": cadence,
+        "timezone": timezone.key,
+    }
+    return period, cadence, payload
+
+
+def _series_sum(series: dict[str, Any]) -> float | None:
+    """Return a usage series total, computing it from values when needed."""
+    value = series.get("sum")
+    if value is not None:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    values = series.get("values", [])
+    if not isinstance(values, list):
+        return None
+
+    total = 0.0
+    found = False
+    for item in values:
+        if not isinstance(item, dict) or item.get("value") is None:
+            continue
+        try:
+            total += float(item["value"])
+            found = True
+        except (TypeError, ValueError):
+            continue
+    return total if found else None
 
 
 def _frequency_to_band(frequency: int | None) -> str:
@@ -539,6 +616,8 @@ class EeroCollector:
 
         if self._include_devices:
             await self._collect_device_metrics(client, network_id, network_name)
+
+        await self._collect_data_usage_metrics(client, network_id, network_details)
 
         if self._include_profiles:
             await self._collect_profile_metrics(client, network_id)
@@ -1154,6 +1233,167 @@ class EeroCollector:
             PROFILE_DEVICES_COUNT.labels(
                 network_id=network_id, profile_id=profile_id, name=name
             ).set(len(devices))
+
+    async def _collect_data_usage_metrics(
+        self,
+        client: EeroClient,
+        network_id: str,
+        network_details: dict[str, Any],
+    ) -> None:
+        """Collect network and device data usage metrics."""
+        timezone = _get_timezone(network_details.get("timezone"))
+        for period in ("day", "week", "month"):
+            period_label, cadence, payload = _data_usage_period_payload(period, timezone)
+            try:
+                usage = await client.get_data_usage(network_id, payload)
+                EXPORTER_API_REQUESTS.labels(
+                    endpoint=f"data_usage_{period_label}", status="success"
+                ).inc()
+                self._set_network_data_usage(network_id, period_label, cadence, usage)
+            except EeroAPIError as e:
+                _LOGGER.debug(f"Failed to get {period_label} data usage: {e}")
+                EXPORTER_API_REQUESTS.labels(
+                    endpoint=f"data_usage_{period_label}", status="error"
+                ).inc()
+
+            if not self._include_devices:
+                continue
+
+            try:
+                device_usage = await client.get_data_usage(network_id, payload, "devices")
+                EXPORTER_API_REQUESTS.labels(
+                    endpoint=f"data_usage_devices_{period_label}", status="success"
+                ).inc()
+                self._set_device_data_usage(network_id, period_label, cadence, device_usage)
+            except EeroAPIError as e:
+                _LOGGER.debug(f"Failed to get {period_label} device data usage: {e}")
+                EXPORTER_API_REQUESTS.labels(
+                    endpoint=f"data_usage_devices_{period_label}", status="error"
+                ).inc()
+
+            try:
+                eero_usage = await client.get_data_usage(network_id, payload, "eeros")
+                EXPORTER_API_REQUESTS.labels(
+                    endpoint=f"data_usage_eeros_{period_label}", status="success"
+                ).inc()
+                self._set_eero_data_usage(network_id, period_label, cadence, eero_usage)
+            except EeroAPIError as e:
+                _LOGGER.debug(f"Failed to get {period_label} eero data usage: {e}")
+                EXPORTER_API_REQUESTS.labels(
+                    endpoint=f"data_usage_eeros_{period_label}", status="error"
+                ).inc()
+
+    def _set_network_data_usage(
+        self,
+        network_id: str,
+        period: str,
+        cadence: str,
+        usage: dict[str, Any],
+    ) -> None:
+        """Set network data usage metrics."""
+        series_list = usage.get("series", [])
+        if not isinstance(series_list, list):
+            return
+
+        for series in series_list:
+            if not isinstance(series, dict):
+                continue
+            direction = str(series.get("type") or series.get("direction") or "").lower()
+            if direction not in ("download", "upload"):
+                continue
+            total = _series_sum(series)
+            if total is None:
+                continue
+            NETWORK_DATA_USAGE_BYTES.labels(
+                network_id=network_id,
+                period=period,
+                cadence=cadence,
+                direction=direction,
+            ).set(total)
+
+    def _set_device_data_usage(
+        self,
+        network_id: str,
+        period: str,
+        cadence: str,
+        usage: dict[str, Any],
+    ) -> None:
+        """Set device data usage metrics."""
+        values = usage.get("values", [])
+        if not isinstance(values, list):
+            return
+
+        for device in values:
+            if not isinstance(device, dict):
+                continue
+            device_id = str(device.get("id") or _extract_id_from_url(device.get("url", "")))
+            if not device_id:
+                continue
+            name = (
+                device.get("nickname")
+                or device.get("display_name")
+                or device.get("hostname")
+                or device.get("name")
+                or device_id
+            )
+            self._set_usage_direction_metrics(
+                DEVICE_DATA_USAGE_BYTES,
+                {
+                    "network_id": network_id,
+                    "device_id": device_id,
+                    "name": str(name),
+                    "period": period,
+                    "cadence": cadence,
+                },
+                device,
+            )
+
+    def _set_eero_data_usage(
+        self,
+        network_id: str,
+        period: str,
+        cadence: str,
+        usage: dict[str, Any],
+    ) -> None:
+        """Set eero node data usage metrics."""
+        values = usage.get("values", [])
+        if not isinstance(values, list):
+            return
+
+        for eero in values:
+            if not isinstance(eero, dict):
+                continue
+            eero_id = str(eero.get("id") or _extract_id_from_url(eero.get("url", "")))
+            if not eero_id:
+                continue
+            location = str(eero.get("location") or eero.get("name") or eero_id)
+            self._set_usage_direction_metrics(
+                EERO_DATA_USAGE_BYTES,
+                {
+                    "network_id": network_id,
+                    "eero_id": eero_id,
+                    "location": location,
+                    "period": period,
+                    "cadence": cadence,
+                },
+                eero,
+            )
+
+    def _set_usage_direction_metrics(
+        self,
+        metric: Any,
+        labels: dict[str, str],
+        usage: dict[str, Any],
+    ) -> None:
+        """Set download/upload metrics for a usage payload."""
+        for direction in ("download", "upload"):
+            value = usage.get(direction)
+            if value is None:
+                continue
+            try:
+                metric.labels(**labels, direction=direction).set(float(value))
+            except (TypeError, ValueError):
+                continue
 
     async def _collect_network_feature_flags(
         self,

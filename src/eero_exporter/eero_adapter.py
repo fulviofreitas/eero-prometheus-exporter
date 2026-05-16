@@ -418,6 +418,34 @@ class EeroClient:
         raw_response = await self._client.get_transfer_stats(network_id, device_id)
         return dict(_extract_data(raw_response))
 
+    @_wrap_api_call("Failed to get data usage")
+    async def get_data_usage(
+        self,
+        network_id: str,
+        payload: dict[str, Any],
+        resource: str | None = None,
+    ) -> dict[str, Any]:
+        """Get data usage for a network, eero nodes, or client devices.
+
+        The public eero-api package does not currently expose the /data_usage
+        endpoint. The Eero cloud API expects the period request fields as a JSON
+        body on a GET request.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        api = getattr(self._client, "_api", None)
+        auth = getattr(api, "auth", None)
+        if not auth:
+            raise EeroAPIError("Authenticated API client is unavailable")
+
+        path = f"/networks/{network_id}/data_usage"
+        if resource:
+            path = f"{path}/{resource}"
+
+        raw_response = await auth.get(path, auth_token=await auth.get_auth_token(), json=payload)
+        return dict(_extract_data(raw_response))
+
     # =========================================================================
     # SQM Settings
     # =========================================================================

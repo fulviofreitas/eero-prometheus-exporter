@@ -566,6 +566,24 @@ NETWORK_UPLOAD_BYTES = Counter(
     labelnames=["network_id"],
 )
 
+NETWORK_DATA_USAGE_BYTES = Gauge(
+    f"{PREFIX}_network_data_usage_bytes",
+    "Network data usage bytes reported by the eero data_usage endpoint for the current period.",
+    labelnames=["network_id", "period", "cadence", "direction"],
+)
+
+DEVICE_DATA_USAGE_BYTES = Gauge(
+    f"{PREFIX}_device_data_usage_bytes",
+    "Device data usage bytes reported by the eero data_usage endpoint for the current period.",
+    labelnames=["network_id", "device_id", "name", "period", "cadence", "direction"],
+)
+
+EERO_DATA_USAGE_BYTES = Gauge(
+    f"{PREFIX}_eero_data_usage_bytes",
+    "Eero node data usage bytes reported by the eero data_usage endpoint for the current period.",
+    labelnames=["network_id", "eero_id", "location", "period", "cadence", "direction"],
+)
+
 # =============================================================================
 # SQM (SMART QUEUE MANAGEMENT) METRICS
 # =============================================================================

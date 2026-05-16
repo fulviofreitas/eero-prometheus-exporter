@@ -46,6 +46,9 @@ The exporter provides **120+ metrics** across 20+ categories.
 | `eero_network_eeros_count` | Gauge | Number of eero devices in mesh |
 | `eero_network_download_bytes_total` | Counter | Total bytes downloaded on the network |
 | `eero_network_upload_bytes_total` | Counter | Total bytes uploaded on the network |
+| `eero_network_data_usage_bytes` | Gauge | Network data usage bytes for the current day, week, or month |
+| `eero_device_data_usage_bytes` | Gauge | Device data usage bytes for the current day, week, or month |
+| `eero_eero_data_usage_bytes` | Gauge | Eero node data usage bytes for the current day, week, or month |
 
 ---
 
