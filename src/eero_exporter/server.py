@@ -288,6 +288,7 @@ def run_server(config: ExporterConfig) -> None:
     collector = EeroCollector(
         include_devices=config.include_devices,
         include_profiles=config.include_profiles,
+        include_data_usage=config.include_data_usage,
         timeout=config.timeout,
         cookie_file=str(config.session_file),
     )

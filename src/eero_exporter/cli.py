@@ -351,6 +351,11 @@ def serve(
         "--include-profiles/--no-profiles",
         help="Include profile metrics",
     ),
+    include_data_usage: bool = typer.Option(
+        True,
+        "--data-usage/--no-data-usage",
+        help="Include data usage metrics (adds ~9 API calls per network per scrape)",
+    ),
 ) -> None:
     """Start the Prometheus metrics server."""
     setup_logging(log_level.upper())
@@ -368,6 +373,7 @@ def serve(
     config.log_level = log_level
     config.include_devices = include_devices
     config.include_profiles = include_profiles
+    config.include_data_usage = include_data_usage
 
     if session_file:
         config.session_file = session_file

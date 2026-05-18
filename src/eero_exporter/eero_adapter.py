@@ -419,6 +419,38 @@ class EeroClient:
         return dict(_extract_data(raw_response))
 
     # =========================================================================
+    # Data Usage
+    # =========================================================================
+
+    @_wrap_api_call("Failed to get data usage")
+    async def get_data_usage(
+        self,
+        network_id: str,
+        payload: dict[str, Any],
+        resource: str | None = None,
+    ) -> dict[str, Any]:
+        """Get data usage for a network, its eero nodes, or its client devices.
+
+        Delegates to the eero-api ``get_data_usage`` facade method, available
+        since eero-api 4.2.0. The Eero cloud API expects the period request
+        fields (start, end, cadence, timezone) as a JSON body on a GET request.
+
+        Args:
+            network_id: Network identifier.
+            payload: Period request fields sent as the GET request body.
+            resource: Optional sub-resource, ``"devices"`` or ``"eeros"``.
+                Omit for network-level totals.
+
+        Returns:
+            Extracted data usage payload from the response envelope.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_data_usage(network_id, payload, resource)
+        return dict(_extract_data(raw_response))
+
+    # =========================================================================
     # SQM Settings
     # =========================================================================
 
