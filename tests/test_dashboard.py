@@ -75,15 +75,19 @@ def test_period_variable_present() -> None:
     assert "period" in names
 
 
-def test_data_usage_panels_do_not_overlap() -> None:
-    """The Data Usage row (panel ids >= 200) sits below the existing rows
-    with no panels overlapping each other."""
-    new = [p for p in _dashboard()["panels"] if p["id"] >= 200]
-    assert new, "Data Usage panels are missing"
-    assert all(p["gridPos"]["y"] >= 127 for p in new), "Data Usage row overlaps existing rows"
-    for i, a in enumerate(new):
-        for b in new[i + 1 :]:
+def test_no_panel_overlaps() -> None:
+    """No two panels may occupy the same grid cell.
+
+    Grafana silently reflows overlapping panels on load, which corrupts the
+    intended layout, so the dashboard JSON itself must stay overlap-free.
+    """
+    panels = _dashboard()["panels"]
+    overlaps = []
+    for i, a in enumerate(panels):
+        for b in panels[i + 1 :]:
             ga, gb = a["gridPos"], b["gridPos"]
             x_hit = ga["x"] < gb["x"] + gb["w"] and gb["x"] < ga["x"] + ga["w"]
             y_hit = ga["y"] < gb["y"] + gb["h"] and gb["y"] < ga["y"] + ga["h"]
-            assert not (x_hit and y_hit), f"panels {a['id']} and {b['id']} overlap"
+            if x_hit and y_hit:
+                overlaps.append((a["id"], b["id"]))
+    assert not overlaps, f"overlapping panels: {overlaps}"
