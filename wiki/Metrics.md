@@ -49,6 +49,20 @@ The exporter provides **120+ metrics** across 20+ categories.
 
 ---
 
+## 📦 Data Usage
+
+Sourced from the eero `data_usage` endpoint. Each gauge is reported for the
+current `day`, `week`, and `month` period, with a `direction` of `download`
+or `upload`. Collection can be disabled with `--no-data-usage`.
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `eero_network_data_usage_bytes` | Gauge | Network data usage for the current day/week/month |
+| `eero_device_data_usage_bytes` | Gauge | Per-device data usage for the current day/week/month |
+| `eero_eero_data_usage_bytes` | Gauge | Per-eero-node data usage for the current day/week/month |
+
+---
+
 ## 🚦 Network Feature Flags
 
 | Metric | Type | Description |

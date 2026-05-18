@@ -41,6 +41,7 @@ class ExporterConfig:
     # Metrics settings
     include_devices: bool = True
     include_profiles: bool = True
+    include_data_usage: bool = True
     include_speed_test: bool = False  # Off by default as it generates traffic
     speed_test_interval: int = 3600  # Run speed test every hour if enabled
 
@@ -84,6 +85,7 @@ class ExporterConfig:
             "session_file": str(self.session_file),
             "include_devices": self.include_devices,
             "include_profiles": self.include_profiles,
+            "include_data_usage": self.include_data_usage,
             "include_speed_test": self.include_speed_test,
             "speed_test_interval": self.speed_test_interval,
             "log_level": self.log_level,
