@@ -3803,7 +3803,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 102
+        "y": 106
       },
       "id": 84,
       "options": {
@@ -3847,7 +3847,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 109
+        "y": 113
       },
       "id": 107,
       "panels": [],
@@ -3886,7 +3886,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 110
+        "y": 114
       },
       "id": 70,
       "options": {
@@ -3956,7 +3956,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 110
+        "y": 114
       },
       "id": 71,
       "options": {
@@ -4020,7 +4020,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 117
+        "y": 121
       },
       "id": 72,
       "options": {
@@ -4096,7 +4096,7 @@
         "h": 3,
         "w": 6,
         "x": 12,
-        "y": 117
+        "y": 121
       },
       "id": 73,
       "options": {
@@ -4160,7 +4160,7 @@
         "h": 3,
         "w": 6,
         "x": 18,
-        "y": 117
+        "y": 121
       },
       "id": 74,
       "options": {
@@ -4224,7 +4224,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 117
+        "y": 124
       },
       "id": 75,
       "options": {
@@ -4288,7 +4288,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 117
+        "y": 124
       },
       "id": 76,
       "options": {
@@ -4325,7 +4325,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 121
+        "y": 128
       },
       "id": 109,
       "panels": [],
@@ -4379,7 +4379,7 @@
         "h": 4,
         "w": 3,
         "x": 0,
-        "y": 122
+        "y": 129
       },
       "id": 90,
       "options": {
@@ -4446,7 +4446,7 @@
         "h": 4,
         "w": 3,
         "x": 3,
-        "y": 122
+        "y": 129
       },
       "id": 91,
       "options": {
@@ -4514,7 +4514,7 @@
         "h": 4,
         "w": 3,
         "x": 6,
-        "y": 122
+        "y": 129
       },
       "id": 94,
       "options": {
@@ -4575,7 +4575,7 @@
         "h": 4,
         "w": 3,
         "x": 9,
-        "y": 122
+        "y": 129
       },
       "id": 95,
       "options": {
@@ -4672,7 +4672,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 122
+        "y": 129
       },
       "id": 92,
       "options": {
@@ -4765,7 +4765,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 122
+        "y": 129
       },
       "id": 93,
       "options": {
@@ -4791,6 +4791,425 @@
       ],
       "title": "API Requests (Cumulative)",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 133
+      },
+      "id": 200,
+      "panels": [],
+      "title": "Data Usage",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "super-light-blue",
+            "mode": "fixed"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 134
+      },
+      "id": 201,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "expr": "sum(eero_network_data_usage_bytes{network_id=~\"$network_id\", period=\"$period\", direction=\"download\"})",
+          "legendFormat": "Download",
+          "refId": "A"
+        }
+      ],
+      "title": "Download \u2014 $period",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "super-light-green",
+            "mode": "fixed"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 134
+      },
+      "id": 202,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "expr": "sum(eero_network_data_usage_bytes{network_id=~\"$network_id\", period=\"$period\", direction=\"upload\"})",
+          "legendFormat": "Upload",
+          "refId": "A"
+        }
+      ],
+      "title": "Upload \u2014 $period",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "super-light-purple",
+            "mode": "fixed"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 134
+      },
+      "id": 203,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "expr": "sum(eero_network_data_usage_bytes{network_id=~\"$network_id\", period=\"$period\"})",
+          "legendFormat": "Total",
+          "refId": "A"
+        }
+      ],
+      "title": "Total \u2014 $period",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 138
+      },
+      "id": 204,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "expr": "sum(eero_network_data_usage_bytes{network_id=~\"$network_id\", period=\"$period\", direction=\"download\"})",
+          "legendFormat": "Download",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(eero_network_data_usage_bytes{network_id=~\"$network_id\", period=\"$period\", direction=\"upload\"})",
+          "legendFormat": "Upload",
+          "refId": "B"
+        }
+      ],
+      "title": "Network Data Usage \u2014 $period (cumulative)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 147
+      },
+      "id": 205,
+      "options": {
+        "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "maxVizHeight": 300,
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "expr": "topk(10, eero_device_data_usage_bytes{network_id=~\"$network_id\", period=\"$period\", direction=\"download\"})",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 10 Devices by Data Usage \u2014 $period",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 147
+      },
+      "id": 206,
+      "options": {
+        "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "maxVizHeight": 300,
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "expr": "sum by (location) (eero_eero_data_usage_bytes{network_id=~\"$network_id\", period=\"$period\", direction=\"download\"})",
+          "legendFormat": "{{location}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Data Usage by Eero Node \u2014 $period",
+      "type": "bargauge"
     }
   ],
   "preload": false,
@@ -4839,6 +5258,34 @@
         "regex": "",
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {
+          "text": "day",
+          "value": "day"
+        },
+        "includeAll": false,
+        "label": "Usage Period",
+        "name": "period",
+        "options": [
+          {
+            "selected": true,
+            "text": "day",
+            "value": "day"
+          },
+          {
+            "selected": false,
+            "text": "week",
+            "value": "week"
+          },
+          {
+            "selected": false,
+            "text": "month",
+            "value": "month"
+          }
+        ],
+        "query": "day,week,month",
+        "type": "custom"
       }
     ]
   },
@@ -4850,5 +5297,5 @@
   "timezone": "",
   "title": "Eero Mesh Network",
   "uid": "eero-mesh-network",
-  "version": 42
+  "version": 44
 }
