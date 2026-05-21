@@ -681,11 +681,15 @@ class EeroCollector:
                 try:
                     HEALTH_STATUS.labels(network_id=network_id, source="internet").set(is_healthy)
                 except Exception:
-                    _LOGGER.warning("Failed to set HEALTH_STATUS[internet] for network %s", network_id)
+                    _LOGGER.warning(
+                        "Failed to set HEALTH_STATUS[internet] for network %s", network_id
+                    )
             if eero_health:
                 is_healthy = 1 if eero_health.get("status") == "connected" else 0
                 try:
-                    HEALTH_STATUS.labels(network_id=network_id, source="eero_network").set(is_healthy)
+                    HEALTH_STATUS.labels(network_id=network_id, source="eero_network").set(
+                        is_healthy
+                    )
                 except Exception:
                     _LOGGER.warning(
                         "Failed to set HEALTH_STATUS[eero_network] for network %s", network_id
@@ -716,9 +720,7 @@ class EeroCollector:
                 except (ValueError, TypeError):
                     pass
                 except Exception:
-                    _LOGGER.warning(
-                        "Failed to set SPEED_TEST_TIMESTAMP for network %s", network_id
-                    )
+                    _LOGGER.warning("Failed to set SPEED_TEST_TIMESTAMP for network %s", network_id)
 
         await self._collect_network_feature_flags(client, network_id, network_name, network_details)
         await self._collect_sqm_metrics(client, network_id)
@@ -958,7 +960,9 @@ class EeroCollector:
                 except Exception:
                     _LOGGER.warning("Failed to set EERO_TEMPERATURE for eero %s", eero_id)
 
-            led_brightness = _coerce_numeric(eero.get("led_brightness"), field_name="led_brightness")
+            led_brightness = _coerce_numeric(
+                eero.get("led_brightness"), field_name="led_brightness"
+            )
             if led_brightness is not None:
                 try:
                     EERO_LED_BRIGHTNESS.labels(
@@ -1202,9 +1206,7 @@ class EeroCollector:
                             source_eero=source_eero,
                         ).set(signal_avg)
                     except Exception:
-                        _LOGGER.warning(
-                            "Failed to set DEVICE_SIGNAL_AVG for device %s", device_id
-                        )
+                        _LOGGER.warning("Failed to set DEVICE_SIGNAL_AVG for device %s", device_id)
 
                 score = _coerce_numeric(connectivity.get("score"), field_name="score")
                 if score is not None:
@@ -1251,9 +1253,7 @@ class EeroCollector:
                             source_eero=source_eero,
                         ).set(frequency)
                     except Exception:
-                        _LOGGER.warning(
-                            "Failed to set DEVICE_FREQUENCY for device %s", device_id
-                        )
+                        _LOGGER.warning("Failed to set DEVICE_FREQUENCY for device %s", device_id)
 
                 rx_bitrate = _parse_bitrate(connectivity.get("rx_bitrate"))
                 if rx_bitrate is not None:
@@ -1267,9 +1267,7 @@ class EeroCollector:
                             source_eero=source_eero,
                         ).set(rx_bitrate)
                     except Exception:
-                        _LOGGER.warning(
-                            "Failed to set DEVICE_RX_BITRATE for device %s", device_id
-                        )
+                        _LOGGER.warning("Failed to set DEVICE_RX_BITRATE for device %s", device_id)
 
                 rx_rate_info = connectivity.get("rx_rate_info", {})
                 if rx_rate_info and isinstance(rx_rate_info, dict):
@@ -1796,9 +1794,7 @@ class EeroCollector:
                 try:
                     SQM_UPLOAD_BANDWIDTH.labels(network_id=network_id).set(upload_bw)
                 except Exception:
-                    _LOGGER.warning(
-                        "Failed to set SQM_UPLOAD_BANDWIDTH for network %s", network_id
-                    )
+                    _LOGGER.warning("Failed to set SQM_UPLOAD_BANDWIDTH for network %s", network_id)
 
             download_bw = _coerce_numeric(
                 sqm_settings.get("download_bandwidth"), field_name="download_bandwidth"
