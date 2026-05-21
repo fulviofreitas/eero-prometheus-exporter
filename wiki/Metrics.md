@@ -172,7 +172,7 @@ or `upload`. Collection can be disabled with `--no-data-usage`.
 | `eero_eero_connected_wired_clients_count` | Gauge | Wired clients per eero |
 | `eero_eero_connected_wireless_clients_count` | Gauge | Wireless clients per eero |
 | `eero_eero_mesh_quality_bars` | Gauge | Mesh quality (0-5 bars) |
-| `eero_eero_uptime_seconds` | Gauge | Device uptime in seconds |
+| `eero_eero_uptime_seconds` | Gauge | Device uptime in seconds (tolerates dict shape `{"seconds": N}` returned by recent Eero firmware) |
 | `eero_eero_led_on` | Gauge | LED status (1=on, 0=off) |
 | `eero_eero_update_available` | Gauge | Firmware update available |
 | `eero_eero_heartbeat_ok` | Gauge | Heartbeat status |

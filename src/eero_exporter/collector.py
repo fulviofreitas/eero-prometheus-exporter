@@ -306,6 +306,56 @@ def _series_sum(series: dict[str, Any]) -> float | None:
     return total if found else None
 
 
+# Module-level set to deduplicate "unknown dict shape" DEBUG log entries.
+# Keyed by (field_name, sorted-keys-tuple) so we log only once per unique
+# field + key combination rather than every 5-minute scrape cycle.
+_COERCE_UNKNOWN_SHAPES_SEEN: set[tuple[str, tuple[str, ...]]] = set()
+
+_COERCE_DICT_KEYS = ("seconds", "value", "current", "total", "count")
+
+
+def _coerce_numeric(value: Any, field_name: str = "") -> float | None:
+    """Coerce a value of unknown type to float, handling dict shapes defensively.
+
+    The Eero Cloud API may change numeric fields from plain numbers to dicts
+    (e.g. ``uptime`` changed from ``int`` to ``{"seconds": N}``). This helper
+    normalises all plausible shapes so a schema migration on one field cannot
+    abort an entire collection cycle.
+
+    Args:
+        value: The raw value from the API response.
+        field_name: Name of the field (used for deduplicated DEBUG logging).
+
+    Returns:
+        The value as a float, or None if the value cannot be coerced.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    if isinstance(value, dict):
+        for key in _COERCE_DICT_KEYS:
+            if key in value:
+                return _coerce_numeric(value[key], field_name=field_name)
+        # No known key found — log once per (field_name, keys) combo.
+        sorted_keys = tuple(sorted(value.keys()))
+        dedup_key = (field_name, sorted_keys)
+        if dedup_key not in _COERCE_UNKNOWN_SHAPES_SEEN:
+            _COERCE_UNKNOWN_SHAPES_SEEN.add(dedup_key)
+            _LOGGER.debug(
+                "Cannot coerce dict to numeric for field %r: unknown keys %s",
+                field_name,
+                sorted_keys,
+            )
+        return None
+    return None
+
+
 def _frequency_to_band(frequency: int | None) -> str:
     """Convert frequency in MHz to WiFi band label.
 
@@ -628,10 +678,22 @@ class EeroCollector:
             eero_health = health.get("eero_network", {})
             if internet_health:
                 is_healthy = 1 if internet_health.get("status") == "connected" else 0
-                HEALTH_STATUS.labels(network_id=network_id, source="internet").set(is_healthy)
+                try:
+                    HEALTH_STATUS.labels(network_id=network_id, source="internet").set(is_healthy)
+                except Exception:
+                    _LOGGER.warning(
+                        "Failed to set HEALTH_STATUS[internet] for network %s", network_id
+                    )
             if eero_health:
                 is_healthy = 1 if eero_health.get("status") == "connected" else 0
-                HEALTH_STATUS.labels(network_id=network_id, source="eero_network").set(is_healthy)
+                try:
+                    HEALTH_STATUS.labels(network_id=network_id, source="eero_network").set(
+                        is_healthy
+                    )
+                except Exception:
+                    _LOGGER.warning(
+                        "Failed to set HEALTH_STATUS[eero_network] for network %s", network_id
+                    )
 
         # Check for speedtest data - eero-api returns "speed_test", but older versions
         # or direct API calls may return "speed"
@@ -640,9 +702,15 @@ class EeroCollector:
             upload = speed.get("up", {})
             download = speed.get("down", {})
             if upload and "value" in upload:
-                SPEED_UPLOAD_MBPS.labels(network_id=network_id).set(upload["value"])
+                try:
+                    SPEED_UPLOAD_MBPS.labels(network_id=network_id).set(upload["value"])
+                except Exception:
+                    _LOGGER.warning("Failed to set SPEED_UPLOAD_MBPS for network %s", network_id)
             if download and "value" in download:
-                SPEED_DOWNLOAD_MBPS.labels(network_id=network_id).set(download["value"])
+                try:
+                    SPEED_DOWNLOAD_MBPS.labels(network_id=network_id).set(download["value"])
+                except Exception:
+                    _LOGGER.warning("Failed to set SPEED_DOWNLOAD_MBPS for network %s", network_id)
             if "date" in speed:
                 try:
                     from datetime import datetime
@@ -651,6 +719,8 @@ class EeroCollector:
                     SPEED_TEST_TIMESTAMP.labels(network_id=network_id).set(dt.timestamp())
                 except (ValueError, TypeError):
                     pass
+                except Exception:
+                    _LOGGER.warning("Failed to set SPEED_TEST_TIMESTAMP for network %s", network_id)
 
         await self._collect_network_feature_flags(client, network_id, network_name, network_details)
         await self._collect_sqm_metrics(client, network_id)
@@ -757,37 +827,66 @@ class EeroCollector:
                 is_gateway
             )
 
-            clients_count = eero.get("connected_clients_count", 0)
-            EERO_CONNECTED_CLIENTS.labels(
-                network_id=network_id, eero_id=eero_id, location=location, model=model
-            ).set(clients_count)
+            clients_count = _coerce_numeric(
+                eero.get("connected_clients_count", 0), field_name="connected_clients_count"
+            )
+            try:
+                EERO_CONNECTED_CLIENTS.labels(
+                    network_id=network_id, eero_id=eero_id, location=location, model=model
+                ).set(clients_count or 0)
+            except Exception:
+                _LOGGER.warning("Failed to set EERO_CONNECTED_CLIENTS for eero %s", eero_id)
 
-            wired_clients = eero.get("connected_wired_clients_count")
+            wired_clients = _coerce_numeric(
+                eero.get("connected_wired_clients_count"),
+                field_name="connected_wired_clients_count",
+            )
             if wired_clients is not None:
-                EERO_CONNECTED_WIRED_CLIENTS.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
-                ).set(wired_clients)
+                try:
+                    EERO_CONNECTED_WIRED_CLIENTS.labels(
+                        network_id=network_id, eero_id=eero_id, location=location
+                    ).set(wired_clients)
+                except Exception:
+                    _LOGGER.warning(
+                        "Failed to set EERO_CONNECTED_WIRED_CLIENTS for eero %s", eero_id
+                    )
 
-            wireless_clients = eero.get("connected_wireless_clients_count")
+            wireless_clients = _coerce_numeric(
+                eero.get("connected_wireless_clients_count"),
+                field_name="connected_wireless_clients_count",
+            )
             if wireless_clients is not None:
-                EERO_CONNECTED_WIRELESS_CLIENTS.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
-                ).set(wireless_clients)
+                try:
+                    EERO_CONNECTED_WIRELESS_CLIENTS.labels(
+                        network_id=network_id, eero_id=eero_id, location=location
+                    ).set(wireless_clients)
+                except Exception:
+                    _LOGGER.warning(
+                        "Failed to set EERO_CONNECTED_WIRELESS_CLIENTS for eero %s", eero_id
+                    )
 
-            mesh_quality = eero.get("mesh_quality_bars")
+            mesh_quality = _coerce_numeric(
+                eero.get("mesh_quality_bars"), field_name="mesh_quality_bars"
+            )
             if mesh_quality is not None:
-                EERO_MESH_QUALITY.labels(
-                    network_id=network_id,
-                    eero_id=eero_id,
-                    location=location,
-                    model=model,
-                ).set(mesh_quality)
+                try:
+                    EERO_MESH_QUALITY.labels(
+                        network_id=network_id,
+                        eero_id=eero_id,
+                        location=location,
+                        model=model,
+                    ).set(mesh_quality)
+                except Exception:
+                    _LOGGER.warning("Failed to set EERO_MESH_QUALITY for eero %s", eero_id)
 
-            uptime = eero.get("uptime")
+            uptime = _coerce_numeric(eero.get("uptime"), field_name="uptime")
             if uptime is not None:
-                EERO_UPTIME_SECONDS.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
-                ).set(uptime)
+                try:
+                    EERO_UPTIME_SECONDS.labels(
+                        network_id=network_id, eero_id=eero_id, location=location
+                    ).set(uptime)
+                except Exception:
+                    _LOGGER.warning("Failed to set EERO_UPTIME_SECONDS for eero %s", eero_id)
 
             led_on = eero.get("led_on")
             if led_on is not None:
@@ -814,60 +913,92 @@ class EeroCollector:
                 )
 
             # Try multiple field names for memory usage
-            memory_usage = eero.get("memory_usage")
+            memory_usage = _coerce_numeric(eero.get("memory_usage"), field_name="memory_usage")
             if memory_usage is None:
                 # Check nested structures
                 resources = eero.get("resources", {})
                 if isinstance(resources, dict):
-                    memory_usage = resources.get("memory_usage") or resources.get("memory_percent")
+                    memory_usage = _coerce_numeric(
+                        resources.get("memory_usage") or resources.get("memory_percent"),
+                        field_name="memory_usage",
+                    )
                 hardware = eero.get("hardware", {})
                 if isinstance(hardware, dict) and memory_usage is None:
-                    memory_usage = hardware.get("memory_usage") or hardware.get("memory_percent")
+                    memory_usage = _coerce_numeric(
+                        hardware.get("memory_usage") or hardware.get("memory_percent"),
+                        field_name="memory_usage",
+                    )
             if memory_usage is not None:
-                EERO_MEMORY_USAGE.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
-                ).set(memory_usage)
+                try:
+                    EERO_MEMORY_USAGE.labels(
+                        network_id=network_id, eero_id=eero_id, location=location
+                    ).set(memory_usage)
+                except Exception:
+                    _LOGGER.warning("Failed to set EERO_MEMORY_USAGE for eero %s", eero_id)
 
             # Try multiple field names for temperature
-            temperature = eero.get("temperature")
+            temperature = _coerce_numeric(eero.get("temperature"), field_name="temperature")
             if temperature is None:
                 # Check nested structures
                 resources = eero.get("resources", {})
                 if isinstance(resources, dict):
-                    temperature = resources.get("temperature") or resources.get("temp_celsius")
+                    temperature = _coerce_numeric(
+                        resources.get("temperature") or resources.get("temp_celsius"),
+                        field_name="temperature",
+                    )
                 hardware = eero.get("hardware", {})
                 if isinstance(hardware, dict) and temperature is None:
-                    temperature = hardware.get("temperature") or hardware.get("temp_celsius")
+                    temperature = _coerce_numeric(
+                        hardware.get("temperature") or hardware.get("temp_celsius"),
+                        field_name="temperature",
+                    )
             if temperature is not None:
-                EERO_TEMPERATURE.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
-                ).set(temperature)
+                try:
+                    EERO_TEMPERATURE.labels(
+                        network_id=network_id, eero_id=eero_id, location=location
+                    ).set(temperature)
+                except Exception:
+                    _LOGGER.warning("Failed to set EERO_TEMPERATURE for eero %s", eero_id)
 
-            led_brightness = eero.get("led_brightness")
+            led_brightness = _coerce_numeric(
+                eero.get("led_brightness"), field_name="led_brightness"
+            )
             if led_brightness is not None:
-                EERO_LED_BRIGHTNESS.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
-                ).set(led_brightness)
+                try:
+                    EERO_LED_BRIGHTNESS.labels(
+                        network_id=network_id, eero_id=eero_id, location=location
+                    ).set(led_brightness)
+                except Exception:
+                    _LOGGER.warning("Failed to set EERO_LED_BRIGHTNESS for eero %s", eero_id)
 
             last_reboot = eero.get("last_reboot")
             if last_reboot:
                 reboot_ts = _parse_timestamp(last_reboot)
                 if reboot_ts is not None:
-                    EERO_LAST_REBOOT.labels(
-                        network_id=network_id, eero_id=eero_id, location=location
-                    ).set(reboot_ts)
+                    try:
+                        EERO_LAST_REBOOT.labels(
+                            network_id=network_id, eero_id=eero_id, location=location
+                        ).set(reboot_ts)
+                    except Exception:
+                        _LOGGER.warning("Failed to set EERO_LAST_REBOOT for eero %s", eero_id)
 
             provides_wifi = eero.get("provides_wifi")
             if provides_wifi is not None:
-                EERO_PROVIDES_WIFI.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
-                ).set(1 if provides_wifi else 0)
+                try:
+                    EERO_PROVIDES_WIFI.labels(
+                        network_id=network_id, eero_id=eero_id, location=location
+                    ).set(1 if provides_wifi else 0)
+                except Exception:
+                    _LOGGER.warning("Failed to set EERO_PROVIDES_WIFI for eero %s", eero_id)
 
             backup_connection = eero.get("backup_connection")
             if backup_connection is not None:
-                EERO_BACKUP_CONNECTION.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
-                ).set(1 if backup_connection else 0)
+                try:
+                    EERO_BACKUP_CONNECTION.labels(
+                        network_id=network_id, eero_id=eero_id, location=location
+                    ).set(1 if backup_connection else 0)
+                except Exception:
+                    _LOGGER.warning("Failed to set EERO_BACKUP_CONNECTION for eero %s", eero_id)
 
             if self._include_ethernet:
                 await self._collect_ethernet_port_metrics(network_id, eero_id, location, eero)
@@ -876,31 +1007,53 @@ class EeroCollector:
             if nightlight and isinstance(nightlight, dict):
                 nl_enabled = nightlight.get("enabled")
                 if nl_enabled is not None:
-                    EERO_NIGHTLIGHT_ENABLED.labels(
-                        network_id=network_id, eero_id=eero_id, location=location
-                    ).set(1 if nl_enabled else 0)
+                    try:
+                        EERO_NIGHTLIGHT_ENABLED.labels(
+                            network_id=network_id, eero_id=eero_id, location=location
+                        ).set(1 if nl_enabled else 0)
+                    except Exception:
+                        _LOGGER.warning(
+                            "Failed to set EERO_NIGHTLIGHT_ENABLED for eero %s", eero_id
+                        )
 
-                nl_brightness = nightlight.get("brightness") or nightlight.get(
-                    "brightness_percentage"
+                nl_brightness = _coerce_numeric(
+                    nightlight.get("brightness") or nightlight.get("brightness_percentage"),
+                    field_name="nightlight_brightness",
                 )
                 if nl_brightness is not None:
-                    EERO_NIGHTLIGHT_BRIGHTNESS.labels(
-                        network_id=network_id, eero_id=eero_id, location=location
-                    ).set(nl_brightness)
+                    try:
+                        EERO_NIGHTLIGHT_BRIGHTNESS.labels(
+                            network_id=network_id, eero_id=eero_id, location=location
+                        ).set(nl_brightness)
+                    except Exception:
+                        _LOGGER.warning(
+                            "Failed to set EERO_NIGHTLIGHT_BRIGHTNESS for eero %s", eero_id
+                        )
 
                 nl_ambient = nightlight.get("ambient_light_enabled")
                 if nl_ambient is not None:
-                    EERO_NIGHTLIGHT_AMBIENT_ENABLED.labels(
-                        network_id=network_id, eero_id=eero_id, location=location
-                    ).set(1 if nl_ambient else 0)
+                    try:
+                        EERO_NIGHTLIGHT_AMBIENT_ENABLED.labels(
+                            network_id=network_id, eero_id=eero_id, location=location
+                        ).set(1 if nl_ambient else 0)
+                    except Exception:
+                        _LOGGER.warning(
+                            "Failed to set EERO_NIGHTLIGHT_AMBIENT_ENABLED for eero %s", eero_id
+                        )
 
                 nl_schedule = nightlight.get("schedule", {})
                 if nl_schedule and isinstance(nl_schedule, dict):
                     schedule_enabled = nl_schedule.get("enabled")
                     if schedule_enabled is not None:
-                        EERO_NIGHTLIGHT_SCHEDULE_ENABLED.labels(
-                            network_id=network_id, eero_id=eero_id, location=location
-                        ).set(1 if schedule_enabled else 0)
+                        try:
+                            EERO_NIGHTLIGHT_SCHEDULE_ENABLED.labels(
+                                network_id=network_id, eero_id=eero_id, location=location
+                            ).set(1 if schedule_enabled else 0)
+                        except Exception:
+                            _LOGGER.warning(
+                                "Failed to set EERO_NIGHTLIGHT_SCHEDULE_ENABLED for eero %s",
+                                eero_id,
+                            )
 
     async def _collect_device_metrics(
         self, client: EeroClient, network_id: str, network_name: str
@@ -963,117 +1116,158 @@ class EeroCollector:
             )
 
             connected = device.get("connected", False)
-            DEVICE_CONNECTED.labels(
-                network_id=network_id,
-                device_id=device_id,
-                name=name,
-                mac=mac,
-                manufacturer=manufacturer,
-                device_type=device_type,
-                connection_type=connection_type,
-                source_eero=source_eero,
-            ).set(1 if connected else 0)
+            try:
+                DEVICE_CONNECTED.labels(
+                    network_id=network_id,
+                    device_id=device_id,
+                    name=name,
+                    mac=mac,
+                    manufacturer=manufacturer,
+                    device_type=device_type,
+                    connection_type=connection_type,
+                    source_eero=source_eero,
+                ).set(1 if connected else 0)
+            except Exception:
+                _LOGGER.warning("Failed to set DEVICE_CONNECTED for device %s", device_id)
 
             wireless = device.get("wireless", False)
-            DEVICE_WIRELESS.labels(
-                network_id=network_id,
-                device_id=device_id,
-                name=name,
-                manufacturer=manufacturer,
-                device_type=device_type,
-            ).set(1 if wireless else 0)
+            try:
+                DEVICE_WIRELESS.labels(
+                    network_id=network_id,
+                    device_id=device_id,
+                    name=name,
+                    manufacturer=manufacturer,
+                    device_type=device_type,
+                ).set(1 if wireless else 0)
+            except Exception:
+                _LOGGER.warning("Failed to set DEVICE_WIRELESS for device %s", device_id)
 
             blocked = device.get("blacklisted", False)
-            DEVICE_BLOCKED.labels(
-                network_id=network_id,
-                device_id=device_id,
-                name=name,
-                mac=mac,
-                manufacturer=manufacturer,
-            ).set(1 if blocked else 0)
+            try:
+                DEVICE_BLOCKED.labels(
+                    network_id=network_id,
+                    device_id=device_id,
+                    name=name,
+                    mac=mac,
+                    manufacturer=manufacturer,
+                ).set(1 if blocked else 0)
+            except Exception:
+                _LOGGER.warning("Failed to set DEVICE_BLOCKED for device %s", device_id)
 
             paused = device.get("paused", False)
-            DEVICE_PAUSED.labels(
-                network_id=network_id,
-                device_id=device_id,
-                name=name,
-                manufacturer=manufacturer,
-                device_type=device_type,
-            ).set(1 if paused else 0)
+            try:
+                DEVICE_PAUSED.labels(
+                    network_id=network_id,
+                    device_id=device_id,
+                    name=name,
+                    manufacturer=manufacturer,
+                    device_type=device_type,
+                ).set(1 if paused else 0)
+            except Exception:
+                _LOGGER.warning("Failed to set DEVICE_PAUSED for device %s", device_id)
 
             is_guest = device.get("is_guest", False)
-            DEVICE_IS_GUEST.labels(
-                network_id=network_id,
-                device_id=device_id,
-                name=name,
-                manufacturer=manufacturer,
-            ).set(1 if is_guest else 0)
+            try:
+                DEVICE_IS_GUEST.labels(
+                    network_id=network_id,
+                    device_id=device_id,
+                    name=name,
+                    manufacturer=manufacturer,
+                ).set(1 if is_guest else 0)
+            except Exception:
+                _LOGGER.warning("Failed to set DEVICE_IS_GUEST for device %s", device_id)
 
             if connectivity:
                 signal = _parse_signal_strength(connectivity.get("signal"))
                 if signal is not None:
-                    DEVICE_SIGNAL_STRENGTH.labels(
-                        network_id=network_id,
-                        device_id=device_id,
-                        name=name,
-                        manufacturer=manufacturer,
-                        band=band,
-                        source_eero=source_eero,
-                    ).set(signal)
+                    try:
+                        DEVICE_SIGNAL_STRENGTH.labels(
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            manufacturer=manufacturer,
+                            band=band,
+                            source_eero=source_eero,
+                        ).set(signal)
+                    except Exception:
+                        _LOGGER.warning(
+                            "Failed to set DEVICE_SIGNAL_STRENGTH for device %s", device_id
+                        )
 
                 signal_avg = _parse_signal_strength(connectivity.get("signal_avg"))
                 if signal_avg is not None:
-                    DEVICE_SIGNAL_AVG.labels(
-                        network_id=network_id,
-                        device_id=device_id,
-                        name=name,
-                        manufacturer=manufacturer,
-                        band=band,
-                        source_eero=source_eero,
-                    ).set(signal_avg)
+                    try:
+                        DEVICE_SIGNAL_AVG.labels(
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            manufacturer=manufacturer,
+                            band=band,
+                            source_eero=source_eero,
+                        ).set(signal_avg)
+                    except Exception:
+                        _LOGGER.warning("Failed to set DEVICE_SIGNAL_AVG for device %s", device_id)
 
-                score = connectivity.get("score")
+                score = _coerce_numeric(connectivity.get("score"), field_name="score")
                 if score is not None:
-                    DEVICE_CONNECTION_SCORE.labels(
-                        network_id=network_id,
-                        device_id=device_id,
-                        name=name,
-                        manufacturer=manufacturer,
-                        connection_type=connection_type,
-                        source_eero=source_eero,
-                    ).set(score)
+                    try:
+                        DEVICE_CONNECTION_SCORE.labels(
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            manufacturer=manufacturer,
+                            connection_type=connection_type,
+                            source_eero=source_eero,
+                        ).set(score)
+                    except Exception:
+                        _LOGGER.warning(
+                            "Failed to set DEVICE_CONNECTION_SCORE for device %s", device_id
+                        )
 
-                score_bars = connectivity.get("score_bars")
+                score_bars = _coerce_numeric(
+                    connectivity.get("score_bars"), field_name="score_bars"
+                )
                 if score_bars is not None:
-                    DEVICE_CONNECTION_SCORE_BARS.labels(
-                        network_id=network_id,
-                        device_id=device_id,
-                        name=name,
-                        manufacturer=manufacturer,
-                        connection_type=connection_type,
-                        source_eero=source_eero,
-                    ).set(score_bars)
+                    try:
+                        DEVICE_CONNECTION_SCORE_BARS.labels(
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            manufacturer=manufacturer,
+                            connection_type=connection_type,
+                            source_eero=source_eero,
+                        ).set(score_bars)
+                    except Exception:
+                        _LOGGER.warning(
+                            "Failed to set DEVICE_CONNECTION_SCORE_BARS for device %s", device_id
+                        )
 
                 if frequency is not None:
-                    DEVICE_FREQUENCY.labels(
-                        network_id=network_id,
-                        device_id=device_id,
-                        name=name,
-                        manufacturer=manufacturer,
-                        band=band,
-                        source_eero=source_eero,
-                    ).set(frequency)
+                    try:
+                        DEVICE_FREQUENCY.labels(
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            manufacturer=manufacturer,
+                            band=band,
+                            source_eero=source_eero,
+                        ).set(frequency)
+                    except Exception:
+                        _LOGGER.warning("Failed to set DEVICE_FREQUENCY for device %s", device_id)
 
                 rx_bitrate = _parse_bitrate(connectivity.get("rx_bitrate"))
                 if rx_bitrate is not None:
-                    DEVICE_RX_BITRATE.labels(
-                        network_id=network_id,
-                        device_id=device_id,
-                        name=name,
-                        manufacturer=manufacturer,
-                        band=band,
-                        source_eero=source_eero,
-                    ).set(rx_bitrate)
+                    try:
+                        DEVICE_RX_BITRATE.labels(
+                            network_id=network_id,
+                            device_id=device_id,
+                            name=name,
+                            manufacturer=manufacturer,
+                            band=band,
+                            source_eero=source_eero,
+                        ).set(rx_bitrate)
+                    except Exception:
+                        _LOGGER.warning("Failed to set DEVICE_RX_BITRATE for device %s", device_id)
 
                 rx_rate_info = connectivity.get("rx_rate_info", {})
                 if rx_rate_info and isinstance(rx_rate_info, dict):
@@ -1593,13 +1787,25 @@ class EeroCollector:
             sqm_settings = await client.get_sqm_settings(network_id)
             EXPORTER_API_REQUESTS.labels(endpoint="sqm", status="success").inc()
 
-            upload_bw = sqm_settings.get("upload_bandwidth")
+            upload_bw = _coerce_numeric(
+                sqm_settings.get("upload_bandwidth"), field_name="upload_bandwidth"
+            )
             if upload_bw is not None:
-                SQM_UPLOAD_BANDWIDTH.labels(network_id=network_id).set(upload_bw)
+                try:
+                    SQM_UPLOAD_BANDWIDTH.labels(network_id=network_id).set(upload_bw)
+                except Exception:
+                    _LOGGER.warning("Failed to set SQM_UPLOAD_BANDWIDTH for network %s", network_id)
 
-            download_bw = sqm_settings.get("download_bandwidth")
+            download_bw = _coerce_numeric(
+                sqm_settings.get("download_bandwidth"), field_name="download_bandwidth"
+            )
             if download_bw is not None:
-                SQM_DOWNLOAD_BANDWIDTH.labels(network_id=network_id).set(download_bw)
+                try:
+                    SQM_DOWNLOAD_BANDWIDTH.labels(network_id=network_id).set(download_bw)
+                except Exception:
+                    _LOGGER.warning(
+                        "Failed to set SQM_DOWNLOAD_BANDWIDTH for network %s", network_id
+                    )
 
         except EeroAPIError as e:
             _LOGGER.debug(f"Failed to get SQM settings: {e}")
