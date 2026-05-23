@@ -1,0 +1,98 @@
+name: 🌐 Issue Report
+description: Tell us what's going wrong with the exporter
+title: "[<TYPE>]: <short description>"
+labels: ["triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        👋 Hey, thanks for taking the time to file this! Sorry the exporter is misbehaving — share what you've got below and we'll dig in. No need to fill every field.
+
+        > 🔒 A quick heads up: please scrub any secrets (session tokens, cookies, personal IPs, MAC addresses, hostnames) before posting.
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: 🏷️ What kind of issue is this?
+      options:
+        - 🐛 Bug / crash
+        - 📊 Missing or wrong metric value
+        - 🔐 Authentication / session issue
+        - 🐢 Performance (slow scrapes, high mem/CPU)
+        - 🐳 Docker / Kubernetes
+        - ❓ Question / how-to
+        - ✨ Feature or new metric request
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 💬 What happened? What did you expect?
+      placeholder: Metric X reports value Y, but I expected Z.
+    validations:
+      required: true
+
+  - type: input
+    id: metric-name
+    attributes:
+      label: 📊 Affected metric (if any)
+      placeholder: eero_client_connected
+    validations:
+      required: false
+
+  - type: textarea
+    id: metrics-output
+    attributes:
+      label: 📈 Metric output
+      description: |
+        Grab the relevant line(s) with:
+        `curl -s localhost:9099/metrics | grep <metric_name>`
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📋 Exporter logs
+      description: |
+        Grab them with whichever fits:
+        - 🐳 Docker: `docker logs <container>`
+        - 🧩 Compose: `docker compose logs eero-exporter`
+        - ☸️ Kubernetes: `kubectl logs <pod>`
+
+        For more detail, set `LOG_LEVEL=DEBUG` and restart.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: 📦 Exporter version
+      description: Image tag, PyPI version, or git SHA.
+      placeholder: 1.4.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: 🚀 How are you running it?
+      options:
+        - 🐳 Docker
+        - 🧩 Docker Compose
+        - ☸️ Kubernetes
+        - 🐍 pip / local Python
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 🎁 Anything else?
+      description: Grafana panel affected, scrape config, scale (number of eeros / clients), workarounds you tried.
+    validations:
+      required: false
