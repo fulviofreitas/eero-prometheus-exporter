@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.17.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.16.2...v3.17.0) (2026-06-08)
+
+### ✨ Features
+
+* **deps:** pin eero-api ~=4.6.0 + bump strategy in renovate ([1e52e3a](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/1e52e3a58e6969056a935a0e22d38300ce238941))
+
 ## [3.16.2](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.16.1...v3.16.2) (2026-05-21)
 
 ### 🐛 Bug Fixes
