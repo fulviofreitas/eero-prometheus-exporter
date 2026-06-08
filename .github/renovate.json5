@@ -115,6 +115,10 @@
       matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
       groupName: "eero-api",
       description: "🟢 eero-api update (triggers minor release, requires review)",
+      // Constraint in pyproject.toml pins major+minor (e.g. ~=4.6.0).
+      // "bump" rewrites the manifest on every new release so a PR is raised
+      // even when the new version technically satisfies the existing range.
+      rangeStrategy: "bump",
       automerge: false,
       addLabels: ["eero-api", "feature", "critical", "needs-review"],
       reviewers: ["fulviofreitas"],
