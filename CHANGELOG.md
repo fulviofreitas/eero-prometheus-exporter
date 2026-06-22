@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.18.3](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.2...v3.18.3) (2026-06-22)
+
+### 🐛 Bug Fixes
+
+* **deps:** bump cryptography from 46.0.7 to 48.0.1 ([6d80ace](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/6d80aced79d70227df5fcc135135a823a09adbae))
+
 ## [3.18.2](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.1...v3.18.2) (2026-06-22)
 
 ### 🐛 Bug Fixes
