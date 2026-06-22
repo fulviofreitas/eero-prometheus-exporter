@@ -56,10 +56,12 @@
     // ==========================================================================
     // 🟡 Python dependencies: Group minor/patch updates (excludes eero-api)
     // ==========================================================================
+    // eero-api is excluded via the negated matchPackageNames pattern so it falls
+    // through to its dedicated rule below (which sets feat(deps): + review gate).
     {
       matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
       matchUpdateTypes: ["minor", "patch"],
-      excludePackageNames: ["eero-api"],
+      matchPackageNames: ["!eero-api"],
       groupName: "python-minor-patch",
       description: "Python minor/patch updates (auto-merge)",
       automerge: true,
