@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.18.4](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.3...v3.18.4) (2026-07-21)
+
+### 🐛 Bug Fixes
+
+* **ci:** update triage to gpt-4o-mini + gh-aw v0.80.9 + App token for try-fix chain ([2130034](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/213003428d6432a30fac56d95a4b41ab36a9ff62))
+
 ## [3.18.3](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.2...v3.18.3) (2026-06-22)
 
 ### 🐛 Bug Fixes
