@@ -156,8 +156,9 @@ or `upload`. Collection can be disabled with `--no-data-usage`.
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `eero_insights_recommendations_count` | Gauge | Pending network recommendations |
-| `eero_insights_issues_count` | Gauge | Detected network issues |
+| `eero_insights_adblock_total` | Gauge | Ad-block events in the last 24 h (labelled by `category`) |
+| `eero_insights_blocked_total` | Gauge | Blocked-threat events in the last 24 h (labelled by `category`) |
+| `eero_insights_inspected_total` | Gauge | Inspected-traffic events in the last 24 h (labelled by `category`) |
 
 ---
 
@@ -313,16 +314,15 @@ These metrics require an active Eero Plus/Secure subscription.
 | `eero_backup_data_used_bytes_total` | Counter | Bytes used on backup |
 | `eero_backup_signal_strength` | Gauge | Backup signal strength |
 
-### Activity Tracking
+### Data Usage Summary (trailing 1-hour window)
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `eero_activity_download_bytes` | Gauge | Network download (period) |
-| `eero_activity_upload_bytes` | Gauge | Network upload (period) |
-| `eero_activity_active_clients` | Gauge | Active client count |
-| `eero_activity_category_bytes` | Gauge | Usage by category |
-| `eero_device_activity_download_bytes` | Gauge | Device download (period) |
-| `eero_device_activity_upload_bytes` | Gauge | Device upload (period) |
+| `eero_data_usage_download_bytes` | Gauge | Network download bytes in the trailing hour |
+| `eero_data_usage_upload_bytes` | Gauge | Network upload bytes in the trailing hour |
+| `eero_data_usage_active_clients` | Gauge | Active client count in the trailing hour |
+| `eero_device_data_usage_download_bytes` | Gauge | Per-device download bytes in the trailing hour |
+| `eero_device_data_usage_upload_bytes` | Gauge | Per-device upload bytes in the trailing hour |
 
 ### Security (Eero Secure)
 

@@ -3968,7 +3968,7 @@
       "pluginVersion": "12.3.1",
       "targets": [
         {
-          "expr": "topk(10, eero_device_activity_download_bytes{network_id=~\"$network_id\"})",
+          "expr": "topk(10, eero_device_data_usage_download_bytes{network_id=~\"$network_id\"})",
           "legendFormat": "{{name}}",
           "refId": "A"
         }
@@ -4038,82 +4038,13 @@
       "pluginVersion": "12.3.1",
       "targets": [
         {
-          "expr": "topk(10, eero_device_activity_upload_bytes{network_id=~\"$network_id\"})",
+          "expr": "topk(10, eero_device_data_usage_upload_bytes{network_id=~\"$network_id\"})",
           "legendFormat": "{{name}}",
           "refId": "A"
         }
       ],
       "title": "Top 10 Devices by Upload",
       "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": [],
-          "unit": "decbytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 121
-      },
-      "id": 72,
-      "options": {
-        "displayLabels": [
-          "name",
-          "percent"
-        ],
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true,
-          "values": [
-            "value",
-            "percent"
-          ]
-        },
-        "pieType": "donut",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "sort": "desc",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.1",
-      "targets": [
-        {
-          "expr": "eero_activity_category_bytes{network_id=~\"$network_id\"}",
-          "legendFormat": "{{category}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Traffic by Category",
-      "type": "piechart"
     },
     {
       "datasource": {
@@ -4171,7 +4102,7 @@
       "pluginVersion": "12.3.1",
       "targets": [
         {
-          "expr": "eero_activity_download_bytes{network_id=~\"$network_id\"}",
+          "expr": "eero_data_usage_download_bytes{network_id=~\"$network_id\"}",
           "legendFormat": "",
           "refId": "A"
         }
@@ -4235,7 +4166,7 @@
       "pluginVersion": "12.3.1",
       "targets": [
         {
-          "expr": "eero_activity_upload_bytes{network_id=~\"$network_id\"}",
+          "expr": "eero_data_usage_upload_bytes{network_id=~\"$network_id\"}",
           "legendFormat": "",
           "refId": "A"
         }
@@ -4299,7 +4230,7 @@
       "pluginVersion": "12.3.1",
       "targets": [
         {
-          "expr": "eero_activity_active_clients{network_id=~\"$network_id\"}",
+          "expr": "eero_data_usage_active_clients{network_id=~\"$network_id\"}",
           "legendFormat": "",
           "refId": "A"
         }

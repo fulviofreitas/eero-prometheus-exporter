@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.18.6](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.5...v3.18.6) (2026-07-22)
+
+### 🐛 Bug Fixes
+
+* **collector:** migrate off removed activity endpoints, fix insights (closes [#112](https://github.com/fulviofreitas/eero-prometheus-exporter/issues/112)) ([#114](https://github.com/fulviofreitas/eero-prometheus-exporter/issues/114)) ([bf4945c](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/bf4945ca498669c585c90f612ab9e168aed4b731))
+
+## [Unreleased]
+
+### Breaking Changes
+
+* **metrics:** `eero_activity_download_bytes` renamed to `eero_data_usage_download_bytes`.
+* **metrics:** `eero_activity_upload_bytes` renamed to `eero_data_usage_upload_bytes`.
+* **metrics:** `eero_activity_active_clients` renamed to `eero_data_usage_active_clients`.
+* **metrics:** `eero_device_activity_download_bytes` renamed to `eero_device_data_usage_download_bytes`.
+* **metrics:** `eero_device_activity_upload_bytes` renamed to `eero_device_data_usage_upload_bytes`.
+* **metrics:** `eero_activity_category_bytes` removed. No direct replacement: the eero
+  API no longer exposes per-category bandwidth. The new `eero_insights_adblock_total`,
+  `eero_insights_blocked_total`, and `eero_insights_inspected_total` metrics expose
+  category-labelled insight-event counts, not traffic-by-category bandwidth.
+* **metrics:** `eero_insights_recommendations_count` and `eero_insights_issues_count` removed.
+
+### Bug Fixes
+
+* **deps:** bump `eero-api` from `~=5.0.0` to `>=6.0.0` to fix broken activity-endpoint calls
+  (closes #112). The `/activity*` routes returned 404 on all accounts; metrics are now sourced
+  from the data-usage and insights endpoints which are live-verified.
+
+### New Metrics
+
+* `eero_insights_adblock_total` — ad-block events over the last 24 h, labelled by `network_id` and `category`.
+* `eero_insights_blocked_total` — blocked-threat events over the last 24 h.
+* `eero_insights_inspected_total` — inspected-traffic events over the last 24 h.
+
+### Dashboard
+
+* Grafana panel "Traffic by Category" removed (was powered by the now-removed `eero_activity_category_bytes`).
+* Remaining Activity section panels updated to the renamed metric names.
+
+
+## [3.18.5](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.4...v3.18.5) (2026-07-21)
+
+### 🐛 Bug Fixes
+
+* **ci:** suppress '[aw] No-Op Runs' tracker issue ([15498ba](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/15498ba72160edf7f61eab43e25f4231322c87b9))
+
+## [3.18.4](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.3...v3.18.4) (2026-07-21)
+
+### 🐛 Bug Fixes
+
+* **ci:** update triage to gpt-4o-mini + gh-aw v0.80.9 + App token for try-fix chain ([2130034](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/213003428d6432a30fac56d95a4b41ab36a9ff62))
+
 ## [3.18.3](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.2...v3.18.3) (2026-06-22)
 
 ### 🐛 Bug Fixes
