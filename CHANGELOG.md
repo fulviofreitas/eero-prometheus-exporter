@@ -15,8 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **metrics:** `eero_activity_active_clients` renamed to `eero_data_usage_active_clients`.
 * **metrics:** `eero_device_activity_download_bytes` renamed to `eero_device_data_usage_download_bytes`.
 * **metrics:** `eero_device_activity_upload_bytes` renamed to `eero_device_data_usage_upload_bytes`.
-* **metrics:** `eero_activity_category_bytes` removed (category breakdowns now available via
-  `eero_insights_adblock_total`, `eero_insights_blocked_total`, `eero_insights_inspected_total`).
+* **metrics:** `eero_activity_category_bytes` removed. No direct replacement: the eero
+  API no longer exposes per-category bandwidth. The new `eero_insights_adblock_total`,
+  `eero_insights_blocked_total`, and `eero_insights_inspected_total` metrics expose
+  category-labelled insight-event counts, not traffic-by-category bandwidth.
 * **metrics:** `eero_insights_recommendations_count` and `eero_insights_issues_count` removed.
 
 ### Bug Fixes

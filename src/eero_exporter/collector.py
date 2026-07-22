@@ -193,6 +193,11 @@ def _parse_timestamp(timestamp_str: str | None) -> float | None:
         return None
 
 
+def _format_utc_z(dt: datetime) -> str:
+    """Format a UTC datetime as ``YYYY-MM-DDTHH:MM:SSZ`` (no fractional seconds)."""
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _get_timezone(timezone_data: Any) -> ZoneInfo:
     """Resolve a network's timezone, falling back to UTC.
 
@@ -1916,11 +1921,9 @@ class EeroCollector:
         endpoint for both network-level totals and per-device breakdowns.
         """
         now = datetime.now(UTC)
-        end = now
-        start = now - timedelta(hours=1)
         payload = {
-            "start": start.replace(tzinfo=None).isoformat() + "Z",
-            "end": end.replace(tzinfo=None).isoformat() + "Z",
+            "start": _format_utc_z(now - timedelta(hours=1)),
+            "end": _format_utc_z(now),
             "cadence": "hourly",
             "timezone": "UTC",
         }
@@ -2219,8 +2222,8 @@ class EeroCollector:
         prevent the others from being collected.
         """
         now = datetime.now(UTC)
-        end_str = now.replace(tzinfo=None).isoformat() + "Z"
-        start_str = (now - timedelta(hours=24)).replace(tzinfo=None).isoformat() + "Z"
+        end_str = _format_utc_z(now)
+        start_str = _format_utc_z(now - timedelta(hours=24))
 
         insight_metrics = {
             "adblock": INSIGHTS_ADBLOCK_TOTAL,
@@ -2256,14 +2259,6 @@ class EeroCollector:
                             series.get("insight_type") or series.get("category") or insight_type
                         )
                         total = _series_sum(series)
-                        if total is None:
-                            total_raw = data.get("totals", {})
-                            if isinstance(total_raw, dict):
-                                raw = total_raw.get(insight_type) or total_raw.get("total")
-                                try:
-                                    total = float(raw) if raw is not None else None
-                                except (TypeError, ValueError):
-                                    total = None
                         if total is not None:
                             metric.labels(network_id=network_id, category=category).set(total)
                 else:
