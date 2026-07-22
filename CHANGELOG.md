@@ -37,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Remaining Activity section panels updated to the renamed metric names.
 
 
+## [3.18.5](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.4...v3.18.5) (2026-07-21)
+
+### 🐛 Bug Fixes
+
+* **ci:** suppress '[aw] No-Op Runs' tracker issue ([15498ba](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/15498ba72160edf7f61eab43e25f4231322c87b9))
+
 ## [3.18.4](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.3...v3.18.4) (2026-07-21)
 
 ### 🐛 Bug Fixes
