@@ -644,42 +644,36 @@ BACKUP_SIGNAL_STRENGTH = Gauge(
 )
 
 # =============================================================================
-# ACTIVITY METRICS (Eero Plus)
+# DATA USAGE SUMMARY METRICS (replaces deprecated activity endpoint)
 # =============================================================================
 
-ACTIVITY_DOWNLOAD_BYTES = Gauge(
-    f"{PREFIX}_activity_download_bytes",
-    "Network activity download bytes (current period)",
+DATA_USAGE_DOWNLOAD_BYTES = Gauge(
+    f"{PREFIX}_data_usage_download_bytes",
+    "Network data usage download bytes for the trailing collection window.",
     labelnames=["network_id"],
 )
 
-ACTIVITY_UPLOAD_BYTES = Gauge(
-    f"{PREFIX}_activity_upload_bytes",
-    "Network activity upload bytes (current period)",
+DATA_USAGE_UPLOAD_BYTES = Gauge(
+    f"{PREFIX}_data_usage_upload_bytes",
+    "Network data usage upload bytes for the trailing collection window.",
     labelnames=["network_id"],
 )
 
-ACTIVITY_ACTIVE_CLIENTS = Gauge(
-    f"{PREFIX}_activity_active_clients",
-    "Number of active clients (Eero Plus)",
+DATA_USAGE_ACTIVE_CLIENTS = Gauge(
+    f"{PREFIX}_data_usage_active_clients",
+    "Number of active clients observed in the trailing collection window.",
     labelnames=["network_id"],
 )
 
-ACTIVITY_CATEGORY_BYTES = Gauge(
-    f"{PREFIX}_activity_category_bytes",
-    "Activity bytes by category",
-    labelnames=["network_id", "category"],
-)
-
-DEVICE_ACTIVITY_DOWNLOAD_BYTES = Gauge(
-    f"{PREFIX}_device_activity_download_bytes",
-    "Device activity download bytes (current period)",
+DEVICE_DATA_USAGE_DOWNLOAD_BYTES = Gauge(
+    f"{PREFIX}_device_data_usage_download_bytes",
+    "Device data usage download bytes for the trailing collection window.",
     labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
 )
 
-DEVICE_ACTIVITY_UPLOAD_BYTES = Gauge(
-    f"{PREFIX}_device_activity_upload_bytes",
-    "Device activity upload bytes (current period)",
+DEVICE_DATA_USAGE_UPLOAD_BYTES = Gauge(
+    f"{PREFIX}_device_data_usage_upload_bytes",
+    "Device data usage upload bytes for the trailing collection window.",
     labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
 )
 
@@ -894,16 +888,22 @@ NETWORK_AD_BLOCK_ENABLED = Gauge(
 # INSIGHTS METRICS
 # =============================================================================
 
-INSIGHTS_RECOMMENDATIONS_COUNT = Gauge(
-    f"{PREFIX}_insights_recommendations_count",
-    "Number of pending network recommendations",
-    labelnames=["network_id"],
+INSIGHTS_ADBLOCK_TOTAL = Gauge(
+    f"{PREFIX}_insights_adblock_total",
+    "Total ad-block events observed in the insights window, by category.",
+    labelnames=["network_id", "category"],
 )
 
-INSIGHTS_ISSUES_COUNT = Gauge(
-    f"{PREFIX}_insights_issues_count",
-    "Number of detected network issues",
-    labelnames=["network_id"],
+INSIGHTS_BLOCKED_TOTAL = Gauge(
+    f"{PREFIX}_insights_blocked_total",
+    "Total blocked-threat events observed in the insights window, by category.",
+    labelnames=["network_id", "category"],
+)
+
+INSIGHTS_INSPECTED_TOTAL = Gauge(
+    f"{PREFIX}_insights_inspected_total",
+    "Total inspected-traffic events observed in the insights window, by category.",
+    labelnames=["network_id", "category"],
 )
 
 # =============================================================================
