@@ -14,8 +14,6 @@ on:
     workflows: ["🚀 Release"]
     types: [completed]
     branches: [master]
-  pull_request:
-    branches: [master]
   workflow_dispatch:
 
 concurrency:
@@ -26,7 +24,6 @@ jobs:
   docker:
     name: 🐳 Docker
     if: |
-      github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     uses: fulviofreitas/workflow-arsenal/.github/workflows/docker-build.yml@master
@@ -38,7 +35,7 @@ jobs:
     with:
       image-name: ghcr.io/${{ github.repository }}
       context: "."
-      push: ${{ github.event_name != 'pull_request' }}
+      push: true
       registry: ghcr.io
       registry-username: ${{ github.actor }}
       annotations: |
