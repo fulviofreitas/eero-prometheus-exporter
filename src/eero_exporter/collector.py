@@ -1909,9 +1909,7 @@ class EeroCollector:
         await self._collect_current_usage_metrics(client, network_id)
         await self._collect_backup_metrics(client, network_id)
 
-    async def _collect_current_usage_metrics(
-        self, client: EeroClient, network_id: str
-    ) -> None:
+    async def _collect_current_usage_metrics(self, client: EeroClient, network_id: str) -> None:
         """Collect trailing-hour data usage summary metrics (replaces deprecated activity endpoint).
 
         Builds a 1-hour trailing window payload and delegates to the data_usage
@@ -1936,9 +1934,7 @@ class EeroCollector:
                 for series in series_list:
                     if not isinstance(series, dict):
                         continue
-                    direction = str(
-                        series.get("type") or series.get("direction") or ""
-                    ).lower()
+                    direction = str(series.get("type") or series.get("direction") or "").lower()
                     total = _series_sum(series)
                     if total is None:
                         continue
@@ -1952,9 +1948,7 @@ class EeroCollector:
                 active = totals.get("active_clients") or totals.get("active_client_count")
                 if active is not None:
                     try:
-                        DATA_USAGE_ACTIVE_CLIENTS.labels(network_id=network_id).set(
-                            float(active)
-                        )
+                        DATA_USAGE_ACTIVE_CLIENTS.labels(network_id=network_id).set(float(active))
                     except (TypeError, ValueError):
                         pass
 
@@ -1976,9 +1970,7 @@ class EeroCollector:
             for device in values:
                 if not isinstance(device, dict):
                     continue
-                device_id = str(
-                    device.get("id") or _extract_id_from_url(device.get("url", ""))
-                )
+                device_id = str(device.get("id") or _extract_id_from_url(device.get("url", "")))
                 if not device_id:
                     continue
                 name = (
@@ -2000,9 +1992,7 @@ class EeroCollector:
                 for series in device.get("series", []):
                     if not isinstance(series, dict):
                         continue
-                    direction = str(
-                        series.get("type") or series.get("direction") or ""
-                    ).lower()
+                    direction = str(series.get("type") or series.get("direction") or "").lower()
                     total = _series_sum(series)
                     if total is None:
                         continue
@@ -2263,9 +2253,7 @@ class EeroCollector:
                         if not isinstance(series, dict):
                             continue
                         category = str(
-                            series.get("insight_type")
-                            or series.get("category")
-                            or insight_type
+                            series.get("insight_type") or series.get("category") or insight_type
                         )
                         total = _series_sum(series)
                         if total is None:
@@ -2287,9 +2275,7 @@ class EeroCollector:
                         except (TypeError, ValueError):
                             total = None
                         if total is not None:
-                            metric.labels(
-                                network_id=network_id, category=insight_type
-                            ).set(total)
+                            metric.labels(network_id=network_id, category=insight_type).set(total)
 
             except EeroAPIError as e:
                 _LOGGER.debug(f"Failed to get {insight_type} insights: {e}")
