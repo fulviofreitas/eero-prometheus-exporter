@@ -9,16 +9,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
 from .metrics import (
     ACCOUNT_NETWORKS_COUNT,
-    ACTIVITY_ACTIVE_CLIENTS,
-    ACTIVITY_CATEGORY_BYTES,
-    ACTIVITY_DOWNLOAD_BYTES,
-    ACTIVITY_UPLOAD_BYTES,
     BACKUP_ACTIVE,
     BACKUP_CONNECTED,
     BACKUP_ENABLED,
     BACKUP_SIGNAL_STRENGTH,
-    DEVICE_ACTIVITY_DOWNLOAD_BYTES,
-    DEVICE_ACTIVITY_UPLOAD_BYTES,
+    DATA_USAGE_ACTIVE_CLIENTS,
+    DATA_USAGE_DOWNLOAD_BYTES,
+    DATA_USAGE_UPLOAD_BYTES,
     DEVICE_ADBLOCK_ENABLED,
     DEVICE_BLOCKED,
     DEVICE_CHANNEL,
@@ -27,6 +24,8 @@ from .metrics import (
     DEVICE_CONNECTION_SCORE,
     DEVICE_CONNECTION_SCORE_BARS,
     DEVICE_DATA_USAGE_BYTES,
+    DEVICE_DATA_USAGE_DOWNLOAD_BYTES,
+    DEVICE_DATA_USAGE_UPLOAD_BYTES,
     DEVICE_FIRST_SEEN_TIMESTAMP,
     DEVICE_FREQUENCY,
     DEVICE_INFO,
@@ -93,8 +92,9 @@ from .metrics import (
     GUEST_NETWORK_CONNECTED_CLIENTS,
     GUEST_NETWORK_INFO,
     HEALTH_STATUS,
-    INSIGHTS_ISSUES_COUNT,
-    INSIGHTS_RECOMMENDATIONS_COUNT,
+    INSIGHTS_ADBLOCK_TOTAL,
+    INSIGHTS_BLOCKED_TOTAL,
+    INSIGHTS_INSPECTED_TOTAL,
     NETWORK_AD_BLOCK_ENABLED,
     NETWORK_AUTO_UPDATE_ENABLED,
     NETWORK_BACKUP_INTERNET_ENABLED,
@@ -1906,97 +1906,114 @@ class EeroCollector:
         if not self._is_premium:
             return
 
-        await self._collect_activity_metrics(client, network_id)
+        await self._collect_current_usage_metrics(client, network_id)
         await self._collect_backup_metrics(client, network_id)
 
-    async def _collect_activity_metrics(self, client: EeroClient, network_id: str) -> None:
-        """Collect activity metrics (Eero Plus feature)."""
-        try:
-            activity = await client.get_activity(network_id)
-            EXPORTER_API_REQUESTS.labels(endpoint="activity", status="success").inc()
+    async def _collect_current_usage_metrics(
+        self, client: EeroClient, network_id: str
+    ) -> None:
+        """Collect trailing-hour data usage summary metrics (replaces deprecated activity endpoint).
 
-            if not activity:
+        Builds a 1-hour trailing window payload and delegates to the data_usage
+        endpoint for both network-level totals and per-device breakdowns.
+        """
+        now = datetime.now(UTC)
+        end = now
+        start = now - timedelta(hours=1)
+        payload = {
+            "start": start.replace(tzinfo=None).isoformat() + "Z",
+            "end": end.replace(tzinfo=None).isoformat() + "Z",
+            "cadence": "hourly",
+            "timezone": "UTC",
+        }
+
+        try:
+            usage = await client.get_data_usage(network_id, payload)
+            EXPORTER_API_REQUESTS.labels(endpoint="current_usage", status="success").inc()
+
+            series_list = usage.get("series", [])
+            if isinstance(series_list, list):
+                for series in series_list:
+                    if not isinstance(series, dict):
+                        continue
+                    direction = str(
+                        series.get("type") or series.get("direction") or ""
+                    ).lower()
+                    total = _series_sum(series)
+                    if total is None:
+                        continue
+                    if direction == "download":
+                        DATA_USAGE_DOWNLOAD_BYTES.labels(network_id=network_id).set(total)
+                    elif direction == "upload":
+                        DATA_USAGE_UPLOAD_BYTES.labels(network_id=network_id).set(total)
+
+            totals = usage.get("totals", {})
+            if isinstance(totals, dict):
+                active = totals.get("active_clients") or totals.get("active_client_count")
+                if active is not None:
+                    try:
+                        DATA_USAGE_ACTIVE_CLIENTS.labels(network_id=network_id).set(
+                            float(active)
+                        )
+                    except (TypeError, ValueError):
+                        pass
+
+        except EeroAPIError as e:
+            _LOGGER.debug(f"Failed to get current usage totals: {e}")
+            EXPORTER_API_REQUESTS.labels(endpoint="current_usage", status="error").inc()
+
+        if not self._include_devices:
+            return
+
+        try:
+            device_usage = await client.get_data_usage(network_id, payload, "devices")
+            EXPORTER_API_REQUESTS.labels(endpoint="current_usage_devices", status="success").inc()
+
+            values = device_usage.get("values", [])
+            if not isinstance(values, list):
                 return
 
-            total_usage = activity.get("total_usage", {})
-            if total_usage:
-                download = total_usage.get("download") or total_usage.get("download_bytes", 0)
-                if download:
-                    ACTIVITY_DOWNLOAD_BYTES.labels(network_id=network_id).set(download)
-
-                upload = total_usage.get("upload") or total_usage.get("upload_bytes", 0)
-                if upload:
-                    ACTIVITY_UPLOAD_BYTES.labels(network_id=network_id).set(upload)
-
-            active_clients = activity.get("active_client_count")
-            if active_clients is not None:
-                ACTIVITY_ACTIVE_CLIENTS.labels(network_id=network_id).set(active_clients)
-
-            top_clients = activity.get("top_clients", [])
-            for client_act in top_clients:
-                if not isinstance(client_act, dict):
+            for device in values:
+                if not isinstance(device, dict):
                     continue
-
-                device_id = client_act.get("device_id", "")
+                device_id = str(
+                    device.get("id") or _extract_id_from_url(device.get("url", ""))
+                )
                 if not device_id:
-                    url = client_act.get("url", "")
-                    device_id = _extract_id_from_url(url)
-
+                    continue
                 name = (
-                    client_act.get("nickname")
-                    or client_act.get("display_name")
-                    or client_act.get("hostname")
+                    device.get("nickname")
+                    or device.get("display_name")
+                    or device.get("hostname")
+                    or device.get("name")
                     or device_id
                 )
-
-                # Extract additional labels from activity data
-                manufacturer = _normalize_manufacturer(client_act.get("manufacturer"))
-                device_type = _normalize_device_type(client_act.get("device_type"))
-
-                usage = client_act.get("usage", {})
-                if usage and isinstance(usage, dict):
-                    dl = usage.get("download_bytes", 0)
-                    if dl:
-                        DEVICE_ACTIVITY_DOWNLOAD_BYTES.labels(
-                            network_id=network_id,
-                            device_id=device_id,
-                            name=name,
-                            manufacturer=manufacturer,
-                            device_type=device_type,
-                        ).set(dl)
-                    ul = usage.get("upload_bytes", 0)
-                    if ul:
-                        DEVICE_ACTIVITY_UPLOAD_BYTES.labels(
-                            network_id=network_id,
-                            device_id=device_id,
-                            name=name,
-                            manufacturer=manufacturer,
-                            device_type=device_type,
-                        ).set(ul)
+                manufacturer = _normalize_manufacturer(device.get("manufacturer"))
+                device_type = _normalize_device_type(device.get("device_type"))
+                labels = {
+                    "network_id": network_id,
+                    "device_id": device_id,
+                    "name": str(name),
+                    "manufacturer": manufacturer,
+                    "device_type": device_type,
+                }
+                for series in device.get("series", []):
+                    if not isinstance(series, dict):
+                        continue
+                    direction = str(
+                        series.get("type") or series.get("direction") or ""
+                    ).lower()
+                    total = _series_sum(series)
+                    if total is None:
+                        continue
+                    if direction == "download":
+                        DEVICE_DATA_USAGE_DOWNLOAD_BYTES.labels(**labels).set(total)
+                    elif direction == "upload":
+                        DEVICE_DATA_USAGE_UPLOAD_BYTES.labels(**labels).set(total)
 
         except EeroAPIError as e:
-            _LOGGER.debug(f"Failed to get activity: {e}")
-            EXPORTER_API_REQUESTS.labels(endpoint="activity", status="error").inc()
-
-        try:
-            categories = await client.get_activity_categories(network_id)
-            EXPORTER_API_REQUESTS.labels(endpoint="activity_categories", status="success").inc()
-
-            for category in categories:
-                if not isinstance(category, dict):
-                    continue
-                cat_name = category.get("name", "unknown")
-                usage = category.get("usage", {})
-                if usage and isinstance(usage, dict):
-                    total = usage.get("total_bytes") or usage.get("total", 0)
-                    if total:
-                        ACTIVITY_CATEGORY_BYTES.labels(
-                            network_id=network_id, category=cat_name
-                        ).set(total)
-
-        except EeroAPIError as e:
-            _LOGGER.debug(f"Failed to get activity categories: {e}")
-            EXPORTER_API_REQUESTS.labels(endpoint="activity_categories", status="error").inc()
+            _LOGGER.debug(f"Failed to get current device usage: {e}")
+            EXPORTER_API_REQUESTS.labels(endpoint="current_usage_devices", status="error").inc()
 
     async def _collect_backup_metrics(self, client: EeroClient, network_id: str) -> None:
         """Collect backup network metrics (Eero Plus feature)."""
@@ -2204,36 +2221,78 @@ class EeroCollector:
             EXPORTER_API_REQUESTS.labels(endpoint="diagnostics", status="error").inc()
 
     async def _collect_insights_metrics(self, client: EeroClient, network_id: str) -> None:
-        """Collect insights metrics."""
-        try:
-            insights = await client.get_insights(network_id)
-            EXPORTER_API_REQUESTS.labels(endpoint="insights", status="success").inc()
+        """Collect insights time-series metrics for all three insight types.
 
-            if not insights:
-                return
+        Fans out to the insights endpoint once per type (adblock, blocked,
+        inspected) using a 24-hour trailing window.  Each call is independently
+        guarded so a 403 (insufficient subscription) on one type does not
+        prevent the others from being collected.
+        """
+        now = datetime.now(UTC)
+        end_str = now.replace(tzinfo=None).isoformat() + "Z"
+        start_str = (now - timedelta(hours=24)).replace(tzinfo=None).isoformat() + "Z"
 
-            # Recommendations count
-            recommendations = insights.get("recommendations", [])
-            if isinstance(recommendations, list):
-                INSIGHTS_RECOMMENDATIONS_COUNT.labels(network_id=network_id).set(
-                    len(recommendations)
+        insight_metrics = {
+            "adblock": INSIGHTS_ADBLOCK_TOTAL,
+            "blocked": INSIGHTS_BLOCKED_TOTAL,
+            "inspected": INSIGHTS_INSPECTED_TOTAL,
+        }
+
+        for insight_type, metric in insight_metrics.items():
+            try:
+                data = await client.get_insights(
+                    network_id,
+                    start=start_str,
+                    end=end_str,
+                    insight_type=insight_type,
+                    cadence="daily",
                 )
+                EXPORTER_API_REQUESTS.labels(
+                    endpoint=f"insights_{insight_type}", status="success"
+                ).inc()
 
-            # Issues count
-            issues = insights.get("issues", [])
-            if isinstance(issues, list):
-                INSIGHTS_ISSUES_COUNT.labels(network_id=network_id).set(len(issues))
+                if not data:
+                    continue
 
-            # Alternative field names
-            if not recommendations and not issues:
-                # Try alternative structure
-                items = insights.get("items", [])
-                if isinstance(items, list):
-                    rec_count = sum(1 for i in items if i.get("type") == "recommendation")
-                    issue_count = sum(1 for i in items if i.get("type") == "issue")
-                    INSIGHTS_RECOMMENDATIONS_COUNT.labels(network_id=network_id).set(rec_count)
-                    INSIGHTS_ISSUES_COUNT.labels(network_id=network_id).set(issue_count)
+                series_list = data.get("series", [])
+                if not isinstance(series_list, list):
+                    series_list = []
 
-        except EeroAPIError as e:
-            _LOGGER.debug(f"Failed to get insights: {e}")
-            EXPORTER_API_REQUESTS.labels(endpoint="insights", status="error").inc()
+                if series_list:
+                    for series in series_list:
+                        if not isinstance(series, dict):
+                            continue
+                        category = str(
+                            series.get("insight_type")
+                            or series.get("category")
+                            or insight_type
+                        )
+                        total = _series_sum(series)
+                        if total is None:
+                            total_raw = data.get("totals", {})
+                            if isinstance(total_raw, dict):
+                                raw = total_raw.get(insight_type) or total_raw.get("total")
+                                try:
+                                    total = float(raw) if raw is not None else None
+                                except (TypeError, ValueError):
+                                    total = None
+                        if total is not None:
+                            metric.labels(network_id=network_id, category=category).set(total)
+                else:
+                    totals = data.get("totals", {})
+                    if isinstance(totals, dict):
+                        raw = totals.get(insight_type) or totals.get("total")
+                        try:
+                            total = float(raw) if raw is not None else None
+                        except (TypeError, ValueError):
+                            total = None
+                        if total is not None:
+                            metric.labels(
+                                network_id=network_id, category=insight_type
+                            ).set(total)
+
+            except EeroAPIError as e:
+                _LOGGER.debug(f"Failed to get {insight_type} insights: {e}")
+                EXPORTER_API_REQUESTS.labels(
+                    endpoint=f"insights_{insight_type}", status="error"
+                ).inc()

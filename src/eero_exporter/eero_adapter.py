@@ -515,37 +515,6 @@ class EeroClient:
         return bool(raw_response)
 
     # =========================================================================
-    # Activity (Eero Plus)
-    # =========================================================================
-
-    @_wrap_api_call("Failed to get activity")
-    async def get_activity(self, network_id: str) -> dict[str, Any]:
-        """Get network activity summary (Eero Plus feature)."""
-        if not self._client:
-            raise EeroAPIError("Client not initialized. Use async context manager.")
-
-        raw_response = await self._client.get_activity(network_id)
-        return dict(_extract_data(raw_response))
-
-    @_wrap_api_call("Failed to get activity clients")
-    async def get_activity_clients(self, network_id: str) -> list[dict[str, Any]]:
-        """Get per-client activity data (Eero Plus feature)."""
-        if not self._client:
-            raise EeroAPIError("Client not initialized. Use async context manager.")
-
-        raw_response = await self._client.get_activity_clients(network_id)
-        return _extract_list(raw_response, "clients")
-
-    @_wrap_api_call("Failed to get activity categories")
-    async def get_activity_categories(self, network_id: str) -> list[dict[str, Any]]:
-        """Get activity data grouped by category (Eero Plus feature)."""
-        if not self._client:
-            raise EeroAPIError("Client not initialized. Use async context manager.")
-
-        raw_response = await self._client.get_activity_categories(network_id)
-        return _extract_list(raw_response, "categories")
-
-    # =========================================================================
     # Backup Network (Eero Plus)
     # =========================================================================
 
@@ -657,12 +626,38 @@ class EeroClient:
     # =========================================================================
 
     @_wrap_api_call("Failed to get insights")
-    async def get_insights(self, network_id: str) -> dict[str, Any]:
-        """Get network insights and recommendations."""
+    async def get_insights(
+        self,
+        network_id: str,
+        *,
+        start: str,
+        end: str,
+        insight_type: str,
+        cadence: str = "daily",
+    ) -> dict[str, Any]:
+        """Get network insights time-series data for one insight type.
+
+        Args:
+            network_id: Network identifier.
+            start: Window start as an ISO 8601 UTC timestamp (e.g. ``"2026-07-21T00:00:00Z"``).
+            end: Window end as an ISO 8601 UTC timestamp.
+            insight_type: One of ``"adblock"``, ``"blocked"``, or ``"inspected"``.
+            cadence: Bucket size — ``"hourly"``, ``"daily"``, or ``"weekly"``.
+                Defaults to ``"daily"``.
+
+        Returns:
+            Extracted data payload from the response envelope.
+        """
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        raw_response = await self._client.get_insights(network_id)
+        raw_response = await self._client.get_insights(
+            network_id,
+            start=start,
+            end=end,
+            insight_type=insight_type,
+            cadence=cadence,
+        )
         return dict(_extract_data(raw_response))
 
     # =========================================================================
