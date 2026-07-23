@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.18.7](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.6...v3.18.7) (2026-07-23)
+
+### ♻️ Refactoring
+
+* **ci:** migrate issue-triage and draft-fix to workflow-arsenal reusables ([0946ba0](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/0946ba0ce1ef280338723aa780c87983725b25f8))
+
 ## [3.18.6](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.5...v3.18.6) (2026-07-22)
 
 ### 🐛 Bug Fixes
