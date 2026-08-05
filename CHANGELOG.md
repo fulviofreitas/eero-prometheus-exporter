@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.18.8](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.7...v3.18.8) (2026-08-05)
+
+### 🐛 Bug Fixes
+
+* **deps:** bump aiohttp from 3.14.1 to 3.14.3 ([#118](https://github.com/fulviofreitas/eero-prometheus-exporter/issues/118)) ([16e8216](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/16e821601378a8f29dbcc098b211e7edc55dc5ff))
+
 ## [3.18.7](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.6...v3.18.7) (2026-07-23)
 
 ### ♻️ Refactoring
