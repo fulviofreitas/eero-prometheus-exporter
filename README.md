@@ -6,7 +6,7 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/eero-prometheus-exporter?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/eero-prometheus-exporter/)
-[![License](https://img.shields.io/badge/license-Apache%202.0-22c55e?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge)](LICENSE)
 [![Prometheus](https://img.shields.io/badge/prometheus-ready-e6522c?style=for-the-badge&logo=prometheus&logoColor=white)](https://prometheus.io)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ed?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
 
@@ -74,7 +74,7 @@ Full documentation in the **[Wiki](../../wiki)** — [Installation](../../wiki/I
 
 ## 📄 License
 
-[Apache License 2.0](LICENSE)
+[MIT](LICENSE) — Use it, fork it, build cool stuff 🎉
 
 ---
 
