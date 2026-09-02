@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.19.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.9...v3.19.0) (2026-09-02)
+
+### ✨ Features
+
+* **deps:** update eero-api to 6.2.0 ([#121](https://github.com/fulviofreitas/eero-prometheus-exporter/issues/121)) ([2677369](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/2677369033e1865b5d8c864a0362965ab8b9321a))
+
 ## [3.18.9](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.18.8...v3.18.9) (2026-08-06)
 
 ### 🐛 Bug Fixes
