@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
+from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient, _parse_network_status
 from .metrics import (
     ACCOUNT_NETWORKS_COUNT,
     BACKUP_ACTIVE,
@@ -641,11 +641,7 @@ class EeroCollector:
             network_details = network_data
 
         # Extract status - may be nested {"status": "online"} or just "online"
-        raw_status = network_details.get("status", "unknown")
-        if isinstance(raw_status, dict):
-            status_str = raw_status.get("status", "unknown")
-        else:
-            status_str = str(raw_status)
+        status_str = _parse_network_status(network_details.get("status"))
 
         # Extract ISP - may be in geo_ip.isp or isp.name or isp_name
         isp_name = network_details.get("isp_name")

@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -14,7 +15,13 @@ from rich.table import Table
 from . import __version__
 from .collector import EeroCollector
 from .config import DEFAULT_PORT, DEFAULT_SESSION_FILE, ExporterConfig
-from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient
+from .eero_adapter import (
+    EeroAPIError,
+    EeroAuthError,
+    EeroClient,
+    _extract_network_id,
+    _parse_network_status,
+)
 from .server import run_server
 
 app = typer.Typer(
@@ -24,6 +31,7 @@ app = typer.Typer(
 )
 
 console = Console()
+_LOGGER = logging.getLogger(__name__)
 
 
 def setup_logging(level: str = "INFO") -> None:
@@ -34,6 +42,33 @@ def setup_logging(level: str = "INFO") -> None:
         datefmt="[%X]",
         handlers=[RichHandler(console=console, rich_tracebacks=True)],
     )
+
+
+async def _resolve_network_status(client: EeroClient, network: dict[str, Any]) -> str:
+    """Resolve a network's status via the authoritative per-network detail endpoint.
+
+    Mirrors the collector's approach (see ``collector.py:_collect_network_metrics``):
+    the ``/networks`` list endpoint does not reliably carry a usable ``status``
+    field, so the detail endpoint (``get_network``) is always queried. If the
+    detail call fails, this falls back to whatever status (if any) was present
+    on the list item, and finally to ``"unknown"`` if nothing is available.
+
+    Args:
+        client: An authenticated EeroClient.
+        network: A network dict as returned by ``client.get_networks()``.
+
+    Returns:
+        The normalized status string.
+    """
+    network_id = _extract_network_id(network)
+    if network_id:
+        try:
+            network_details = await client.get_network(network_id)
+            return _parse_network_status(network_details.get("status"))
+        except EeroAPIError as e:
+            _LOGGER.debug(f"Failed to get network details for {network_id}: {e}")
+
+    return _parse_network_status(network.get("status"))
 
 
 @app.command()
@@ -174,7 +209,7 @@ def validate(
                     console.print(f"[green]✓[/green] Found {len(networks)} network(s)")
                     for net in networks:
                         name = net.get("name", "Unknown")
-                        status = net.get("status", "unknown")
+                        status = await _resolve_network_status(client, net)
                         console.print(f"    • {name}: {status}")
                     console.print()
 
@@ -234,23 +269,23 @@ def status(
                     console.print("[bold red]Session expired. Please login again.[/bold red]")
                     raise typer.Exit(1)
 
-        if not networks:
-            console.print("[yellow]No networks found.[/yellow]")
-            return
+                if not networks:
+                    console.print("[yellow]No networks found.[/yellow]")
+                    return
 
-        table = Table(title="Your Networks")
-        table.add_column("Name", style="cyan")
-        table.add_column("Status", style="green")
-        table.add_column("Network ID", style="dim")
+                table = Table(title="Your Networks")
+                table.add_column("Name", style="cyan")
+                table.add_column("Status", style="green")
+                table.add_column("Network ID", style="dim")
 
-        for network in networks:
-            name = network.get("name", "Unknown")
-            status = network.get("status", "unknown")
-            url = network.get("url", "")
-            network_id = str(url).rstrip("/").split("/")[-1] if url else "unknown"
+                for network in networks:
+                    name = network.get("name", "Unknown")
+                    status = await _resolve_network_status(client, network)
+                    url = network.get("url", "")
+                    network_id = str(url).rstrip("/").split("/")[-1] if url else "unknown"
 
-            status_color = "green" if status in ("connected", "online") else "red"
-            table.add_row(name, f"[{status_color}]{status}[/{status_color}]", network_id)
+                    status_color = "green" if status in ("connected", "online") else "red"
+                    table.add_row(name, f"[{status_color}]{status}[/{status_color}]", network_id)
 
         console.print(table)
         console.print()

@@ -6,6 +6,10 @@ Tests cover:
 - Dict shapes with common keys (seconds, value, current, total, count)
 - Unknown dict shapes returning None with deduplicated DEBUG logging
 - None and unsupported types returning None
+
+Also covers `_parse_network_status` in eero_adapter.py: normalizing the
+network `status` field, which may be a plain string, a nested dict, or
+genuinely absent.
 """
 
 import logging
@@ -13,6 +17,7 @@ import logging
 import pytest
 
 from eero_exporter.collector import _COERCE_UNKNOWN_SHAPES_SEEN, _coerce_numeric
+from eero_exporter.eero_adapter import _parse_network_status
 
 # ========================== _coerce_numeric Tests ==========================
 
@@ -157,3 +162,28 @@ class TestCoerceNumeric:
         _COERCE_UNKNOWN_SHAPES_SEEN.add(("uptime", ("seconds",)))  # pre-populate
         # Should still coerce correctly — dedup set only gates logging, not logic
         assert _coerce_numeric({"seconds": 100}, field_name="uptime") == 100.0
+
+
+# ======================= _parse_network_status Tests =======================
+
+
+class TestParseNetworkStatus:
+    """Tests for _parse_network_status() defensive status normalization."""
+
+    @pytest.mark.parametrize(
+        ("raw_status", "expected"),
+        [
+            ("connected", "connected"),
+            ("online", "online"),
+            ("offline", "offline"),
+            ({"status": "connected"}, "connected"),
+            ({"status": "offline"}, "offline"),
+            ({"other_key": "irrelevant"}, "unknown"),
+            ({}, "unknown"),
+            (None, "unknown"),
+            (123, "123"),
+            (True, "True"),
+        ],
+    )
+    def test_parse_network_status(self, raw_status: object, expected: str) -> None:
+        assert _parse_network_status(raw_status) == expected
