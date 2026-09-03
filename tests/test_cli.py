@@ -74,9 +74,7 @@ class TestValidateCommand:
     def test_happy_path_uses_detail_status(self, session_file: Path) -> None:
         """Status comes from get_network(), not the list item."""
         networks = [{"id": "123", "name": "iFulvio@House", "url": "https://x/2.2/networks/123"}]
-        mock_client = _make_mock_client(
-            networks, network_details={"123": {"status": "connected"}}
-        )
+        mock_client = _make_mock_client(networks, network_details={"123": {"status": "connected"}})
 
         with patch("eero_exporter.cli.EeroClient", return_value=mock_client):
             result = runner.invoke(app, ["validate", "--session-file", str(session_file)])
@@ -110,9 +108,7 @@ class TestValidateCommand:
         assert result.exit_code == 0
         assert "Net A: unknown" in result.output
 
-    def test_detail_call_failure_falls_back_to_list_item_status(
-        self, session_file: Path
-    ) -> None:
+    def test_detail_call_failure_falls_back_to_list_item_status(self, session_file: Path) -> None:
         """If get_network() raises, fall back to the list item's own status."""
         networks = [
             {
@@ -122,9 +118,7 @@ class TestValidateCommand:
                 "status": "connected",
             }
         ]
-        mock_client = _make_mock_client(
-            networks, detail_side_effect=EeroAPIError("boom")
-        )
+        mock_client = _make_mock_client(networks, detail_side_effect=EeroAPIError("boom"))
 
         with patch("eero_exporter.cli.EeroClient", return_value=mock_client):
             result = runner.invoke(app, ["validate", "--session-file", str(session_file)])
@@ -137,9 +131,7 @@ class TestValidateCommand:
     ) -> None:
         """If both the detail call fails and the list item lacks status -> "unknown"."""
         networks = [{"id": "123", "name": "Net A", "url": "https://x/2.2/networks/123"}]
-        mock_client = _make_mock_client(
-            networks, detail_side_effect=EeroAPIError("boom")
-        )
+        mock_client = _make_mock_client(networks, detail_side_effect=EeroAPIError("boom"))
 
         with patch("eero_exporter.cli.EeroClient", return_value=mock_client):
             result = runner.invoke(app, ["validate", "--session-file", str(session_file)])
@@ -176,9 +168,7 @@ class TestStatusCommand:
 
     def test_happy_path_uses_detail_status(self, session_file: Path) -> None:
         networks = [{"id": "123", "name": "iFulvio@House", "url": "https://x/2.2/networks/123"}]
-        mock_client = _make_mock_client(
-            networks, network_details={"123": {"status": "connected"}}
-        )
+        mock_client = _make_mock_client(networks, network_details={"123": {"status": "connected"}})
 
         with patch("eero_exporter.cli.EeroClient", return_value=mock_client):
             result = runner.invoke(app, ["status", "--session-file", str(session_file)])
@@ -213,9 +203,7 @@ class TestStatusCommand:
         assert "Net C" in result.output and "unknown" in result.output
         assert mock_client.get_network.await_count == 3
 
-    def test_detail_call_failure_falls_back_to_list_item_status(
-        self, session_file: Path
-    ) -> None:
+    def test_detail_call_failure_falls_back_to_list_item_status(self, session_file: Path) -> None:
         networks = [
             {
                 "id": "123",
@@ -224,9 +212,7 @@ class TestStatusCommand:
                 "status": "connected",
             }
         ]
-        mock_client = _make_mock_client(
-            networks, detail_side_effect=EeroAPIError("boom")
-        )
+        mock_client = _make_mock_client(networks, detail_side_effect=EeroAPIError("boom"))
 
         with patch("eero_exporter.cli.EeroClient", return_value=mock_client):
             result = runner.invoke(app, ["status", "--session-file", str(session_file)])
