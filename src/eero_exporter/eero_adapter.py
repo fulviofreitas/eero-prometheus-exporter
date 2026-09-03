@@ -52,6 +52,7 @@ __all__ = [
     "EeroClient",
     "EeroAPIError",
     "EeroAuthError",
+    "_parse_network_status",
 ]
 
 _LOGGER = logging.getLogger(__name__)
@@ -162,6 +163,30 @@ def _extract_list(raw_response: Any, list_key: str | None = None) -> list[dict[s
                     return list(result)
 
     return []
+
+
+def _parse_network_status(raw_status: Any) -> str:
+    """Normalize a network status value into a plain string.
+
+    The eero API sometimes returns the network status as a plain string
+    (e.g. ``"connected"``) and sometimes as a nested dict
+    (e.g. ``{"status": "connected"}``). This helper defensively handles
+    both shapes, plus the genuinely-absent case, so callers never have to
+    duplicate the parsing logic.
+
+    Args:
+        raw_status: The raw ``status`` value from a network payload. May be
+            a string, a dict, ``None``, or another type.
+
+    Returns:
+        The normalized status string, or ``"unknown"`` if the status is
+        missing or cannot be determined.
+    """
+    if isinstance(raw_status, dict):
+        return str(raw_status.get("status", "unknown"))
+    if raw_status is None:
+        return "unknown"
+    return str(raw_status)
 
 
 def _extract_network_id(network: dict[str, Any]) -> str | None:
