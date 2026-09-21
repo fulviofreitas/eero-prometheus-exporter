@@ -237,3 +237,232 @@ class TestStatusCommand:
         missing = tmp_path / "does-not-exist.json"
         result = runner.invoke(app, ["status", "--session-file", str(missing)])
         assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# --session-file plumbing: `cookie_file` must reach the adapter ctor (§4.3.7)
+# ---------------------------------------------------------------------------
+
+
+class TestSessionFilePlumbing:
+    """Every command that talks to `EeroClient` must pass `cookie_file`."""
+
+    def test_validate_passes_cookie_file(self, session_file: Path) -> None:
+        mock_client = _make_mock_client([], network_details={})
+        with patch("eero_exporter.cli.EeroClient", return_value=mock_client) as mock_ctor:
+            runner.invoke(app, ["validate", "--session-file", str(session_file)])
+        mock_ctor.assert_called_once_with(cookie_file=str(session_file))
+
+    def test_status_passes_cookie_file(self, session_file: Path) -> None:
+        mock_client = _make_mock_client([], network_details={})
+        with patch("eero_exporter.cli.EeroClient", return_value=mock_client) as mock_ctor:
+            runner.invoke(app, ["status", "--session-file", str(session_file)])
+        mock_ctor.assert_called_once_with(cookie_file=str(session_file))
+
+    def test_login_passes_cookie_file(self, tmp_path: Path) -> None:
+        session_path = tmp_path / "session.json"
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.login = AsyncMock(side_effect=EeroAuthError("rejected"))
+
+        with patch("eero_exporter.cli.EeroClient", return_value=mock_client) as mock_ctor:
+            result = runner.invoke(
+                app, ["login", "user@example.com", "--session-file", str(session_path)]
+            )
+
+        mock_ctor.assert_called_once_with(cookie_file=str(session_path))
+        assert result.exit_code == 1
+
+    def test_test_command_passes_cookie_file(self, session_file: Path) -> None:
+        with patch("eero_exporter.cli.EeroCollector") as mock_collector_cls:
+            mock_collector = MagicMock()
+            mock_collector.collect = AsyncMock(return_value=True)
+            mock_collector_cls.return_value = mock_collector
+
+            runner.invoke(app, ["test", "--session-file", str(session_file)])
+
+        _, kwargs = mock_collector_cls.call_args
+        assert kwargs["cookie_file"] == str(session_file)
+
+
+# ---------------------------------------------------------------------------
+# EeroAPIError catch-all (§4.3.8) -- exit 1, one-line message, no traceback
+# ---------------------------------------------------------------------------
+
+
+class TestApiErrorCatchAll:
+    def test_login_rejected_identifier_is_auth_error(self, tmp_path: Path) -> None:
+        """8.0.1 re-wraps a rejected identifier as EeroAuthError (§1.2a)."""
+        session_path = tmp_path / "session.json"
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.login = AsyncMock(side_effect=EeroAuthError("rejected identifier"))
+
+        with patch("eero_exporter.cli.EeroClient", return_value=mock_client):
+            result = runner.invoke(
+                app, ["login", "not-an-email", "--session-file", str(session_path)]
+            )
+
+        assert result.exit_code == 1
+        assert "rejected identifier" in result.output
+        assert "Traceback" not in result.output
+
+    def test_status_generic_api_error_exits_one_no_traceback(self, session_file: Path) -> None:
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get_networks = AsyncMock(
+            side_effect=EeroAPIError("boom", status_code=500, error_code="error.internal")
+        )
+
+        with patch("eero_exporter.cli.EeroClient", return_value=mock_client):
+            result = runner.invoke(app, ["status", "--session-file", str(session_file)])
+
+        assert result.exit_code == 1
+        assert "Traceback" not in result.output
+        assert "500" in result.output
+
+
+# ---------------------------------------------------------------------------
+# session-info
+# ---------------------------------------------------------------------------
+
+
+class TestSessionInfoCommand:
+    def test_missing_file_exits_one_with_hint(self, tmp_path: Path) -> None:
+        missing = tmp_path / "does-not-exist.json"
+        result = runner.invoke(app, ["session-info", "--session-file", str(missing)])
+        assert result.exit_code == 1
+        assert "login" in result.output.lower()
+
+    def test_schema_2_record_reports_version_and_never_prints_token(self, tmp_path: Path) -> None:
+        planted_token = "s=SUPER-SECRET-TOKEN-VALUE"  # nosec B105 - test fixture only
+        path = tmp_path / "session.json"
+        path.write_text(f'{{"session_id": "{planted_token}", "schema_version": 2}}')
+        path.chmod(0o600)
+
+        result = runner.invoke(app, ["session-info", "--session-file", str(path)])
+
+        assert result.exit_code == 0
+        assert "Schema version: 2" in result.output
+        assert "Token present: True" in result.output
+        assert planted_token not in result.output
+
+    def test_schema_1_legacy_record_reports_legacy(self, tmp_path: Path) -> None:
+        path = tmp_path / "session.json"
+        path.write_text('{"session_id": "legacy-token-value"}')
+        path.chmod(0o600)
+
+        result = runner.invoke(app, ["session-info", "--session-file", str(path)])
+
+        assert result.exit_code == 0
+        assert "1 (legacy)" in result.output
+        assert "legacy-token-value" not in result.output
+
+    def test_unreadable_json_reports_error_and_exits_one(self, tmp_path: Path) -> None:
+        path = tmp_path / "session.json"
+        path.write_text("not valid json{{{")
+
+        result = runner.invoke(app, ["session-info", "--session-file", str(path)])
+
+        assert result.exit_code == 1
+
+    def test_no_token_reports_false(self, tmp_path: Path) -> None:
+        path = tmp_path / "session.json"
+        path.write_text('{"schema_version": 2, "session_id": null}')
+
+        result = runner.invoke(app, ["session-info", "--session-file", str(path)])
+
+        assert result.exit_code == 0
+        assert "Token present: False" in result.output
+
+
+# ---------------------------------------------------------------------------
+# serve: precedence fix + auth_failure_exit
+# ---------------------------------------------------------------------------
+
+
+class TestServeCommand:
+    def test_yaml_value_survives_when_cli_flag_absent(
+        self, tmp_path: Path, session_file: Path
+    ) -> None:
+        """Regression guard for the CLI-always-wins-over-YAML bug (§4.3.2)."""
+        from eero_exporter.config import ExporterConfig
+
+        config_path = tmp_path / "config.yml"
+        ExporterConfig(port=9191).save(config_path)
+
+        captured: dict[str, object] = {}
+
+        def _fake_run_server(config: object) -> None:
+            captured["port"] = config.port  # type: ignore[attr-defined]
+
+        with patch("eero_exporter.cli.run_server", side_effect=_fake_run_server):
+            result = runner.invoke(
+                app,
+                [
+                    "serve",
+                    "--config-file",
+                    str(config_path),
+                    "--session-file",
+                    str(session_file),
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert captured["port"] == 9191
+
+    def test_cli_flag_overrides_yaml_value(self, tmp_path: Path, session_file: Path) -> None:
+        from eero_exporter.config import ExporterConfig
+
+        config_path = tmp_path / "config.yml"
+        ExporterConfig(port=9191).save(config_path)
+
+        captured: dict[str, object] = {}
+
+        def _fake_run_server(config: object) -> None:
+            captured["port"] = config.port  # type: ignore[attr-defined]
+
+        with patch("eero_exporter.cli.run_server", side_effect=_fake_run_server):
+            result = runner.invoke(
+                app,
+                [
+                    "serve",
+                    "--config-file",
+                    str(config_path),
+                    "--session-file",
+                    str(session_file),
+                    "--port",
+                    "8181",
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert captured["port"] == 8181
+
+    def test_auth_failure_exit_flag_is_wired_to_run_server(self, session_file: Path) -> None:
+        captured: dict[str, object] = {}
+
+        def _fake_run_server(config: object) -> None:
+            captured["auth_failure_exit"] = config.auth_failure_exit  # type: ignore[attr-defined]
+
+        with patch("eero_exporter.cli.run_server", side_effect=_fake_run_server):
+            result = runner.invoke(
+                app,
+                [
+                    "serve",
+                    "--session-file",
+                    str(session_file),
+                    "--auth-failure-exit",
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert captured["auth_failure_exit"] is True
+
+    def test_serve_exits_with_server_systemexit_code(self, session_file: Path) -> None:
+        with patch("eero_exporter.cli.run_server", side_effect=SystemExit(2)):
+            result = runner.invoke(app, ["serve", "--session-file", str(session_file)])
+        assert result.exit_code == 2

@@ -15,6 +15,12 @@ from .config import ExporterConfig
 
 _LOGGER = logging.getLogger(__name__)
 
+# Exit code raised when `--auth-failure-exit` is set and a collection cycle
+# ends with a terminal authentication failure (§2, D6). Mirrors
+# `cli.AUTH_FAILURE_EXIT_CODE`; duplicated here (rather than imported) to
+# avoid a server -> cli import edge.
+AUTH_FAILURE_EXIT_CODE = 2
+
 # Global state for health checks
 _health_state: dict[str, bool | int | str | None] = {
     "session_valid": False,
@@ -227,6 +233,7 @@ async def collection_loop(
     collector: EeroCollector,
     interval: int,
     stop_event: asyncio.Event,
+    auth_failure_exit: bool = False,
 ) -> None:
     """Run the collection loop.
 
@@ -234,6 +241,11 @@ async def collection_loop(
         collector: The metrics collector
         interval: Collection interval in seconds
         stop_event: Event to signal shutdown
+        auth_failure_exit: When True, a collection cycle that ends in a
+            terminal authentication failure (``collector.last_error_kind ==
+            "auth"``) logs one ERROR with a re-login hint and raises
+            ``SystemExit(AUTH_FAILURE_EXIT_CODE)`` instead of letting the
+            loop keep retrying forever (§2, D6). Default off.
     """
     _LOGGER.info(f"Starting collection loop (interval: {interval}s)")
 
@@ -253,6 +265,15 @@ async def collection_loop(
                 if isinstance(collections_failed, int):
                     _health_state["collections_failed"] = collections_failed + 1
                 _health_state["last_error"] = "Collection failed - check logs for details"
+
+                if auth_failure_exit and collector.last_error_kind == "auth":
+                    _LOGGER.error(
+                        "Terminal authentication failure and --auth-failure-exit is set; "
+                        "exiting. Run: eero-exporter login <email-or-phone>"
+                    )
+                    raise SystemExit(AUTH_FAILURE_EXIT_CODE)
+        except SystemExit:
+            raise
         except Exception as e:
             _health_state["last_collection_success"] = False
             _health_state["session_valid"] = False
@@ -284,13 +305,27 @@ def run_server(config: ExporterConfig) -> None:
     Args:
         config: Exporter configuration
     """
-    # Create collector
+    # Create collector. `timeout` is intentionally NOT passed through: it is
+    # an HTTP-server-only setting (the v8 SDK client has no such kwarg).
+    # Tier flags (include_extended/rf/per_profile/per_device/per_eero/
+    # unverified) are defined on ExporterConfig but not yet accepted by the
+    # collector -- that wiring lands in a later commit (§4.2, §4.3).
     collector = EeroCollector(
         include_devices=config.include_devices,
         include_profiles=config.include_profiles,
+        include_premium=config.include_premium,
+        include_ethernet=config.include_ethernet,
+        include_thread=config.include_thread,
+        include_port_forwards=config.include_port_forwards,
+        include_reservations=config.include_reservations,
+        include_blacklist=config.include_blacklist,
+        include_diagnostics=config.include_diagnostics,
+        include_insights=config.include_insights,
         include_data_usage=config.include_data_usage,
-        timeout=config.timeout,
         cookie_file=str(config.session_file),
+        send_legacy_cookie=config.send_legacy_cookie,
+        accept_language=config.accept_language,
+        get_retries=config.get_retries,
     )
     # Set collection interval for caching metrics
     collector._collection_interval = config.collection_interval
@@ -323,7 +358,12 @@ def run_server(config: ExporterConfig) -> None:
     async def main() -> None:
         nonlocal loop
         loop = asyncio.get_running_loop()
-        await collection_loop(collector, config.collection_interval, stop_event)
+        await collection_loop(
+            collector,
+            config.collection_interval,
+            stop_event,
+            auth_failure_exit=config.auth_failure_exit,
+        )
 
     try:
         asyncio.run(main())

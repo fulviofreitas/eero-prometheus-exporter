@@ -512,8 +512,10 @@ class EeroCollector:
         include_diagnostics: bool = True,
         include_insights: bool = True,
         include_data_usage: bool = True,
-        timeout: int = 30,
         cookie_file: str | None = None,
+        send_legacy_cookie: bool = True,
+        accept_language: str = "en-US",
+        get_retries: int = 1,
     ) -> None:
         """Initialize the collector.
 
@@ -529,8 +531,14 @@ class EeroCollector:
             include_diagnostics: Whether to collect diagnostics metrics
             include_insights: Whether to collect insights metrics
             include_data_usage: Whether to collect data usage metrics
-            timeout: Request timeout in seconds
             cookie_file: Path to session/cookie file for authentication
+            send_legacy_cookie: Passed through to the adapter's ``EeroClient``
+                -- also send the legacy session cookie alongside
+                ``X-User-Token``.
+            accept_language: Passed through to the adapter's ``EeroClient``
+                as the ``X-Accept-Language`` header value.
+            get_retries: Passed through to the adapter's ``EeroClient`` --
+                bounded number of additional attempts for GET requests.
         """
         self._include_devices = include_devices
         self._include_profiles = include_profiles
@@ -543,22 +551,32 @@ class EeroCollector:
         self._include_diagnostics = include_diagnostics
         self._include_insights = include_insights
         self._include_data_usage = include_data_usage
-        self._timeout = timeout
         self._cookie_file = cookie_file
+        self._send_legacy_cookie = send_legacy_cookie
+        self._accept_language = accept_language
+        self._get_retries = get_retries
         self._last_collection_time: float = 0
         self._cached_data: dict[str, Any] = {}
         self._is_premium: bool = False
         self._networks_count: int = 0
         self._collection_interval: int = 60  # Default, can be overridden
+        # Set when the most recent collect() call ended in an EeroAuthError;
+        # None otherwise (success or a non-auth failure). Consumed by
+        # server.py to implement `--auth-failure-exit` (§2).
+        self.last_error_kind: str | None = None
 
     async def collect(self) -> bool:
         """Collect metrics from the eero API."""
         start_time = time.monotonic()
         success = False
+        self.last_error_kind = None
 
         try:
             async with EeroClient(
                 cookie_file=self._cookie_file,
+                send_legacy_cookie=self._send_legacy_cookie,
+                accept_language=self._accept_language,
+                get_retries=self._get_retries,
             ) as client:
                 networks = await client.get_networks()
                 EXPORTER_API_REQUESTS.labels(endpoint="networks", status="success").inc()
@@ -581,6 +599,7 @@ class EeroCollector:
 
         except EeroAuthError as e:
             _LOGGER.error(f"Authentication error: {e}")
+            self.last_error_kind = "auth"
             EXPORTER_SCRAPE_ERRORS.labels(error_type="auth").inc()
             EERO_UP.set(0)
             EXPORTER_SCRAPE_SUCCESS.set(0)
