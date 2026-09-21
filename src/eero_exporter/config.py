@@ -1,9 +1,6 @@
 """Configuration management for Eero Prometheus Exporter."""
 
-import json
 import logging
-import os
-import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -95,68 +92,3 @@ class ExporterConfig:
             yaml.dump(data, f, default_flow_style=False)
 
         _LOGGER.info(f"Configuration saved to {save_path}")
-
-
-@dataclass
-class SessionData:
-    """Session data for eero authentication."""
-
-    user_token: str | None = None
-    session_id: str | None = None
-    refresh_token: str | None = None
-    user_id: str | None = None
-    preferred_network_id: str | None = None
-    session_expiry: str | None = None
-
-    @property
-    def is_valid(self) -> bool:
-        """Check if the session is valid."""
-        return bool(self.user_token and self.session_id)
-
-    @classmethod
-    def from_file(cls, path: Path) -> "SessionData":
-        """Load session data from a JSON file."""
-        if not path.exists():
-            _LOGGER.debug(f"Session file not found at {path}")
-            return cls()
-
-        try:
-            with open(path) as f:
-                data = json.load(f)
-            return cls(**data)
-        except Exception as e:
-            _LOGGER.warning(f"Error loading session from {path}: {e}")
-            return cls()
-
-    def save(self, path: Path) -> None:
-        """Save session data to a JSON file."""
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        data = {
-            "user_token": self.user_token,
-            "session_id": self.session_id,
-            "refresh_token": self.refresh_token,
-            "user_id": self.user_id,
-            "preferred_network_id": self.preferred_network_id,
-            "session_expiry": self.session_expiry,
-        }
-
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2)
-
-        # Set restrictive permissions (owner read/write only)
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
-        _LOGGER.info(f"Session saved to {path}")
-
-    def clear(self, path: Path) -> None:
-        """Clear session data and delete the file."""
-        self.user_token = None
-        self.session_id = None
-        self.refresh_token = None
-        self.user_id = None
-        self.preferred_network_id = None
-        self.session_expiry = None
-
-        if path.exists():
-            path.unlink()
-            _LOGGER.info(f"Session file deleted: {path}")

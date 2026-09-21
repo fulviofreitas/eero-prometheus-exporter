@@ -8,77 +8,294 @@ As of eero-api v2.0.0, all responses are raw JSON in the format:
     {"meta": {...}, "data": {...}}
 
 This adapter handles data extraction from the envelope.
+
+This adapter exposes no write methods: every method here issues a GET
+against the eero cloud API, with the sole exception of ``login``/``verify``
+(and ``logout``, unused today), which are the only POSTs the exporter is
+permitted to issue. Nothing here calls a ``set_*``/``create_*``/``delete_*``/
+``update_*``/``run_*``/``pause_*``/``block_*``/``reboot_*``/``apply_*``/
+``request_support``/``discover_*`` method on the underlying SDK client.
+
+Upstream (eero-api 8.0.1) exception -> local exception mapping
+================================================================
+
+======================================  ==============================
+Upstream (``eero.exceptions``)          Local (this module)
+======================================  ==============================
+``EeroAuthenticationException``         ``EeroAuthError`` (sibling, not
+                                         a subclass of ``EeroAPIError``)
+``EeroNotFoundException``               ``EeroNotFoundError``
+``EeroAccessDeniedException``           ``EeroAccessDeniedError``
+``EeroPremiumRequiredException``        ``EeroPremiumRequiredError``
+``EeroFeatureUnavailableException``     ``EeroFeatureUnavailableError``
+``EeroRateLimitException``              ``EeroRateLimitError``
+``EeroValidationException``             ``EeroValidationError``
+``EeroNetworkException``                ``EeroTransportError``
+``EeroTimeoutException``                ``EeroTransportError``
+``EeroClientBlockedException``          ``EeroAPIError`` (generic; the
+                                         ``error_code``/``group`` still
+                                         identify it)
+``EeroAPIException`` (domain errors,    ``EeroAPIError``
+and anything else)
+``EeroException`` (any other subclass)  ``EeroAPIError`` (fallback)
+======================================  ==============================
+
+Every local exception in the ``EeroAPIError`` family carries ``status_code``,
+``error_code``, and ``group`` (from ``eero.classify_error_code``). The raw
+response envelope attached to the upstream exception is never read here and
+never reaches a local exception's message -- it can carry account data.
+Classification is always by exception class and ``error_code``, never by
+matching message text.
 """
 
 import logging
+from collections.abc import Callable
+from functools import wraps
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn, TypeVar
 
 from eero import EeroClient as BaseEeroClient  # type: ignore[import-untyped]
+from eero import classify_error_code  # type: ignore[import-untyped]
 from eero.exceptions import (  # type: ignore[import-untyped]
-    EeroAPIException,
+    EeroAccessDeniedException,
     EeroAuthenticationException,
+    EeroException,
+    EeroFeatureUnavailableException,
+    EeroNetworkException,
+    EeroNotFoundException,
+    EeroPremiumRequiredException,
+    EeroRateLimitException,
+    EeroTimeoutException,
+    EeroValidationException,
 )
 
+F = TypeVar("F", bound=Callable[..., Any])
 
-# Define local exception classes for stable API.
-# This decouples the adapter from upstream exception signature changes
-# (e.g., eero-api v1.3.0+ changed EeroAPIException to require status_code).
+
+# Local exception classes decouple the adapter (and the collector) from the
+# upstream eero-api exception hierarchy. Every member of the EeroAPIError
+# family carries status_code/error_code/group; EeroAuthError is a sibling of
+# EeroAPIError, not a subclass, since an authentication failure aborts a
+# network scrape differently from every other API failure (see collector.py).
 class EeroAPIError(Exception):
-    """API error raised by the eero adapter.
+    """Base for every non-auth API failure raised by the eero adapter.
 
-    This is a local exception class that provides a stable interface,
-    independent of upstream eero-api exception signatures.
+    Attributes:
+        status_code: The HTTP status code, when known.
+        error_code: The value of ``envelope["meta"]["error"]``, when known.
+        group: The catalogue group name (``eero.ErrorGroup``) that
+            ``error_code`` classifies into, or ``None`` when it does not
+            classify into any known group.
     """
 
-    pass
+    def __init__(
+        self,
+        message: str = "API call failed",
+        *,
+        status_code: int | None = None,
+        error_code: str | None = None,
+        group: str | None = None,
+    ) -> None:
+        """Initialize the error.
+
+        Args:
+            message: Human-readable message. Never includes the upstream
+                response envelope.
+            status_code: The HTTP status code, when known.
+            error_code: The value of ``envelope["meta"]["error"]``, when known.
+            group: The catalogue group name the error_code classifies into.
+        """
+        super().__init__(message)
+        self.status_code = status_code
+        self.error_code = error_code
+        self.group = group
 
 
 class EeroAuthError(Exception):
     """Authentication error raised by the eero adapter.
 
-    This is a local exception class that provides a stable interface,
-    independent of upstream eero-api exception signatures.
+    A sibling of :class:`EeroAPIError`, not a subclass: an authentication
+    failure aborts the whole network scrape rather than being treated as a
+    per-endpoint failure like the rest of the ``EeroAPIError`` family.
+
+    Attributes:
+        status_code: The HTTP status code, when known (the upstream SDK does
+            not currently attach one to authentication failures).
+        error_code: The value of ``envelope["meta"]["error"]``, when known.
+        group: The catalogue group name ``error_code`` classifies into.
     """
 
-    pass
+    def __init__(
+        self,
+        message: str = "Authentication failed",
+        *,
+        status_code: int | None = None,
+        error_code: str | None = None,
+        group: str | None = None,
+    ) -> None:
+        """Initialize the error.
+
+        Args:
+            message: Human-readable message. Never includes the upstream
+                response envelope.
+            status_code: The HTTP status code, when known.
+            error_code: The value of ``envelope["meta"]["error"]``, when known.
+            group: The catalogue group name the error_code classifies into.
+        """
+        super().__init__(message)
+        self.status_code = status_code
+        self.error_code = error_code
+        self.group = group
 
 
-# Keep references to upstream exceptions for catching in try/except blocks
-_UpstreamAPIException = EeroAPIException
-_UpstreamAuthException = EeroAuthenticationException
+class EeroNotFoundError(EeroAPIError):
+    """A requested resource does not exist (HTTP 404)."""
+
+
+class EeroAccessDeniedError(EeroAPIError):
+    """The caller is authenticated but not permitted to perform this read (HTTP 403)."""
+
+
+class EeroPremiumRequiredError(EeroAPIError):
+    """The requested feature requires an Eero Plus subscription. An expected, non-error state."""
+
+
+class EeroFeatureUnavailableError(EeroAPIError):
+    """The requested feature is not available on this device/network. An expected state."""
+
+
+class EeroRateLimitError(EeroAPIError):
+    """The API rate-limited this request (HTTP 429, or ``error.rate.limit`` on any status)."""
+
+
+class EeroTransportError(EeroAPIError):
+    """A network or timeout failure occurred before any response was classified."""
+
+
+class EeroValidationError(EeroAPIError):
+    """A request parameter failed validation, locally (before any request) or via the API."""
+
 
 __all__ = [
     "EeroClient",
     "EeroAPIError",
     "EeroAuthError",
+    "EeroNotFoundError",
+    "EeroAccessDeniedError",
+    "EeroPremiumRequiredError",
+    "EeroFeatureUnavailableError",
+    "EeroRateLimitError",
+    "EeroTransportError",
+    "EeroValidationError",
     "_parse_network_status",
 ]
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def _wrap_api_call(message: str = "API call failed") -> Any:
-    """Decorator to wrap API calls and convert upstream exceptions to local ones.
+def _group_value(error_code: str | None) -> str | None:
+    """Classify an ``error_code`` into its catalogue group name.
 
-    This ensures that any EeroAPIException or EeroAuthenticationException raised
-    by the eero-api library is converted to our local EeroAPIError or EeroAuthError.
+    Args:
+        error_code: The value of ``envelope["meta"]["error"]``, or ``None``.
+
+    Returns:
+        The ``eero.ErrorGroup`` value the error code classifies into, or
+        ``None`` when ``error_code`` is ``None`` or unrecognised.
     """
-    from collections.abc import Callable
-    from functools import wraps
-    from typing import TypeVar
+    group = classify_error_code(error_code)
+    return group.value if group is not None else None
 
-    F = TypeVar("F", bound=Callable[..., Any])
+
+def _reraise_as_local(exc: EeroException) -> NoReturn:
+    """Classify an upstream ``EeroException`` and raise the local equivalent.
+
+    The single place classification happens for this adapter -- both
+    ``_wrap_api_call`` and ``EeroClient.__aenter__`` route every upstream
+    exception through this function, so the mapping table in the module
+    docstring has exactly one implementation. Classification is by
+    exception class only, most specific first; message text is never
+    matched. The upstream response envelope (``exc.envelope``) is
+    intentionally never read here -- it can carry account data -- so it
+    never reaches a local exception's message.
+
+    Args:
+        exc: The upstream exception to classify.
+
+    Raises:
+        EeroAuthError: If ``exc`` is an ``EeroAuthenticationException``.
+        EeroNotFoundError: If ``exc`` is an ``EeroNotFoundException``.
+        EeroAccessDeniedError: If ``exc`` is an ``EeroAccessDeniedException``.
+        EeroPremiumRequiredError: If ``exc`` is an ``EeroPremiumRequiredException``.
+        EeroFeatureUnavailableError: If ``exc`` is an ``EeroFeatureUnavailableException``.
+        EeroRateLimitError: If ``exc`` is an ``EeroRateLimitException``.
+        EeroValidationError: If ``exc`` is an ``EeroValidationException``.
+        EeroTransportError: If ``exc`` is an ``EeroNetworkException`` or
+            ``EeroTimeoutException``.
+        EeroAPIError: For every other ``EeroException`` (including
+            ``EeroClientBlockedException``, domain errors carried as a
+            generic ``EeroAPIException``, and any unrecognised subclass).
+    """
+    message = str(exc)
+    error_code = exc.error_code
+    group = _group_value(error_code)
+    status_code = getattr(exc, "status_code", None)
+
+    if isinstance(exc, EeroAuthenticationException):
+        raise EeroAuthError(
+            message, status_code=status_code, error_code=error_code, group=group
+        ) from exc
+    if isinstance(exc, EeroNotFoundException):
+        raise EeroNotFoundError(
+            message, status_code=status_code, error_code=error_code, group=group
+        ) from exc
+    if isinstance(exc, EeroAccessDeniedException):
+        raise EeroAccessDeniedError(
+            message, status_code=status_code, error_code=error_code, group=group
+        ) from exc
+    if isinstance(exc, EeroPremiumRequiredException):
+        raise EeroPremiumRequiredError(
+            message, status_code=status_code, error_code=error_code, group=group
+        ) from exc
+    if isinstance(exc, EeroFeatureUnavailableException):
+        raise EeroFeatureUnavailableError(
+            message, status_code=status_code, error_code=error_code, group=group
+        ) from exc
+    if isinstance(exc, EeroRateLimitException):
+        raise EeroRateLimitError(
+            message, status_code=status_code, error_code=error_code, group=group
+        ) from exc
+    if isinstance(exc, EeroValidationException):
+        raise EeroValidationError(
+            message, status_code=status_code, error_code=error_code, group=group
+        ) from exc
+    if isinstance(exc, (EeroNetworkException, EeroTimeoutException)):
+        raise EeroTransportError(
+            message, status_code=status_code, error_code=error_code, group=group
+        ) from exc
+    # EeroClientBlockedException, every recognised "domain" EeroAPIException,
+    # and any other EeroException subclass not enumerated above: a generic
+    # API error, keeping status_code/error_code/group for callers that want
+    # to branch on them.
+    raise EeroAPIError(
+        message, status_code=status_code, error_code=error_code, group=group
+    ) from exc
+
+
+def _wrap_api_call() -> Callable[[F], F]:
+    """Decorator that maps every upstream ``EeroException`` to a local one.
+
+    See :func:`_reraise_as_local` for the classification logic and the
+    module docstring for the full mapping table.
+    """
 
     def decorator(func: F) -> F:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 return await func(*args, **kwargs)
-            except _UpstreamAuthException as e:
-                raise EeroAuthError(str(e)) from e
-            except _UpstreamAPIException as e:
-                raise EeroAPIError(str(e)) from e
+            except EeroException as e:
+                _reraise_as_local(e)
 
         return wrapper  # type: ignore[return-value]
 
@@ -93,7 +310,7 @@ DEFAULT_SESSION_FILE = Path.home() / ".config" / "eero-exporter" / "session.json
 def _extract_data(raw_response: Any) -> Any:
     """Extract data from raw API response envelope.
 
-    eero-api v2.0.0 returns raw responses in format: {"meta": {...}, "data": {...}}
+    eero-api v2.0.0+ returns raw responses in format: {"meta": {...}, "data": {...}}
 
     Args:
         raw_response: Raw response from eero-api
@@ -209,42 +426,57 @@ class EeroClient:
     but delegates to the eero-api library internally. Responses are
     extracted from the raw API envelope format.
 
-    eero-api v2.0.0 returns raw responses in format: {"meta": {...}, "data": {...}}
+    eero-api v2.0.0+ returns raw responses in format: {"meta": {...}, "data": {...}}
 
     The eero-api library handles authentication via:
     - System keyring (default, for desktop use)
     - Cookie file (for Docker/headless environments)
 
     For Docker deployments, use cookie_file parameter to persist credentials.
+
+    This adapter exposes no write methods -- see the module docstring.
     """
 
     def __init__(
         self,
-        session_id: str | None = None,
-        user_token: str | None = None,
-        timeout: int = 30,
         cookie_file: str | None = None,
         use_keyring: bool = False,
+        *,
+        send_legacy_cookie: bool = True,
+        accept_language: str = "en-US",
+        get_retries: int = 0,
     ) -> None:
         """Initialize the eero client adapter.
 
         Args:
-            session_id: Ignored (kept for backward compatibility)
-            user_token: Ignored (kept for backward compatibility)
-            timeout: Request timeout in seconds (currently unused)
             cookie_file: Path to cookie file for credential storage
             use_keyring: Whether to use system keyring (default: False for Docker)
+            send_legacy_cookie: When True (default), also send the session
+                token as the legacy ``s=<token>`` cookie, per request.
+                Forwarded to the SDK unchanged.
+            accept_language: Value sent as the ``X-Accept-Language`` header
+                on every request. Forwarded to the SDK unchanged.
+            get_retries: Number of additional attempts the SDK makes for GET
+                requests that fail with a transport error or a 5xx response.
+                0 (default) disables retrying. Never applies to writes.
         """
-        # Note: session_id and user_token are ignored - eero-api manages auth internally
-        self._timeout = timeout
         self._cookie_file = cookie_file or str(DEFAULT_SESSION_FILE)
         self._use_keyring = use_keyring
+        self._send_legacy_cookie = send_legacy_cookie
+        self._accept_language = accept_language
+        self._get_retries = get_retries
         self._client: BaseEeroClient | None = None
         self._preferred_network_id: str | None = None
 
     @property
     def is_authenticated(self) -> bool:
-        """Check if the client is authenticated."""
+        """Report whether a session token is present.
+
+        There is no client-side session expiry in eero-api 8 -- the server
+        is the sole authority on session validity, signalled via 401
+        responses. This property only reports whether a token is present,
+        not whether it is still valid.
+        """
         if self._client:
             return bool(self._client.is_authenticated)
         return False
@@ -259,13 +491,14 @@ class EeroClient:
         self._client = BaseEeroClient(
             cookie_file=self._cookie_file,
             use_keyring=self._use_keyring,
+            send_legacy_cookie=self._send_legacy_cookie,
+            accept_language=self._accept_language,
+            get_retries=self._get_retries,
         )
         try:
             await self._client.__aenter__()
-        except _UpstreamAuthException as e:
-            raise EeroAuthError(str(e)) from e
-        except _UpstreamAPIException as e:
-            raise EeroAPIError(str(e)) from e
+        except EeroException as e:
+            _reraise_as_local(e)
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -277,15 +510,22 @@ class EeroClient:
     # Authentication
     # =========================================================================
 
-    @_wrap_api_call("Login failed")
-    async def login(self, identifier: str) -> str:
+    @_wrap_api_call()
+    async def login(self, identifier: str) -> None:
         """Start login flow by requesting a verification code.
 
         Args:
-            identifier: Email address or phone number
+            identifier: Email address or phone number.
 
         Returns:
-            A placeholder token (actual auth is managed by eero-api)
+            None. The verification code is delivered out of band
+            (email/SMS); there is nothing meaningful to return once the
+            request succeeds.
+
+        Raises:
+            EeroAuthError: If the login request is rejected -- including a
+                server-rejected identifier, which eero-api 8.0.1 re-wraps as
+                an authentication failure.
         """
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -294,18 +534,20 @@ class EeroClient:
         if not success:
             raise EeroAuthError("Login request failed")
 
-        # Return a placeholder - actual token management is internal to eero-api
-        return "pending_verification"
-
-    @_wrap_api_call("Verification failed")
-    async def verify(self, code: str) -> dict[str, Any]:
+    @_wrap_api_call()
+    async def verify(self, code: str) -> str | None:
         """Verify login with the code sent to the user.
 
         Args:
-            code: Verification code from email/SMS
+            code: Verification code from email/SMS.
 
         Returns:
-            Session data (placeholder for compatibility)
+            The account's preferred network ID once discovered, or ``None``
+            when no network could be resolved (e.g. a brand-new account
+            with no networks yet).
+
+        Raises:
+            EeroAuthError: If verification fails.
         """
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
@@ -314,26 +556,24 @@ class EeroClient:
         if not success:
             raise EeroAuthError("Verification failed")
 
-        # Get preferred network ID from raw response
         try:
             raw_networks = await self._client.get_networks()
             networks = _extract_list(raw_networks, "networks")
             if networks:
                 self._preferred_network_id = _extract_network_id(networks[0])
-        except Exception:
-            pass
+        except EeroException as e:
+            # Verification itself already succeeded; a follow-up failure to
+            # discover the preferred network is not fatal here -- the caller
+            # can look it up again later via get_networks().
+            _LOGGER.debug("Could not resolve preferred network after verify: %s", e)
 
-        return {
-            "session_id": "managed_by_eero_client",
-            "user_token": "managed_by_eero_client",
-            "preferred_network_id": self._preferred_network_id,
-        }
+        return self._preferred_network_id
 
     # =========================================================================
     # Account & Networks
     # =========================================================================
 
-    @_wrap_api_call("Failed to get account")
+    @_wrap_api_call()
     async def get_account(self) -> dict[str, Any]:
         """Get account information."""
         if not self._client:
@@ -342,7 +582,7 @@ class EeroClient:
         raw_response = await self._client.get_account()
         return dict(_extract_data(raw_response))
 
-    @_wrap_api_call("Failed to get networks")
+    @_wrap_api_call()
     async def get_networks(self) -> list[dict[str, Any]]:
         """Get list of networks."""
         if not self._client:
@@ -357,7 +597,7 @@ class EeroClient:
 
         return result
 
-    @_wrap_api_call("Failed to get network")
+    @_wrap_api_call()
     async def get_network(self, network_id: str) -> dict[str, Any]:
         """Get detailed network information."""
         if not self._client:
@@ -370,7 +610,7 @@ class EeroClient:
     # Eero Devices
     # =========================================================================
 
-    @_wrap_api_call("Failed to get eeros")
+    @_wrap_api_call()
     async def get_eeros(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of eero devices in a network."""
         if not self._client:
@@ -383,7 +623,7 @@ class EeroClient:
     # Client Devices
     # =========================================================================
 
-    @_wrap_api_call("Failed to get devices")
+    @_wrap_api_call()
     async def get_devices(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of client devices in a network."""
         if not self._client:
@@ -396,7 +636,7 @@ class EeroClient:
     # Profiles
     # =========================================================================
 
-    @_wrap_api_call("Failed to get profiles")
+    @_wrap_api_call()
     async def get_profiles(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of profiles in a network."""
         if not self._client:
@@ -409,7 +649,7 @@ class EeroClient:
     # Speed Test
     # =========================================================================
 
-    @_wrap_api_call("Failed to get speed test")
+    @_wrap_api_call()
     async def get_speed_test(self, network_id: str) -> dict[str, Any] | None:
         """Get the latest speed test results.
 
@@ -432,7 +672,7 @@ class EeroClient:
     # Transfer Stats
     # =========================================================================
 
-    @_wrap_api_call("Failed to get transfer stats")
+    @_wrap_api_call()
     async def get_transfer_stats(
         self, network_id: str, device_id: str | None = None
     ) -> dict[str, Any]:
@@ -447,24 +687,28 @@ class EeroClient:
     # Data Usage
     # =========================================================================
 
-    @_wrap_api_call("Failed to get data usage")
+    @_wrap_api_call()
     async def get_data_usage(
         self,
         network_id: str,
-        payload: dict[str, Any],
-        resource: str | None = None,
+        *,
+        start: str,
+        end: str,
+        cadence: str,
+        timezone: str | None = None,
     ) -> dict[str, Any]:
-        """Get data usage for a network, its eero nodes, or its client devices.
+        """Get network-level data usage.
 
-        Delegates to the eero-api ``get_data_usage`` facade method, available
-        since eero-api 4.2.0. The Eero cloud API expects the period request
-        fields (start, end, cadence, timezone) as a JSON body on a GET request.
+        The API requires ``start``, ``end``, and ``cadence`` on this
+        endpoint; a ``cadence`` the API rejects surfaces as
+        ``EeroValidationError``.
 
         Args:
             network_id: Network identifier.
-            payload: Period request fields sent as the GET request body.
-            resource: Optional sub-resource, ``"devices"`` or ``"eeros"``.
-                Omit for network-level totals.
+            start: Window start, ISO 8601 timestamp (e.g. ``"2026-07-21T00:00:00Z"``).
+            end: Window end, ISO 8601 timestamp.
+            cadence: Bucket size for the returned series, ``"daily"`` or ``"hourly"``.
+            timezone: Optional IANA timezone name applied to the bucketing.
 
         Returns:
             Extracted data usage payload from the response envelope.
@@ -472,14 +716,183 @@ class EeroClient:
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        raw_response = await self._client.get_data_usage(network_id, payload, resource)
+        raw_response = await self._client.get_data_usage(
+            network_id, start=start, end=end, cadence=cadence, timezone=timezone
+        )
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_devices_data_usage(
+        self,
+        network_id: str,
+        *,
+        start: str,
+        end: str,
+        cadence: str | None = None,
+        timezone: str | None = None,
+        profile_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Get per-device data usage.
+
+        Args:
+            network_id: Network identifier.
+            start: Window start, ISO 8601 timestamp.
+            end: Window end, ISO 8601 timestamp.
+            cadence: Optional bucket size, ``"daily"`` or ``"hourly"``.
+                Omitted from the request when ``None``.
+            timezone: Optional IANA timezone name.
+            profile_id: Optional profile ID to scope results to a single profile.
+
+        Returns:
+            Extracted data usage payload from the response envelope.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_devices_data_usage(
+            network_id,
+            start=start,
+            end=end,
+            cadence=cadence,
+            timezone=timezone,
+            profile_id=profile_id,
+        )
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_eeros_data_usage_summary(
+        self,
+        network_id: str,
+        *,
+        start: str,
+        end: str,
+        cadence: str,
+        timezone: str | None = None,
+    ) -> dict[str, Any]:
+        """Get a summary of data usage across all eero devices.
+
+        Args:
+            network_id: Network identifier.
+            start: Window start, ISO 8601 timestamp.
+            end: Window end, ISO 8601 timestamp.
+            cadence: Bucket size for the returned series, ``"daily"`` or ``"hourly"``.
+            timezone: Optional IANA timezone name.
+
+        Returns:
+            Extracted data usage payload from the response envelope.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_eeros_data_usage_summary(
+            network_id, start=start, end=end, cadence=cadence, timezone=timezone
+        )
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_eero_data_usage(
+        self,
+        network_id: str,
+        eero_id: str,
+        *,
+        start: str,
+        end: str,
+        cadence: str,
+        timezone: str | None = None,
+    ) -> dict[str, Any]:
+        """Get data usage for a single eero device.
+
+        Fallback for when ``get_eeros_data_usage_summary`` is unavailable or
+        insufficient -- queries one eero at a time.
+
+        Args:
+            network_id: Network identifier.
+            eero_id: ID of the eero device to query.
+            start: Window start, ISO 8601 timestamp.
+            end: Window end, ISO 8601 timestamp.
+            cadence: Bucket size for the returned series, ``"daily"`` or ``"hourly"``.
+            timezone: Optional IANA timezone name.
+
+        Returns:
+            Extracted data usage payload from the response envelope.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_eero_data_usage(
+            eero_id, network_id, start=start, end=end, cadence=cadence, timezone=timezone
+        )
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_device_data_usage(
+        self,
+        network_id: str,
+        device_mac: str,
+        *,
+        start: str,
+        end: str,
+        cadence: str,
+        timezone: str | None = None,
+    ) -> dict[str, Any]:
+        """Get data usage for a single device.
+
+        Args:
+            network_id: Network identifier.
+            device_mac: MAC address of the device to query.
+            start: Window start, ISO 8601 timestamp.
+            end: Window end, ISO 8601 timestamp.
+            cadence: Bucket size for the returned series, ``"daily"`` or ``"hourly"``.
+            timezone: Optional IANA timezone name.
+
+        Returns:
+            Extracted data usage payload from the response envelope.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_device_data_usage(
+            device_mac, network_id, start=start, end=end, cadence=cadence, timezone=timezone
+        )
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_profile_data_usage(
+        self,
+        network_id: str,
+        profile_id: str,
+        *,
+        start: str,
+        end: str,
+        cadence: str,
+        timezone: str | None = None,
+    ) -> dict[str, Any]:
+        """Get data usage for a single profile.
+
+        Args:
+            network_id: Network identifier.
+            profile_id: ID of the profile to query.
+            start: Window start, ISO 8601 timestamp.
+            end: Window end, ISO 8601 timestamp.
+            cadence: Bucket size for the returned series, ``"daily"`` or ``"hourly"``.
+            timezone: Optional IANA timezone name.
+
+        Returns:
+            Extracted data usage payload from the response envelope.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_profile_data_usage(
+            profile_id, network_id, start=start, end=end, cadence=cadence, timezone=timezone
+        )
         return dict(_extract_data(raw_response))
 
     # =========================================================================
     # SQM Settings
     # =========================================================================
 
-    @_wrap_api_call("Failed to get SQM settings")
+    @_wrap_api_call()
     async def get_sqm_settings(self, network_id: str) -> dict[str, Any]:
         """Get SQM (Smart Queue Management) settings."""
         if not self._client:
@@ -492,7 +905,7 @@ class EeroClient:
     # Security Settings
     # =========================================================================
 
-    @_wrap_api_call("Failed to get security settings")
+    @_wrap_api_call()
     async def get_security_settings(self, network_id: str) -> dict[str, Any]:
         """Get security settings for the network."""
         if not self._client:
@@ -505,7 +918,7 @@ class EeroClient:
     # Premium Features (Eero Plus)
     # =========================================================================
 
-    @_wrap_api_call("Failed to get premium status")
+    @_wrap_api_call()
     async def get_premium_status(self, network_id: str) -> dict[str, Any]:
         """Get Eero Plus/Secure subscription status."""
         if not self._client:
@@ -514,7 +927,7 @@ class EeroClient:
         raw_response = await self._client.get_premium_status(network_id)
         return dict(_extract_data(raw_response))
 
-    @_wrap_api_call("Failed to check premium status")
+    @_wrap_api_call()
     async def is_premium(self, network_id: str) -> bool:
         """Check if the network has an active Eero Plus subscription."""
         if not self._client:
@@ -540,52 +953,10 @@ class EeroClient:
         return bool(raw_response)
 
     # =========================================================================
-    # Backup Network (Eero Plus)
-    # =========================================================================
-
-    @_wrap_api_call("Failed to get backup network")
-    async def get_backup_network(self, network_id: str) -> dict[str, Any]:
-        """Get backup network configuration (Eero Plus feature)."""
-        if not self._client:
-            raise EeroAPIError("Client not initialized. Use async context manager.")
-
-        raw_response = await self._client.get_backup_network(network_id)
-        return dict(_extract_data(raw_response))
-
-    @_wrap_api_call("Failed to get backup status")
-    async def get_backup_status(self, network_id: str) -> dict[str, Any]:
-        """Get current backup network status (Eero Plus feature)."""
-        if not self._client:
-            raise EeroAPIError("Client not initialized. Use async context manager.")
-
-        raw_response = await self._client.get_backup_status(network_id)
-        return dict(_extract_data(raw_response))
-
-    @_wrap_api_call("Failed to check backup status")
-    async def is_using_backup(self, network_id: str) -> bool:
-        """Check if the network is currently using backup connection."""
-        if not self._client:
-            raise EeroAPIError("Client not initialized. Use async context manager.")
-
-        # get_backup_status returns backup status data
-        raw_response = await self._client.get_backup_status(network_id)
-        if isinstance(raw_response, bool):
-            return raw_response
-        if isinstance(raw_response, dict):
-            data = _extract_data(raw_response)
-            # Check for active or using_backup fields
-            if data.get("active"):
-                return True
-            if data.get("using_backup"):
-                return True
-            return False
-        return bool(raw_response)
-
-    # =========================================================================
     # Thread
     # =========================================================================
 
-    @_wrap_api_call("Failed to get thread data")
+    @_wrap_api_call()
     async def get_thread(self, network_id: str) -> dict[str, Any]:
         """Get Thread network information."""
         if not self._client:
@@ -598,7 +969,7 @@ class EeroClient:
     # Port Forwards
     # =========================================================================
 
-    @_wrap_api_call("Failed to get port forwards")
+    @_wrap_api_call()
     async def get_forwards(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of port forwarding rules."""
         if not self._client:
@@ -611,7 +982,7 @@ class EeroClient:
     # DHCP Reservations
     # =========================================================================
 
-    @_wrap_api_call("Failed to get DHCP reservations")
+    @_wrap_api_call()
     async def get_reservations(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of DHCP reservations."""
         if not self._client:
@@ -624,7 +995,7 @@ class EeroClient:
     # Blacklist
     # =========================================================================
 
-    @_wrap_api_call("Failed to get blacklist")
+    @_wrap_api_call()
     async def get_blacklist(self, network_id: str) -> list[dict[str, Any]]:
         """Get list of blacklisted devices."""
         if not self._client:
@@ -637,7 +1008,7 @@ class EeroClient:
     # Updates
     # =========================================================================
 
-    @_wrap_api_call("Failed to get updates")
+    @_wrap_api_call()
     async def get_updates(self, network_id: str) -> dict[str, Any]:
         """Get firmware update information."""
         if not self._client:
@@ -650,7 +1021,7 @@ class EeroClient:
     # Insights
     # =========================================================================
 
-    @_wrap_api_call("Failed to get insights")
+    @_wrap_api_call()
     async def get_insights(
         self,
         network_id: str,
@@ -668,7 +1039,8 @@ class EeroClient:
             end: Window end as an ISO 8601 UTC timestamp.
             insight_type: One of ``"adblock"``, ``"blocked"``, or ``"inspected"``.
             cadence: Bucket size — ``"hourly"``, ``"daily"``, or ``"weekly"``.
-                Defaults to ``"daily"``.
+                Defaults to ``"daily"``. A value the API rejects surfaces as
+                ``EeroValidationError`` before any request is made.
 
         Returns:
             Extracted data payload from the response envelope.
@@ -689,7 +1061,7 @@ class EeroClient:
     # Diagnostics
     # =========================================================================
 
-    @_wrap_api_call("Failed to get diagnostics")
+    @_wrap_api_call()
     async def get_diagnostics(self, network_id: str) -> dict[str, Any]:
         """Get network diagnostics information."""
         if not self._client:

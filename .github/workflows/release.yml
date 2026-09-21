@@ -57,6 +57,7 @@ jobs:
     outputs:
       released: ${{ steps.release.outputs.released }}
       version: ${{ steps.release.outputs.version }}
+      new_release_published: ${{ steps.release.outputs.new_release_published }}
 
     steps:
       - name: 🔑 Generate GitHub App token
@@ -79,6 +80,21 @@ jobs:
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           dry-run: ${{ github.event.inputs.dry_run || 'false' }}
+
+      - name: 📤 Create release-published artifact (for docker-publish gate)
+        if: steps.release.outputs.released == 'true' && github.event.inputs.dry_run != 'true'
+        run: |
+          echo "released" > /tmp/release-published.txt
+          echo "Version: ${{ steps.release.outputs.version }}" >> /tmp/release-published.txt
+
+      - name: 📦 Upload release artifact
+        if: steps.release.outputs.released == 'true' && github.event.inputs.dry_run != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-published
+          path: /tmp/release-published.txt
+          retention-days: 1
+          overwrite: true
 
   # ============================================================================
   # 📦 Publish to TestPyPI (validation step)

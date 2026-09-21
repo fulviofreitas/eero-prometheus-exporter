@@ -9,10 +9,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .eero_adapter import EeroAPIError, EeroAuthError, EeroClient, _parse_network_status
 from .metrics import (
     ACCOUNT_NETWORKS_COUNT,
-    BACKUP_ACTIVE,
-    BACKUP_CONNECTED,
-    BACKUP_ENABLED,
-    BACKUP_SIGNAL_STRENGTH,
     DATA_USAGE_ACTIVE_CLIENTS,
     DATA_USAGE_DOWNLOAD_BYTES,
     DATA_USAGE_UPLOAD_BYTES,
@@ -562,7 +558,6 @@ class EeroCollector:
 
         try:
             async with EeroClient(
-                timeout=self._timeout,
                 cookie_file=self._cookie_file,
             ) as client:
                 networks = await client.get_networks()
@@ -1490,7 +1485,7 @@ class EeroCollector:
             period_label, cadence, payload = _data_usage_period_payload(period, timezone)
 
             try:
-                usage = await client.get_data_usage(network_id, payload)
+                usage = await client.get_data_usage(network_id, **payload)
                 EXPORTER_API_REQUESTS.labels(
                     endpoint=f"data_usage_{period_label}", status="success"
                 ).inc()
@@ -1505,7 +1500,7 @@ class EeroCollector:
                 continue
 
             try:
-                device_usage = await client.get_data_usage(network_id, payload, "devices")
+                device_usage = await client.get_devices_data_usage(network_id, **payload)
                 EXPORTER_API_REQUESTS.labels(
                     endpoint=f"data_usage_devices_{period_label}", status="success"
                 ).inc()
@@ -1517,7 +1512,7 @@ class EeroCollector:
                 ).inc()
 
             try:
-                eero_usage = await client.get_data_usage(network_id, payload, "eeros")
+                eero_usage = await client.get_eeros_data_usage_summary(network_id, **payload)
                 EXPORTER_API_REQUESTS.labels(
                     endpoint=f"data_usage_eeros_{period_label}", status="success"
                 ).inc()
@@ -1925,7 +1920,7 @@ class EeroCollector:
         }
 
         try:
-            usage = await client.get_data_usage(network_id, payload)
+            usage = await client.get_data_usage(network_id, **payload)
             EXPORTER_API_REQUESTS.labels(endpoint="current_usage", status="success").inc()
 
             series_list = usage.get("series", [])
@@ -1959,7 +1954,7 @@ class EeroCollector:
             return
 
         try:
-            device_usage = await client.get_data_usage(network_id, payload, "devices")
+            device_usage = await client.get_devices_data_usage(network_id, **payload)
             EXPORTER_API_REQUESTS.labels(endpoint="current_usage_devices", status="success").inc()
 
             values = device_usage.get("values", [])
@@ -2005,39 +2000,16 @@ class EeroCollector:
             EXPORTER_API_REQUESTS.labels(endpoint="current_usage_devices", status="error").inc()
 
     async def _collect_backup_metrics(self, client: EeroClient, network_id: str) -> None:
-        """Collect backup network metrics (Eero Plus feature)."""
-        try:
-            backup_config = await client.get_backup_network(network_id)
-            EXPORTER_API_REQUESTS.labels(endpoint="backup", status="success").inc()
+        """Collect backup network metrics (Eero Plus feature).
 
-            enabled = backup_config.get("enabled")
-            if enabled is not None:
-                BACKUP_ENABLED.labels(network_id=network_id).set(1 if enabled else 0)
-
-        except EeroAPIError as e:
-            _LOGGER.debug(f"Failed to get backup config: {e}")
-            EXPORTER_API_REQUESTS.labels(endpoint="backup", status="error").inc()
-            return
-
-        try:
-            backup_status = await client.get_backup_status(network_id)
-            EXPORTER_API_REQUESTS.labels(endpoint="backup_status", status="success").inc()
-
-            active = backup_status.get("active") or backup_status.get("using_backup")
-            if active is not None:
-                BACKUP_ACTIVE.labels(network_id=network_id).set(1 if active else 0)
-
-            connected = backup_status.get("connected")
-            if connected is not None:
-                BACKUP_CONNECTED.labels(network_id=network_id).set(1 if connected else 0)
-
-            signal = backup_status.get("signal_strength")
-            if signal is not None:
-                BACKUP_SIGNAL_STRENGTH.labels(network_id=network_id).set(signal)
-
-        except EeroAPIError as e:
-            _LOGGER.debug(f"Failed to get backup status: {e}")
-            EXPORTER_API_REQUESTS.labels(endpoint="backup_status", status="error").inc()
+        The eero-api v8 SDK removed ``get_backup_network``/``get_backup_status``
+        (see the v8 migration plan §1.1) with no replacement read of the same
+        shape; this sub-collector is a placeholder no-op until COLLECTOR-SME
+        re-implements backup metrics against the extended-tier reads
+        (``get_backup_internet``, ``list_backup_access_points``) in a later
+        commit.
+        """
+        return
 
     async def _collect_thread_metrics(self, client: EeroClient, network_id: str) -> None:
         """Collect Thread network metrics."""
