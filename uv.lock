@@ -334,7 +334,7 @@ wheels = [
 
 [[package]]
 name = "eero-prometheus-exporter"
-version = "3.18.9"
+version = "3.19.1"
 source = { editable = "." }
 dependencies = [
     { name = "eero-api" },
@@ -356,7 +356,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "eero-api", specifier = ">=6.2.0" },
+    { name = "eero-api", specifier = ">=6.2.0,<7.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "prometheus-client", specifier = ">=0.19.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
