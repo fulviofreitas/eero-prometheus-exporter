@@ -327,12 +327,17 @@ ENUM_KEYS = frozenset(
     }
 )
 
-#: Exact key names that are never exported in any form.
+#: Exact key names that are never exported in any form. Matching is done on a
+#: snake_case-normalised, separator-stripped form (see :func:`_normalise_key`)
+#: so that camelCase surface forms (``segmentId``) and flat lower forms
+#: (``segmentid``) both hit the same rule as their snake_case spelling.
 _NEVER_EXPORT_EXACT = frozenset(
     {
+        "active_operational_dataset",
         "bssid",
         "bssids",
         "bssids_with_bands",
+        "chassisid",
         "domain",
         "domains",
         "email",
@@ -352,21 +357,29 @@ _NEVER_EXPORT_EXACT = frozenset(
         "longitude",
         "mac",
         "macs",
+        "mask",
         "name",
         "nickname",
+        "owner",
         "passphrase",
         "password",
         "phone",
+        "portid",
+        "prefix",
         "psk",
         "resources",
+        "router",
         "secret",
+        "segmentid",
         "serial",
         "ssid",
         "ssids",
         "subdomain",
+        "systemdescription",
         "token",
         "url",
         "urls",
+        "uuid",
     }
 )
 
@@ -408,14 +421,17 @@ _NEVER_EXPORT_SUFFIXES = (
     "_names",
     "_url",
     "_urls",
+    "etag",
 )
 
 #: The only child of a ``geo_ip`` object that may be described at all.
 _GEO_IP_ALLOWED = frozenset({"isp"})
 
 #: Container keys that would otherwise match a never-export rule but are worth
-#: descending into, because a stricter per-child rule applies below them.
-_TRAVERSE_KEYS = frozenset({"geo_ip"})
+#: descending into, because a stricter per-child rule applies below them (or,
+#: for ``name_servers``, because its only child of interest -- ``mode`` -- is
+#: not itself sensitive).
+_TRAVERSE_KEYS = frozenset({"geo_ip", "name_servers"})
 
 _ENUM_VALUE_RE = re.compile(r"^[A-Za-z0-9_./-]{1,32}$")
 
@@ -441,13 +457,31 @@ _SAFE_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\- ]{0,48}$")
 
 _REDACTED = "<redacted>"
 
+_CAMEL_BOUNDARY_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]")
+
+
+def _normalise_key(key: str) -> str:
+    """Fold camelCase and snake_case spellings of a key onto one form.
+
+    ``segmentId``, ``segment_id`` and ``segmentid`` (an already-flat key, as
+    LLDP-style payloads use) all normalise to ``segmentid`` so a single
+    exact-match entry covers every surface form the API uses.
+    """
+    text = _CAMEL_BOUNDARY_RE.sub("_", str(key)).lower()
+    return _NON_ALNUM_RE.sub("", text)
+
+
+#: :data:`_NEVER_EXPORT_EXACT`, pre-normalised once for exact-key lookups.
+_NEVER_EXPORT_EXACT_NORM = frozenset(_normalise_key(entry) for entry in _NEVER_EXPORT_EXACT)
+
 
 def _is_never_export(key: str, path: Sequence[str]) -> bool:
     """Return True when ``key`` must never have its value described."""
     lowered = key.lower()
     if lowered in _TRAVERSE_KEYS:
         return False
-    if lowered in _NEVER_EXPORT_EXACT:
+    if _normalise_key(key) in _NEVER_EXPORT_EXACT_NORM:
         return True
     if any(token in lowered for token in _NEVER_EXPORT_SUBSTRINGS):
         return True
@@ -495,28 +529,183 @@ def _redact_string(key: str, value: str) -> Any:
     return {"_type": "str", "_len": len(value)}
 
 
-def _merge_trees(left: Any, right: Any) -> Any:
-    """Merge two item trees so a list's ``_item`` covers every observed key."""
-    if isinstance(left, dict) and isinstance(right, dict):
-        if "_type" in left and "_type" in right and left.get("_type") != right.get("_type"):
-            return {"_type": "mixed"}
-        merged: dict[str, Any] = dict(left)
-        for key, value in right.items():
-            merged[key] = _merge_trees(merged[key], value) if key in merged else value
+#: Cap on how many distinct enum values :func:`_merge_trees` will keep in a
+#: merged ``_values`` list before giving up and reporting the type alone.
+_MAX_MERGED_VALUES = 16
+
+
+def _is_marker_dict(value: Any) -> bool:
+    """Return True when ``value`` is a type-descriptor dict, not a real object."""
+    return isinstance(value, Mapping) and bool(value) and all(str(k).startswith("_") for k in value)
+
+
+def _as_descriptor(value: Any) -> Mapping[str, Any]:
+    """Wrap a raw scalar as a bare ``{"_type": ...}`` marker; pass dicts through."""
+    if isinstance(value, Mapping):
+        return value
+    return {"_type": _type_name(value)}
+
+
+def _collect_kept_values(value: Any) -> set[str]:
+    """Return the raw enum strings ``value`` represents, if any."""
+    if isinstance(value, str):
+        return {value}
+    if isinstance(value, Mapping):
+        return set(value.get("_values", []))
+    return set()
+
+
+def _merge_scalar_markers(
+    left_raw: Any, right_raw: Any, left: Mapping[str, Any], right: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Merge two same-type, non-list marker dicts, keeping only stable fields.
+
+    ``left_raw``/``right_raw`` are the pre-descriptor values (a raw kept
+    string, or an already-merged marker carrying ``_values``); the enum
+    values they represent are collected from these, not from ``left``/
+    ``right``, which have already been wrapped into bare ``{"_type": ...}``
+    markers and would otherwise lose that information.
+    """
+    type_name = left.get("_type")
+    if type_name == "str":
+        values = sorted(_collect_kept_values(left_raw) | _collect_kept_values(right_raw))
+        merged: dict[str, Any] = {"_type": "str"}
+        if values and len(values) <= _MAX_MERGED_VALUES:
+            merged["_values"] = values
+        if "_value" in left and left.get("_value") == right.get("_value"):
+            merged["_value"] = left["_value"]
         return merged
+    merged = {"_type": type_name}
+    if "_value" in left and left.get("_value") == right.get("_value"):
+        merged["_value"] = left["_value"]
+    if "_keys" in left and left.get("_keys") == right.get("_keys"):
+        merged["_keys"] = left["_keys"]
+    return merged
+
+
+def _merge_list_markers(left: Mapping[str, Any], right: Mapping[str, Any]) -> dict[str, Any]:
+    """Merge two ``_type: list`` markers, recursing into ``_item``."""
+    merged: dict[str, Any] = {"_type": "list"}
+    left_len, right_len = left.get("_len"), right.get("_len")
+    if left_len is not None and left_len == right_len:
+        merged["_len"] = left_len
+    left_item, right_item = left.get("_item"), right.get("_item")
+    if left_item is not None or right_item is not None:
+        merged["_item"] = _merge_trees(
+            left_item if left_item is not None else {"_type": "null"},
+            right_item if right_item is not None else {"_type": "null"},
+        )
+    values = sorted(set(left.get("_values", [])) | set(right.get("_values", [])))
+    if values and len(values) <= _MAX_MERGED_VALUES:
+        merged["_values"] = values
+    if "_value" in left and left.get("_value") == right.get("_value"):
+        merged["_value"] = left["_value"]
+    return merged
+
+
+def _merge_markers(
+    left_raw: Any, right_raw: Any, left: Mapping[str, Any], right: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Merge two marker dicts of possibly different ``_type``."""
+    left_type, right_type = left.get("_type"), right.get("_type")
+    if left_type != right_type:
+        return {"_type": "mixed", "_types": sorted({str(left_type), str(right_type)})}
+    if left_type == "list":
+        return _merge_list_markers(left, right)
+    return _merge_scalar_markers(left_raw, right_raw, left, right)
+
+
+def _merge_trees(left: Any, right: Any, *, top: bool = False) -> Any:
+    """Merge two redacted item trees into one that covers both shapes.
+
+    Real objects (dicts with actual field names) are merged key by key, and a
+    per-key type clash is recorded as a sibling ``_note: "mixed"`` rather than
+    replacing the object -- one divergent field must never erase an otherwise
+    well-known shape. At the top of a list (``top=True``), where there is no
+    dominant shape to protect, a dict/scalar clash collapses to a single
+    ``{"_type": "mixed", "_types": [...]}`` marker instead.
+
+    Args:
+        left: A previously merged (or freshly redacted) item tree.
+        right: The next item tree to fold in.
+        top: True when merging whole list items (as opposed to merging the
+            subtree found under one shared key of two list-item objects).
+
+    Returns:
+        The merged tree.
+    """
     if left == right:
         return left
-    if _type_name(left) == _type_name(right):
-        return {"_type": _type_name(left)}
-    return {"_type": "mixed"}
+
+    left_desc, right_desc = _as_descriptor(left), _as_descriptor(right)
+    left_marker, right_marker = _is_marker_dict(left_desc), _is_marker_dict(right_desc)
+
+    if not left_marker and not right_marker:
+        merged: dict[str, Any] = dict(left_desc)
+        for key, value in right_desc.items():
+            merged[key] = _merge_trees(merged[key], value) if key in merged else value
+        return merged
+
+    if left_marker and right_marker:
+        return _merge_markers(left, right, left_desc, right_desc)
+
+    # One side is a real object, the other a type marker (a genuine shape clash).
+    real = right_desc if left_marker else left_desc
+    marker = left_desc if left_marker else right_desc
+    if top:
+        return {"_type": "mixed", "_types": sorted({"dict", str(marker.get("_type"))})}
+    merged = dict(real)
+    merged["_note"] = "mixed"
+    return merged
+
+
+def _never_export_marker(value: Any) -> dict[str, Any]:
+    """Describe a never-export value: type only, plus shape metadata.
+
+    Lists keep their length and dicts keep their key count -- neither reveals
+    a value, only how big the redacted thing was.
+    """
+    if isinstance(value, (list, tuple)):
+        return {"_type": "list", "_len": len(value), "_value": _REDACTED}
+    if isinstance(value, Mapping):
+        return {"_type": "dict", "_keys": len(value), "_value": _REDACTED}
+    return {"_type": _type_name(value), "_value": _REDACTED}
+
+
+def _redact_list(items: Sequence[Any], *, key: str, path: Sequence[str]) -> dict[str, Any]:
+    """Redact a list, merging every item's tree into one ``_item`` shape.
+
+    A list of scalars keeps its item type in ``_item`` and, when the items
+    are enum-kept strings, moves the accumulated values up to a sibling
+    ``_values`` -- so ``_item`` stays a bare type descriptor, matching the
+    shape of a list of objects.
+    """
+    values = list(items)
+    tree: dict[str, Any] = {"_type": "list", "_len": len(values)}
+    if not values:
+        return tree
+
+    redacted_items = [redact(item, key=key, path=path) for item in values]
+    merged = redacted_items[0]
+    for later in redacted_items[1:]:
+        merged = _merge_trees(merged, later, top=True)
+    item_descriptor = dict(_as_descriptor(merged))
+    kept_values = item_descriptor.pop("_values", None)
+    tree["_item"] = item_descriptor
+    if kept_values:
+        tree["_values"] = kept_values
+    return tree
 
 
 def redact(value: Any, *, key: str = "", path: Sequence[str] = ()) -> Any:
     """Turn an API response into a redacted key tree.
 
-    Booleans, numbers, ``None``, ISO-8601 timestamps and allowlisted enum
-    values survive. Every other string becomes ``{"_type": "str", "_len": N}``.
-    Anything under a never-export key is reduced to its type alone.
+    Booleans always survive, regardless of the key they were found under --
+    a flag is not an identifying value. Numbers, ``None``, ISO-8601
+    timestamps and allowlisted enum strings survive everywhere else. Every
+    other string becomes ``{"_type": "str", "_len": N}``. Anything under a
+    never-export key (other than a boolean) is reduced to its type and shape
+    (length or key count) alone.
 
     Args:
         value: The value to describe.
@@ -526,8 +715,11 @@ def redact(value: Any, *, key: str = "", path: Sequence[str] = ()) -> Any:
     Returns:
         A JSON-serialisable tree containing no identifying value.
     """
+    if isinstance(value, bool):
+        return value
+
     if key and _is_never_export(key, path):
-        return {"_type": _type_name(value), "_value": _REDACTED}
+        return _never_export_marker(value)
 
     if isinstance(value, Mapping):
         child_path = (*path, key) if key else tuple(path)
@@ -537,16 +729,9 @@ def redact(value: Any, *, key: str = "", path: Sequence[str] = ()) -> Any:
         }
 
     if isinstance(value, (list, tuple)):
-        items = list(value)
-        tree: dict[str, Any] = {"_type": "list", "_len": len(items)}
-        if items:
-            merged = redact(items[0], key=key, path=path)
-            for item in items[1:]:
-                merged = _merge_trees(merged, redact(item, key=key, path=path))
-            tree["_item"] = merged
-        return tree
+        return _redact_list(value, key=key, path=path)
 
-    if isinstance(value, bool) or value is None or isinstance(value, (int, float)):
+    if value is None or isinstance(value, (int, float)):
         return value
 
     if isinstance(value, str):
@@ -577,7 +762,6 @@ class ProbeContext:
     device_id: str | None = None
     device_mac: str | None = None
     profile_id: str | None = None
-    bands: tuple[str, ...] = ()
 
 
 StepRunner = Callable[[EeroClient, ProbeContext], Awaitable[dict[str, Any]]]
@@ -650,18 +834,6 @@ def _first_mapping(payload: Any, *keys: str) -> Mapping[str, Any] | None:
     return None
 
 
-def _normalise_band(raw: Any) -> str | None:
-    """Map an eero-reported band label onto a channel-utilisation band value."""
-    text = str(raw).lower()
-    if "2.4" in text or text.startswith("2"):
-        return "band_2_4GHz"
-    if "6" in text:
-        return "band_6GHz"
-    if "5" in text:
-        return "band_5GHz_full"
-    return None
-
-
 def _extract_network(ctx: ProbeContext, payload: Any) -> None:
     """Record the first network's id from ``get_networks()``."""
     item = _first_mapping(payload, "networks")
@@ -670,7 +842,7 @@ def _extract_network(ctx: ProbeContext, payload: Any) -> None:
 
 
 def _extract_eero(ctx: ProbeContext, payload: Any) -> None:
-    """Record the first eero's id, serial, OS version and reported bands."""
+    """Record the first eero's id, serial and OS version."""
     item = _first_mapping(payload, "eeros")
     if item is None:
         return
@@ -681,14 +853,6 @@ def _extract_eero(ctx: ProbeContext, payload: Any) -> None:
     version = item.get("os_version") or item.get("os")
     if isinstance(version, str) and version:
         ctx.eero_os_version = version
-    bands: list[str] = []
-    raw_bands = item.get("bands")
-    if isinstance(raw_bands, (list, tuple)):
-        for raw in raw_bands:
-            band = _normalise_band(raw)
-            if band and band not in bands:
-                bands.append(band)
-    ctx.bands = tuple(bands) or ("band_2_4GHz", "band_5GHz_full")
 
 
 def _extract_device(ctx: ProbeContext, payload: Any) -> None:
@@ -707,15 +871,6 @@ def _extract_profile(ctx: ProbeContext, payload: Any) -> None:
     item = _first_mapping(payload, "profiles")
     if item is not None:
         ctx.profile_id = _id_from_url(item.get("url")) or ctx.profile_id
-
-
-def _has_band(band: str) -> StepGuard:
-    """Build a guard that only runs a step for a band the eeros reported."""
-
-    def _guard(ctx: ProbeContext) -> bool:
-        return band in ctx.bands
-
-    return _guard
 
 
 _NET = ("network_id",)
@@ -1030,36 +1185,19 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "transfer-device",
         "get_transfer_stats",
-        lambda c, x: c.get_transfer_stats(x.network_id, str(x.device_id)),
-        requires=("network_id", "device_id"),
+        lambda c, x: c.get_transfer_stats(x.network_id, str(x.device_mac)),
+        requires=("network_id", "device_mac"),
     ),
-    # --- channel utilisation, one call per band the eeros report ------------
+    # --- channel utilisation: `band` is optional and, live, returned every
+    # band for every eero in one call -- the per-band vocabulary is visible
+    # instead on each eero's `radio_channel_stats` keys (band_2_4GHz,
+    # band_5GHz_low, band_5GHz_high, band_5GHz_full, band_6GHz), so no
+    # per-band fan-out is needed here.
     ProbeStep(
-        "channel-utilization-2_4ghz",
+        "channel-utilization",
         "get_channel_utilization",
-        lambda c, x: c.get_channel_utilization(
-            x.network_id, start=x.start, end=x.end, band="band_2_4GHz"
-        ),
+        lambda c, x: c.get_channel_utilization(x.network_id, start=x.start, end=x.end),
         requires=_NET,
-        guard=_has_band("band_2_4GHz"),
-    ),
-    ProbeStep(
-        "channel-utilization-5ghz",
-        "get_channel_utilization",
-        lambda c, x: c.get_channel_utilization(
-            x.network_id, start=x.start, end=x.end, band="band_5GHz_full"
-        ),
-        requires=_NET,
-        guard=_has_band("band_5GHz_full"),
-    ),
-    ProbeStep(
-        "channel-utilization-6ghz",
-        "get_channel_utilization",
-        lambda c, x: c.get_channel_utilization(
-            x.network_id, start=x.start, end=x.end, band="band_6GHz"
-        ),
-        requires=_NET,
-        guard=_has_band("band_6GHz"),
     ),
     # --- misc network reads -------------------------------------------------
     ProbeStep(
@@ -1086,12 +1224,6 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
         "get_connections",
         lambda c, x: c.get_connections(str(x.eero_id), x.network_id),
         requires=("network_id", "eero_id"),
-    ),
-    ProbeStep(
-        "eero-support",
-        "get_eero_support",
-        lambda c, x: c.get_eero_support(str(x.eero_serial)),
-        requires=("eero_serial",),
     ),
     ProbeStep(
         "eero-ouicheck",

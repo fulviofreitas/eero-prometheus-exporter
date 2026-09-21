@@ -111,7 +111,8 @@
           "status": "green",
           "wired": true,
           "uptime": 987654,
-          "last_heartbeat": "2026-09-21T10:00:00Z"
+          "last_heartbeat": "2026-09-21T10:00:00Z",
+          "bands": ["2.4", "5"]
         },
         {
           "url": "/2.2/eeros/9911223355",
@@ -121,7 +122,8 @@
           "status": "green",
           "wired": false,
           "uptime": 12345,
-          "mesh_quality_bars": 5
+          "mesh_quality_bars": 5,
+          "bands": ["2.4", "6"]
         }
       ]
     },
@@ -129,6 +131,57 @@
       "devices": "/2.2/networks/PLANTED-NETWORK-URL/devices",
       "profiles": "/2.2/networks/PLANTED-NETWORK-URL/profiles"
     },
-    "free_text_note": "PLANTED-FREE-TEXT-NOTE-THAT-IS-LONG"
+    "free_text_note": "PLANTED-FREE-TEXT-NOTE-THAT-IS-LONG",
+    "conflicting_ssid": true,
+    "enable_credential_syncing": false,
+    "gateway": true,
+    "features": {
+      "multi_ssid": true,
+      "one_password": false
+    },
+    "utilization": [
+      {"band": "band_2_4GHz", "busy_percent": 12},
+      {"band": "band_5GHz_full", "busy_percent": 34}
+    ],
+    "statuses": [
+      {"speed": "1gbps"},
+      {"speed": "100mbps"}
+    ],
+    "insight_series": [
+      {"insight_type": "adblock", "count": 1},
+      {"insight_type": "bandwidth", "count": 2},
+      {"insight_type": "blocked", "count": 3},
+      {"insight_type": "inspected", "count": 4},
+      {"insight_type": "malware", "count": 5},
+      {"insight_type": "spam", "count": 6},
+      {"insight_type": "vpn", "count": 7}
+    ],
+    "bandwidth_usage": [10, 20, 30],
+    "ethernet_status": [
+      {"port": 1, "connected": true},
+      {"port": 2, "connected": false},
+      {"port": 3, "connected": true}
+    ],
+    "device_summaries": [
+      {
+        "organization": {"org_id": "PLANTED-ORG-ID", "billing": {"plan": "premium"}},
+        "homekit": {"enabled": true}
+      },
+      {
+        "organization": null,
+        "homekit": true
+      }
+    ],
+    "network_interfaces": {
+      "lldpInfo": {
+        "chassisId": "PLANTED-CHASSIS-ID",
+        "portId": "PLANTED-PORT-ID",
+        "systemDescription": "PLANTED-SYSTEM-DESCRIPTION"
+      }
+    },
+    "name_servers": {
+      "mode": "auto",
+      "servers": ["203.0.113.53"]
+    }
   }
 }

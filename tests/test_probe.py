@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import stat
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -93,6 +94,11 @@ PLANTED_SECRETS = (
     "9911223355",
     "12.3456",
     "-65.4321",
+    "PLANTED-CHASSIS-ID",
+    "PLANTED-PORT-ID",
+    "PLANTED-SYSTEM-DESCRIPTION",
+    "PLANTED-ORG-ID",
+    "203.0.113.53",
 )
 
 #: Method-name prefixes that mean "this call can change state".
@@ -243,7 +249,6 @@ class TestAllowlist:
             "app-events",
             "eero-nightlight",
             "eero-connections",
-            "eero-support",
             "eero-ouicheck",
             "device-labels",
             "profile-schedules",
@@ -284,7 +289,77 @@ class TestRedaction:
         assert data["health"] == "ok"
         assert data["connection_mode"] == "dhcp"
         assert data["schema_version"] == "2"
-        assert data["bands"]["_item"] in ("2.4", {"_type": "str"})
+        assert data["bands"] == {
+            "_type": "list",
+            "_len": 2,
+            "_item": {"_type": "str"},
+            "_values": ["2.4", "5"],
+        }
+
+    def test_scalar_list_keeps_length_and_type_when_values_differ(
+        self, kitchen_sink: dict[str, Any]
+    ) -> None:
+        # `bandwidth_usage` is 3 distinct numbers -- must not collapse into a
+        # useless `{"_type": "mixed"}` (the bug this fix addresses).
+        tree = redact(kitchen_sink)["data"]["bandwidth_usage"]
+        assert tree == {"_type": "list", "_len": 3, "_item": {"_type": "int"}}
+
+    def test_list_of_dicts_never_gets_a_bare_type_marker(
+        self, kitchen_sink: dict[str, Any]
+    ) -> None:
+        # A real object's keys (`port`, `connected`) must survive even though
+        # `connected` differs across items -- no dict may be replaced outright
+        # by `{"_type": "mixed"}`.
+        item = redact(kitchen_sink)["data"]["ethernet_status"]["_item"]
+        assert set(item) >= {"port", "connected"}
+        assert "_type" not in item
+
+    def test_type_conflict_on_a_real_object_keeps_its_keys(
+        self, kitchen_sink: dict[str, Any]
+    ) -> None:
+        # In one item `organization` is an object, in the other it is `null`;
+        # in the other, `homekit` is an object vs. a bare bool. Neither real
+        # object may be replaced by a bare `{"_type": "mixed"}` -- the bug
+        # this fix addresses.
+        item = redact(kitchen_sink)["data"]["device_summaries"]["_item"]
+        assert "org_id" in item["organization"]
+        assert item["organization"]["_note"] == "mixed"
+        assert "enabled" in item["homekit"]
+        assert item["homekit"]["_note"] == "mixed"
+
+    def test_enum_survives_across_a_list_of_dicts(self, kitchen_sink: dict[str, Any]) -> None:
+        # `insight_type` differs on every one of 7 series -- all 7 must
+        # survive in the merged item's `_values`.
+        item = redact(kitchen_sink)["data"]["insight_series"]["_item"]
+        assert item["insight_type"] == {
+            "_type": "str",
+            "_values": [
+                "adblock",
+                "bandwidth",
+                "blocked",
+                "inspected",
+                "malware",
+                "spam",
+                "vpn",
+            ],
+        }
+
+    def test_enum_survives_nested_inside_a_list_of_dicts(
+        self, kitchen_sink: dict[str, Any]
+    ) -> None:
+        item = redact(kitchen_sink)["data"]["utilization"]["_item"]
+        assert item["band"] == {
+            "_type": "str",
+            "_values": ["band_2_4GHz", "band_5GHz_full"],
+        }
+        speeds = redact(kitchen_sink)["data"]["statuses"]["_item"]
+        assert speeds["speed"] == {"_type": "str", "_values": ["100mbps", "1gbps"]}
+
+    def test_enum_survives_across_merged_list_of_dict_items(
+        self, kitchen_sink: dict[str, Any]
+    ) -> None:
+        item = redact(kitchen_sink)["data"]["eeros"]["data"]["_item"]
+        assert item["bands"]["_values"] == ["2.4", "5", "6"]
 
     def test_timestamps_survive(self, kitchen_sink: dict[str, Any]) -> None:
         tree = redact(kitchen_sink)
@@ -306,8 +381,50 @@ class TestRedaction:
     def test_never_export_keys_record_type_only(self, kitchen_sink: dict[str, Any]) -> None:
         data = redact(kitchen_sink)["data"]
         assert data["password"] == {"_type": "str", "_value": "<redacted>"}
-        assert data["ips"] == {"_type": "list", "_value": "<redacted>"}
-        assert data["bssids_with_bands"] == {"_type": "dict", "_value": "<redacted>"}
+        assert data["ips"] == {"_type": "list", "_len": 2, "_value": "<redacted>"}
+        assert data["bssids_with_bands"] == {"_type": "dict", "_keys": 2, "_value": "<redacted>"}
+
+    def test_never_export_list_and_dict_under_dns_keep_shape(
+        self, kitchen_sink: dict[str, Any]
+    ) -> None:
+        # dns.custom.ips / dns.parent.ips style: still a length, never values.
+        assert redact({"ips": ["1.1.1.1", "8.8.8.8", "9.9.9.9"]})["ips"] == {
+            "_type": "list",
+            "_len": 3,
+            "_value": "<redacted>",
+        }
+        assert redact({"owner": {"a": 1, "b": 2, "c": 3}})["owner"] == {
+            "_type": "dict",
+            "_keys": 3,
+            "_value": "<redacted>",
+        }
+
+    def test_boolean_survives_under_a_never_export_key(self) -> None:
+        assert redact({"conflicting_ssid": True})["conflicting_ssid"] is True
+        assert redact({"enable_credential_syncing": False})["enable_credential_syncing"] is False
+        assert redact({"gateway": True})["gateway"] is True
+        assert redact({"multi_ssid": True})["multi_ssid"] is True
+        assert redact({"one_password": False})["one_password"] is False
+
+    def test_number_and_string_still_redacted_under_a_never_export_key(self) -> None:
+        assert redact({"latitude": 12.5})["latitude"] == {
+            "_type": "float",
+            "_value": "<redacted>",
+        }
+        assert redact({"ssid": "PLANTED-SSID"})["ssid"] == {
+            "_type": "str",
+            "_value": "<redacted>",
+        }
+
+    def test_camel_case_keys_match_the_snake_case_rule(self) -> None:
+        tree = redact({"segmentId": "abc", "chassisId": "def", "portId": "ghi"})
+        assert tree["segmentId"]["_value"] == "<redacted>"
+        assert tree["chassisId"]["_value"] == "<redacted>"
+        assert tree["portId"]["_value"] == "<redacted>"
+
+    def test_name_servers_mode_is_visible(self, kitchen_sink: dict[str, Any]) -> None:
+        name_servers = redact(kitchen_sink)["data"]["name_servers"]
+        assert name_servers["mode"] == "auto"
 
     def test_geo_ip_keeps_only_isp(self, kitchen_sink: dict[str, Any]) -> None:
         geo = redact(kitchen_sink)["data"]["geo_ip"]
@@ -334,6 +451,29 @@ class TestRedaction:
 
     def test_empty_list_has_no_item(self) -> None:
         assert redact({"series": []})["series"] == {"_type": "list", "_len": 0}
+
+    def test_no_real_dict_is_ever_replaced_by_a_bare_type_marker(
+        self, kitchen_sink: dict[str, Any]
+    ) -> None:
+        """Any dict carrying ``_type`` must be a pure marker (only ``_``-keys).
+
+        A real object -- one with actual field names -- must never be wiped
+        out and replaced by ``{"_type": ...}`` just because one key clashed
+        across list items; at worst it gains a ``_note: "mixed"`` sibling.
+        """
+
+        def _walk(node: Any) -> None:
+            if isinstance(node, Mapping):
+                if "_type" in node:
+                    non_reserved = [k for k in node if not str(k).startswith("_")]
+                    assert non_reserved == [], f"real dict wiped by a type marker: {node}"
+                for child in node.values():
+                    _walk(child)
+            elif isinstance(node, (list, tuple)):
+                for child in node:
+                    _walk(child)
+
+        _walk(redact(kitchen_sink))
 
 
 # ---------------------------------------------------------------------------
@@ -521,21 +661,18 @@ class TestExecuteSteps:
         assert ctx.eero_id == "9911223344"
         assert ctx.eero_serial == "PLANTED-EERO-SERIAL"
         assert ctx.eero_os_version == "7.1.0-1234"
-        assert ctx.bands == ("band_2_4GHz", "band_5GHz_full")
         assert ctx.device_id == "dev1"
         assert ctx.device_mac == "aa:bb:cc:dd:ee:ff"
         assert ctx.profile_id == "77"
 
-    async def test_band_guard_skips_absent_bands(self) -> None:
+    async def test_channel_utilization_is_a_single_unguarded_step(self) -> None:
         meter = RequestMeter(budget=10, rate=0)
         client = FakeClient(meter, {})
-        ctx = ProbeContext(start="s", end="e", network_id="1", bands=("band_2_4GHz",))
-        steps = tuple(step for step in PROBE_STEPS if step.label.startswith("channel-utilization-"))
+        ctx = ProbeContext(start="s", end="e", network_id="1")
+        steps = tuple(step for step in PROBE_STEPS if step.label == "channel-utilization")
+        assert len(steps) == 1
         results = await execute_steps(client, ctx, meter, steps=steps)
-        by_label = {result.label: result.outcome for result in results}
-        assert by_label["channel-utilization-2_4ghz"] == "ok"
-        assert by_label["channel-utilization-5ghz"] == "skipped"
-        assert by_label["channel-utilization-6ghz"] == "skipped"
+        assert [result.outcome for result in results] == ["ok"]
 
 
 # ---------------------------------------------------------------------------
