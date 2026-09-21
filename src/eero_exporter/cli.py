@@ -22,6 +22,10 @@ from .eero_adapter import (
     _extract_network_id,
     _parse_network_status,
 )
+from .probe import DEFAULT_BUDGET as DEFAULT_PROBE_BUDGET
+from .probe import DEFAULT_OUT_DIR as DEFAULT_PROBE_OUT_DIR
+from .probe import DEFAULT_RATE as DEFAULT_PROBE_RATE
+from .probe import ProbeOptions, run_probe_cli
 from .server import run_server
 
 app = typer.Typer(
@@ -430,6 +434,84 @@ def serve(
 
     # Run server
     run_server(config)
+
+
+@app.command()
+def probe(
+    session_file: Path = typer.Option(
+        DEFAULT_SESSION_FILE,
+        "--session-file",
+        "-s",
+        envvar="EERO_EXPORTER_PROBE_SESSION_FILE",
+        help="Session file to copy for the run (the original is never written to)",
+    ),
+    out: Path = typer.Option(
+        DEFAULT_PROBE_OUT_DIR,
+        "--out",
+        "-o",
+        envvar="EERO_EXPORTER_PROBE_OUT",
+        help="Directory for the redacted JSON report and its Markdown summary",
+    ),
+    budget: int = typer.Option(
+        DEFAULT_PROBE_BUDGET,
+        "--budget",
+        "-b",
+        envvar="EERO_EXPORTER_PROBE_BUDGET",
+        help="Maximum number of GET requests for the whole run",
+    ),
+    rate: float = typer.Option(
+        DEFAULT_PROBE_RATE,
+        "--rate",
+        "-r",
+        envvar="EERO_EXPORTER_PROBE_RATE",
+        help="Maximum requests per second",
+    ),
+    only: str | None = typer.Option(
+        None,
+        "--only",
+        envvar="EERO_EXPORTER_PROBE_ONLY",
+        help="Run a single step by label",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        envvar="EERO_EXPORTER_PROBE_DRY_RUN",
+        help="List the planned steps and make no request",
+    ),
+    keep_copy: bool = typer.Option(
+        False,
+        "--keep-copy",
+        envvar="EERO_EXPORTER_PROBE_KEEP_COPY",
+        help="Keep the temporary session copy instead of deleting it at exit",
+    ),
+    log_level: str = typer.Option(
+        "INFO",
+        "--log-level",
+        "-l",
+        envvar="EERO_EXPORTER_PROBE_LOG_LEVEL",
+        help="Logging level",
+    ),
+) -> None:
+    """Run the strictly read-only live API probe and write a redacted report.
+
+    The probe issues GET requests only: every non-GET path in the SDK is
+    patched to raise before a request is built. It works on a 0600 copy of the
+    session file, caps and paces its requests, and writes a key tree with
+    lengths instead of values, so no secret or identifier reaches the report.
+    """
+    setup_logging(log_level)
+    exit_code = run_probe_cli(
+        ProbeOptions(
+            session_file=session_file,
+            out_dir=out,
+            budget=budget,
+            rate=rate,
+            only=only,
+            dry_run=dry_run,
+            keep_copy=keep_copy,
+        )
+    )
+    raise typer.Exit(exit_code)
 
 
 @app.command()
