@@ -21,6 +21,7 @@ from rich.table import Table
 from . import __version__
 from .collector import EeroCollector
 from .config import (
+    AUTH_UI_MIN_TOKEN_LENGTH,
     DEFAULT_CONFIG_FILE,
     DEFAULT_PORT,
     DEFAULT_SESSION_FILE,
@@ -658,6 +659,32 @@ def serve(
         show_envvar=True,
         help="Add public_ip back onto eero_network_info (off by default, D13)",
     ),
+    auth_ui: bool | None = typer.Option(
+        None,
+        "--auth-ui/--no-auth-ui",
+        envvar=envvar_name("--auth-ui"),
+        show_envvar=True,
+        help=(
+            "Enable the opt-in /auth web login page. Put it behind TLS or a "
+            "trusted network -- it accepts a shared secret over plain HTTP otherwise"
+        ),
+    ),
+    auth_ui_token: str | None = typer.Option(
+        None,
+        "--auth-ui-token",
+        envvar=envvar_name("--auth-ui-token"),
+        show_envvar=True,
+        help=(
+            f"Shared secret required by /auth (min {AUTH_UI_MIN_TOKEN_LENGTH} chars, never logged)"
+        ),
+    ),
+    auth_ui_pending_ttl: int | None = typer.Option(
+        None,
+        "--auth-ui-pending-ttl",
+        envvar=envvar_name("--auth-ui-pending-ttl"),
+        show_envvar=True,
+        help="Seconds a pending /auth login->verify flow stays valid before expiring",
+    ),
 ) -> None:
     """Start the Prometheus metrics server."""
     # Load YAML first (lowest precedence above the dataclass default),
@@ -699,15 +726,40 @@ def serve(
         eeros_from_envelope=eeros_from_envelope,
         auth_failure_exit=auth_failure_exit,
         expose_public_ip=expose_public_ip,
+        auth_ui=auth_ui,
+        auth_ui_token=auth_ui_token,
+        auth_ui_pending_ttl=auth_ui_pending_ttl,
     )
 
     setup_logging(config.log_level.upper())
 
-    # Check session file exists
-    if not config.session_file.exists():
-        console.print("[bold red]Not authenticated.[/bold red]")
-        console.print("\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
+    # `--auth-ui` requires a shared secret of a minimum length -- refuse to
+    # start rather than serve a login page with no meaningful protection.
+    if config.auth_ui and (
+        not config.auth_ui_token or len(config.auth_ui_token) < AUTH_UI_MIN_TOKEN_LENGTH
+    ):
+        console.print(
+            f"[bold red]--auth-ui requires --auth-ui-token "
+            f"of at least {AUTH_UI_MIN_TOKEN_LENGTH} characters.[/bold red]"
+        )
         raise typer.Exit(1)
+
+    # Check session file exists. When `--auth-ui` is enabled, the exporter
+    # starts anyway: the collector keeps recording auth failures and the
+    # session can be created later via the /auth page. Without `--auth-ui`,
+    # behaviour is unchanged: a missing session file is a hard stop. Note:
+    # if `--auth-failure-exit` is also set, it does not fire on a merely
+    # *missing* session file -- only on a terminal auth failure surfaced by
+    # the collector -- so the two flags can be combined safely.
+    if not config.session_file.exists():
+        if not config.auth_ui:
+            console.print("[bold red]Not authenticated.[/bold red]")
+            console.print("\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
+            raise typer.Exit(1)
+        console.print(
+            "[yellow]Not authenticated yet.[/yellow] "
+            f"Visit [green]http://{config.host}:{config.port}/auth[/green] to sign in."
+        )
 
     console.print(
         Panel.fit(

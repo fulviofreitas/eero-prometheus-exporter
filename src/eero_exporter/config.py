@@ -28,6 +28,15 @@ VALID_DATA_USAGE_PERIODS: tuple[str, ...] = ("day", "week", "month")
 # Every EERO_EXPORTER_* environment variable shares this prefix (D6/D15).
 ENV_PREFIX = "EERO_EXPORTER_"
 
+# Minimum length required for `--auth-ui-token` when `--auth-ui` is enabled.
+# Enforced by `cli.serve` at start-up, not here, so a malformed YAML/env
+# value still round-trips through `ExporterConfig` for inspection.
+AUTH_UI_MIN_TOKEN_LENGTH = 16
+
+# Default TTL (seconds) a pending /auth login->verify flow stays alive
+# before being discarded.
+DEFAULT_AUTH_UI_PENDING_TTL = 600
+
 
 def envvar_name(flag: str) -> str:
     """Derive the ``EERO_EXPORTER_*`` environment-variable name for a CLI flag.
@@ -147,6 +156,14 @@ class ExporterConfig:
     # Auth behaviour
     auth_failure_exit: bool = False
 
+    # Opt-in web authentication page (§/auth). `auth_ui_token` is the shared
+    # secret required to use the page; it is never echoed by `to_dict()` or
+    # logged. See `cli.serve` for the start-up validation (min length) and
+    # `server.py` for the route implementation.
+    auth_ui: bool = False
+    auth_ui_token: str | None = None
+    auth_ui_pending_ttl: int = DEFAULT_AUTH_UI_PENDING_TTL
+
     # Privacy-sensitive opt-in (D13)
     expose_public_ip: bool = False
 
@@ -257,6 +274,9 @@ class ExporterConfig:
             "data_usage_periods": list(self.data_usage_periods),
             "eeros_from_envelope": self.eeros_from_envelope,
             "auth_failure_exit": self.auth_failure_exit,
+            "auth_ui": self.auth_ui,
+            "auth_ui_token": "***" if self.auth_ui_token else None,
+            "auth_ui_pending_ttl": self.auth_ui_pending_ttl,
             "expose_public_ip": self.expose_public_ip,
             "log_level": self.log_level,
         }
