@@ -3261,7 +3261,9 @@ class EeroCollector:
             try:
                 if not isinstance(item, dict):
                     continue
-                eero_id = _extract_id_from_url(item.get("url", ""))
+                # Observed shape is {"id": int, "eero": {...}}; the url form is
+                # accepted too so a future payload that publishes a link works.
+                eero_id = str(item.get("id") or _extract_id_from_url(item.get("url", "")))
                 verbs = item.get("eero")
                 if not eero_id or not isinstance(verbs, dict):
                     continue
