@@ -36,7 +36,8 @@ Enter the code you receive by email or SMS. The session is stored in
 
 ```bash
 eero-exporter session-info     # path, mode, schema version, token present -- never the token
-eero-exporter validate         # makes one API call; exit 0 = valid
+eero-exporter validate -q      # exactly one API call; exit 0 = valid
+eero-exporter validate         # same, plus one detail call per network to print its status
 ```
 
 If you cannot type a code on the machine that runs the exporter (a container, for example),
@@ -64,9 +65,11 @@ tiers and [Metrics](Metrics) for the full list.
 | `/` | Index page |
 | `/auth` | Browser login page, only when `--auth-ui` is enabled (404 otherwise) |
 
-Only these paths exist, and only for `GET` (plus `POST` on the `/auth/*` routes).
-Any other path is a 404 and any other method a 501; in particular the server does
-not answer `HEAD`, so a probe that uses it must be pointed at `GET /ready`.
+`/health` and `/ready` also answer to the aliases `/healthz` and `/readyz`.
+
+Those paths are the complete set, and only for `GET` (plus `POST` on the `/auth/*`
+routes). Any other path is a 404 and any other method a 501; in particular the server
+does not answer `HEAD`, so a probe that uses it must be pointed at `GET /ready`.
 
 `/health` response:
 

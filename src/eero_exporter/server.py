@@ -806,7 +806,15 @@ async def collection_loop(
         try:
             success = await collector.collect()
             _health_state["last_collection_success"] = success
-            _health_state["session_valid"] = success
+            # Only an authentication failure invalidates the session. A
+            # transport error or a parser bug must not flip `session_valid`,
+            # or /health tells the operator to re-authenticate (and, with the
+            # auth page on, shows the sign-in hint) for a problem that has
+            # nothing to do with their credentials.
+            if success:
+                _health_state["session_valid"] = True
+            elif collector.last_error_kind == "auth":
+                _health_state["session_valid"] = False
             if success:
                 _health_state["last_error"] = None
             else:
@@ -830,7 +838,9 @@ async def collection_loop(
             # otherwise appear only in the /health JSON, with its type lost.
             _LOGGER.exception("Collection cycle raised %s", type(e).__name__)
             _health_state["last_collection_success"] = False
-            _health_state["session_valid"] = False
+            # An exception escaping collect() is a bug, not a credential
+            # problem, so it leaves `session_valid` alone for the same reason
+            # as the failure branch above.
             collections_failed = _health_state["collections_failed"]
             if isinstance(collections_failed, int):
                 _health_state["collections_failed"] = collections_failed + 1

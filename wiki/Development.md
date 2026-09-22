@@ -43,7 +43,9 @@ tests/fixtures/v8/       redacted API payloads (one per endpoint) used by the pa
 
 - `eero-api` is pinned to `>=8.0.1,<9`. Docker images install from `uv.lock`, so an image
   never resolves a newer SDK than the lock.
-- **There is no Pydantic in the SDK.** Every call returns the raw `{"meta": ..., "data": ...}`
+- **The SDK hands back raw envelopes, not Pydantic models.** (It does depend on Pydantic
+  internally -- see `uv.lock` -- but no model instance reaches a caller.) Every call returns
+  the raw `{"meta": ..., "data": ...}`
   envelope; the adapter extracts `data` and the collector parses dicts and lists defensively
   (`isinstance` before `.get`, nullable everywhere).
 - `get_network()` is called once per cycle. The client caches that envelope and injects it as
@@ -128,8 +130,10 @@ EERO_UPTIME_SECONDS = _gauge(
 - `tests/test_collector_readonly.py` runs a full cycle with every tier on under the probe's
   write guard (`BaseAPI.post/put/delete` replaced with functions that raise) and asserts the
   GET counts: 29 with the defaults, 58 on the fixture mesh with everything on.
-- Any new adapter method must be a documented read in the eero-api API reference. `login` /
-  `verify` (CLI and `/auth`) are the only POSTs the exporter is allowed to issue.
+- Any new adapter method must be a documented read in the eero-api API reference. Every data
+  operation is a GET; the only POSTs are authentication -- `login` / `verify` (CLI and
+  `/auth`), and the SDK's transparent session refresh, which it replays for the caller (see
+  `tests/test_adapter_refresh_replay.py`).
 
 ## Probe workflow
 

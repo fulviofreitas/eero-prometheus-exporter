@@ -334,7 +334,9 @@ API_STATUS_VALUES: frozenset[str] = frozenset(
 
 EXPORTER_API_REQUESTS_LAST_CYCLE = _gauge(
     f"{PREFIX}_exporter_api_requests_last_cycle",
-    "Number of eero API requests issued during the most recently completed collection cycle.",
+    "Adapter read operations issued during the most recently completed collection cycle. "
+    "Counts calls the collector makes, not HTTP requests: with get_retries > 0 a retried "
+    "call, or one the SDK replays after a transparent session refresh, still counts once.",
     family="exporter",
     source="derived: EeroCollector._api_requests_this_cycle",
     evidence="verified",

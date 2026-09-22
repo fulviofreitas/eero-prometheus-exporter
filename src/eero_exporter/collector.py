@@ -2536,7 +2536,11 @@ class EeroCollector:
             GUEST_NETWORK_INFO.labels(network_id=network_id).info(
                 {
                     "name": guest_name or "Guest Network",
-                    "enabled": str(network_details.get("guest_network_enabled", False)).lower(),
+                    # Reuse the value resolved above, which falls back to the
+                    # nested `guest_network.enabled`. Reading the top-level key
+                    # again here would report "false" for a nested-only payload
+                    # while the gauge beside it reports 1.
+                    "enabled": str(bool(guest_enabled)).lower(),
                 }
             )
             # `access_duration_enabled` was removed in 4.0.0 -- the guest

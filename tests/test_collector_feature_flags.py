@@ -9,7 +9,7 @@ import pytest
 
 from eero_exporter.collector import EeroCollector
 from eero_exporter.config import ExporterConfig
-from eero_exporter.metrics import NETWORK_GUEST_ENABLED
+from eero_exporter.metrics import GUEST_NETWORK_INFO, NETWORK_GUEST_ENABLED
 
 
 def _collector() -> EeroCollector:
@@ -30,6 +30,30 @@ async def test_guest_enabled_falls_back_to_nested_guest_network_object() -> None
 
     value = NETWORK_GUEST_ENABLED.labels(network_id="net-1", name="Test Network")._value.get()
     assert value == 1
+
+
+@pytest.mark.asyncio
+async def test_guest_info_and_gauge_agree_on_a_nested_only_payload() -> None:
+    """The Info metric must use the same resolved value as the gauge.
+
+    Reading `guest_network_enabled` directly for the Info metric reported
+    `enabled="false"` next to a gauge of 1 whenever the API sent only the
+    nested `guest_network.enabled`.
+    """
+    collector = _collector()
+    client = MagicMock()
+
+    await collector._collect_network_feature_flags(
+        client,
+        "net-2",
+        "Test Network",
+        {"guest_network": {"enabled": True, "name": "Guests"}},
+    )
+
+    gauge = NETWORK_GUEST_ENABLED.labels(network_id="net-2", name="Test Network")._value.get()
+    info = GUEST_NETWORK_INFO.labels(network_id="net-2")._value
+    assert gauge == 1
+    assert info["enabled"] == "true"
 
 
 @pytest.mark.asyncio

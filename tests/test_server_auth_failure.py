@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from eero_exporter.server import AUTH_FAILURE_EXIT_CODE, collection_loop
+from eero_exporter.server import AUTH_FAILURE_EXIT_CODE, _health_state, collection_loop
 
 
 def _mock_collector(success: bool, last_error_kind: str | None) -> MagicMock:
@@ -61,3 +61,51 @@ async def test_auth_failure_exit_true_but_success_keeps_looping() -> None:
 
     await collection_loop(collector, interval=60, stop_event=stop_event, auth_failure_exit=True)
     collector.collect.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_non_auth_failure_keeps_the_session_marked_valid() -> None:
+    """A transport or parser failure must not look like an expired session.
+
+    `session_valid` previously tracked collection success, so any non-auth
+    failure flipped it and `/health` told the operator to re-authenticate --
+    with the auth page enabled, it also showed the sign-in hint -- for a
+    problem that had nothing to do with their credentials.
+    """
+    _health_state["session_valid"] = True
+    collector = _mock_collector(success=False, last_error_kind="network")
+    stop_event = asyncio.Event()
+    stop_event.set()
+
+    await collection_loop(collector, interval=60, stop_event=stop_event)
+
+    assert _health_state["session_valid"] is True
+    assert _health_state["last_collection_success"] is False
+
+
+@pytest.mark.asyncio
+async def test_auth_failure_marks_the_session_invalid() -> None:
+    _health_state["session_valid"] = True
+    collector = _mock_collector(success=False, last_error_kind="auth")
+    stop_event = asyncio.Event()
+    stop_event.set()
+
+    await collection_loop(collector, interval=60, stop_event=stop_event)
+
+    assert _health_state["session_valid"] is False
+
+
+@pytest.mark.asyncio
+async def test_unexpected_exception_does_not_invalidate_the_session() -> None:
+    """An exception escaping collect() is a bug, not a credential problem."""
+    _health_state["session_valid"] = True
+    collector = MagicMock()
+    collector.collect = AsyncMock(side_effect=RuntimeError("parser blew up"))
+    collector.last_error_kind = None
+    stop_event = asyncio.Event()
+    stop_event.set()
+
+    await collection_loop(collector, interval=60, stop_event=stop_event)
+
+    assert _health_state["session_valid"] is True
+    assert _health_state["last_collection_success"] is False

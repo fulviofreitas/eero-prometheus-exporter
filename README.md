@@ -49,12 +49,12 @@ _Network health, every eero and radio, client devices, data usage, entitlements 
 | Feature | Description |
 |---------|-------------|
 | 📊 **197 metrics, tiered** | `core`, `extended` and `rf` on by default (29 API requests per cycle); `per-profile`, `per-device`, `per-eero` and `unverified` opt-in. Every metric documents its API source path and evidence level. |
-| 🔒 **Strictly read-only** | Only GET requests; `login`/`verify` are the sole POSTs. Enforced by a surface test against the real SDK and a write guard in the test suite. |
+| 🔒 **Strictly read-only** | Every data operation is a GET: the exporter never creates, changes or deletes anything on your network. The only POSTs are authentication -- `login`/`verify`, plus the SDK's own transparent session refresh. Enforced by a surface test against the real SDK and a write guard in the test suite. |
 | 🌐 **Network & radios** | Health, ISP state, speed test, DNS/DHCP/WAN modes, 119 capability flags, per-band channel, width, TX power and utilisation on every eero. |
 | 📱 **Devices & profiles** | Connection quality, PHY rates, MCS/NSS, packet statistics, data usage per device, eero and profile. |
 | 💎 **eero Plus / Secure** | Entitlements, DNS policies, insights, WPA3 per band, permissions, subnets, notifications. |
 | 🩺 **Observable errors** | `eero_exporter_api_requests_total{endpoint,status}` with a closed `status` enum: `premium_required`, `feature_unavailable` and `not_found` are expected states, not failures. |
-| ⚙️ **Configure anywhere** | Every flag has an `EERO_EXPORTER_*` environment variable and a YAML key; precedence CLI > env > YAML > default. |
+| ⚙️ **Configure anywhere** | Every flag of every command has an `EERO_EXPORTER_*` environment variable; `serve`'s options also have YAML keys. Precedence CLI > env > YAML > default. |
 | 🔐 **Browser login** | Optional `/auth` page (shared secret, CSRF, rate limit) to sign in without shell access -- handy for containers. |
 | 🔎 **Read-only probe** | `eero-exporter probe` captures redacted API shapes for bug reports and new metrics. |
 | 🐳 **Docker ready** | Non-root image built from `uv.lock`; `latest` only moves on releases. |

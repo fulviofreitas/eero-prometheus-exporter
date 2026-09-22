@@ -16,7 +16,7 @@ that touches the session.
 |---|---|---|
 | `login <email-or-phone>` | Send a verification code, prompt for it, save the session (mode 0600) | 0 ok; 1 login or verification rejected / API error |
 | `logout` | Delete the local session file (does not revoke the token server-side) | 0 |
-| `validate [-q]` | Make one API call to prove the session works; for health checks and CI | 0 valid; 1 invalid, expired or API error; 2 no session file |
+| `validate [-q]` | Prove the session works; for health checks and CI. `-q` makes exactly one API call; without it, each network's detail is also fetched to print its status | 0 valid; 1 invalid, expired or API error; 2 no session file |
 | `status` | Show authentication state and your networks | 0 ok; 1 not authenticated / API error |
 | `test` | Run one full collection cycle with DEBUG logging, without serving | 0 ok; 1 collection failed |
 | `session-info` | Print session-file diagnostics: path, mode, owner match, directory writability, credential schema version, token present (never the value) | 0 ok; 1 missing or unreadable |
@@ -104,7 +104,8 @@ Examples:
 ```bash
 eero-exporter serve --port 9200 --interval 120
 eero-exporter serve --no-devices --no-data-usage            # small footprint
-eero-exporter serve --include-per-eero --include-unverified   # everything on
+eero-exporter serve --include-per-profile --include-per-device \
+                    --include-per-eero --include-unverified   # every opt-in tier on
 EERO_EXPORTER_AUTH_UI=true EERO_EXPORTER_AUTH_UI_TOKEN=... eero-exporter serve --auth-ui
 ```
 
