@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.0.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.19.2...v4.0.0) (2026-09-22)
+
+### ⚠ BREAKING CHANGES
+
+* requires eero-api >=8.0.2,<9.
+
+- 36 metrics are removed because nothing in the API backs them; most never produced a
+  sample. The full table with replacements is in wiki/Metrics.md under "Removed in
+  4.0.0". It covers every eero_backup_*, every eero_diagnostics_*, the eero/device
+  gauges with no source (memory, temperature, prioritized, signal_strength_avg, rx/tx
+  bandwidth, adblock), the SQM bandwidth pair, the never-set *_bytes_total counters,
+  eero_thread_device_count/border_router, eero_exporter_scrape_success and
+  eero_data_usage_active_clients. eero_account_premium_expiration_timestamp_seconds is
+  renamed eero_account_premium_next_renewal_timestamp_seconds.
+- eero_exporter_api_requests_total{status} is now a closed enum: success, error, auth,
+  not_found, access_denied, premium_required, feature_unavailable, rate_limited,
+  validation, transport. premium_required, feature_unavailable and not_found are
+  expected states, so alerts on status="error" must become
+  status!~"success|premium_required|feature_unavailable|not_found".
+- The session file is rewritten to credential schema 2 on first use and 3.x cannot read
+  it back. Back it up before upgrading, keep the session directory writable, and restore
+  that backup before rolling back to 3.19.2.
+- public_ip is no longer exported unless --expose-public-ip is set.
+- include_diagnostics and --include-diagnostics are removed; --data-usage is renamed
+  --include-data-usage. --config remains an alias of --config-file.
+- The HTTP server no longer answers HEAD; it returns 501. Only GET on /metrics, /health,
+  /healthz, /ready, /readyz, / and /auth, plus POST on /auth/*, exist. Health checks
+  already use GET /ready; repoint any probe that used HEAD.
+- For users of eero_exporter.eero_adapter as a library: EeroAuthError is no longer an
+  EeroAPIError subclass, get_backup_network/get_backup_status/is_using_backup are gone,
+  and the client constructor no longer accepts session_id/user_token/timeout.
+- Docker images are built from uv.lock and latest moves only on a published release. The
+  compose file mounts the config directory read-write.
+
+### ✨ Features
+
+* revamp exporter for eero-api 8.0.2 ([903d53d](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/903d53d588d0307d518fc88a0b4d00d603c75618))
+
 ## [3.19.2](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v3.19.1...v3.19.2) (2026-09-21)
 
 ### 🐛 Bug Fixes
