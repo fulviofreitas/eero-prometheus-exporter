@@ -28,6 +28,7 @@ from eero_exporter.metrics import (
     NETWORK_MEMBERS_COUNT,
     NETWORK_NOTIFICATION_ENABLED,
     NETWORK_NOTIFICATIONS_UNREAD,
+    NETWORK_PER_EERO_PERMISSION,
     NETWORK_PERMISSION,
     PROFILE_INSIGHTS_TOTAL,
     SUBNET_ENABLED,
@@ -227,6 +228,26 @@ async def test_permissions_skip_redacted_and_per_eero_keys() -> None:
         "per_eero",
     ):
         assert f'capability="{skipped_capability}"' not in output
+
+
+@pytest.mark.asyncio
+async def test_per_eero_permissions_are_exported_per_verb() -> None:
+    """The per_eero list is `{"id": ..., "eero": {verb: bool}}` -- it carries no url.
+
+    Reading the id from a url yields nothing and silently exports zero series,
+    which is exactly what happened before this was pinned down.
+    """
+    collector = EeroCollector(session_file="/tmp/session.json", config=_config())  # nosec B108
+    mock_client = _mock_client()
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    labels = {"network_id": "999001", "eero_id": "eero-1"}
+    assert NETWORK_PER_EERO_PERMISSION.labels(**labels, verb="read")._value.get() == 1
+    assert NETWORK_PER_EERO_PERMISSION.labels(**labels, verb="create")._value.get() == 0
+    assert NETWORK_PER_EERO_PERMISSION.labels(**labels, verb="update")._value.get() == 0
+    assert NETWORK_PER_EERO_PERMISSION.labels(**labels, verb="delete")._value.get() == 0
 
 
 @pytest.mark.asyncio
