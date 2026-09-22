@@ -43,18 +43,42 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            // A manual dispatch is for re-publishing a release whose image
-            // build failed, not for pushing an arbitrary commit. The reusable
-            // publisher always writes the `latest` tag, so dispatching from a
-            // branch would move `latest` to an unreleased commit -- exactly
-            // what this gate exists to prevent. Require a tag ref.
+            // The reusable publisher tags every push it makes with `latest`
+            // (type=raw,value=latest,enable=${inputs.push} in
+            // workflow-arsenal/.github/workflows/docker-build.yml), so ANY run
+            // that reaches it moves `latest`. A manual dispatch is therefore
+            // only safe from the tag of the newest release: from a branch it
+            // would point `latest` at unreleased code, and from an older tag
+            // it would silently downgrade every `:latest` user -- across 4.0.0
+            // that means handing them a build which cannot read the schema-2
+            // session file 4.x writes.
             if (context.eventName === 'workflow_dispatch') {
-              const isTag = context.ref.startsWith('refs/tags/');
-              core.info(isTag
-                ? `Manual dispatch from tag ${context.ref} — building`
-                : `Manual dispatch from ${context.ref}, which is not a tag — skipping. `
-                  + 'Re-run this workflow from the release tag to republish its image.');
-              core.setOutput('released', isTag ? 'true' : 'false');
+              const ref = context.ref;
+              if (!ref.startsWith('refs/tags/')) {
+                core.info(`Manual dispatch from ${ref}, which is not a tag — skipping. `
+                  + 'Re-run from the tag of the most recent release to republish its image.');
+                core.setOutput('released', 'false');
+                return;
+              }
+              const tag = ref.replace('refs/tags/', '');
+              let latest;
+              try {
+                const res = await github.rest.repos.getLatestRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                });
+                latest = res.data.tag_name;
+              } catch (err) {
+                core.setFailed(`Could not read the latest release to validate ${tag}: ${err.message}`);
+                return;
+              }
+              if (tag !== latest) {
+                core.setFailed(`Refusing to publish from ${tag}: the newest release is ${latest}, `
+                  + `so this run would move the \`latest\` tag backwards to ${tag}.`);
+                return;
+              }
+              core.info(`Manual dispatch from ${tag}, the newest release — building`);
+              core.setOutput('released', 'true');
               return;
             }
             const run = context.payload.workflow_run;
