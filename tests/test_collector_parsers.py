@@ -279,6 +279,16 @@ def _mock_client(
     client.get_reservations = AsyncMock(return_value=[])
     client.get_blacklist = AsyncMock(return_value=[])
     client.get_insights = AsyncMock(return_value={})
+    client.get_entitlement_features = AsyncMock(return_value={})
+    client.get_wpa3_per_band = AsyncMock(return_value={})
+    client.get_fast_transition = AsyncMock(return_value={})
+    client.get_permissions = AsyncMock(return_value={})
+    client.get_members = AsyncMock(return_value={})
+    client.get_notification_settings = AsyncMock(return_value={})
+    client.has_unread_notifications = AsyncMock(return_value={})
+    client.get_advanced_content_filter = AsyncMock(return_value={})
+    client.get_subnets_config = AsyncMock(return_value=[])
+    client.get_profiles_insights = AsyncMock(return_value={})
     return client
 
 

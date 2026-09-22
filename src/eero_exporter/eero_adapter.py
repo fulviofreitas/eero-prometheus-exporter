@@ -1106,3 +1106,128 @@ class EeroClient:
 
         raw_response = await self._client.get_diagnostics(network_id)
         return dict(_extract_data(raw_response))
+
+    # =========================================================================
+    # Extended tier -- entitlements, security, permissions, members,
+    # notifications, DNS policy, subnets, profile insights (v8 probe shape
+    # summary §9 #12-19, §11.6/§11.8-11.10). One GET each, all verified reads.
+    # =========================================================================
+
+    @_wrap_api_call()
+    async def get_entitlement_features(self, network_id: str) -> dict[str, Any]:
+        """Get the network's entitled features and account entitlements."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_entitlement_features(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_wpa3_per_band(self, network_id: str) -> dict[str, Any]:
+        """Get the WPA3 mode configured for each radio band."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_wpa3_per_band(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_fast_transition(self, network_id: str) -> dict[str, Any]:
+        """Get the fast-transition (802.11r) setting."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_fast_transition(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_permissions(self, network_id: str) -> dict[str, Any]:
+        """Get the current user's role and permissions on the network."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_permissions(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_members(self, network_id: str) -> dict[str, Any]:
+        """Get the network's members. Callers must only read the member count."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_members(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_notification_settings(self, network_id: str) -> dict[str, Any]:
+        """Get the flat dotted-key notification-settings booleans."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_notification_settings(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def has_unread_notifications(self, network_id: str) -> dict[str, Any]:
+        """Get the unread-notifications flag."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.has_unread_notifications(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_advanced_content_filter(self, network_id: str) -> dict[str, Any]:
+        """Get the DNS advanced content filter's allowed/blocked domain lists.
+
+        Premium-only; raises :class:`EeroPremiumRequiredError` on accounts
+        without an active subscription -- an expected state, not an error.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_advanced_content_filter(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_subnets_config(self, network_id: str) -> list[dict[str, Any]]:
+        """Get the list of configured subnets. Never returns name/password fields to callers."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_subnets_config(network_id)
+        return _extract_list(raw_response)
+
+    @_wrap_api_call()
+    async def get_profiles_insights(
+        self,
+        network_id: str,
+        *,
+        start: str,
+        end: str,
+        cadence: str,
+        insight_type: str,
+    ) -> dict[str, Any]:
+        """Get insights series for every profile on the network, for one insight type.
+
+        Args:
+            network_id: Network identifier.
+            start: Window start as an ISO 8601 UTC timestamp.
+            end: Window end as an ISO 8601 UTC timestamp.
+            cadence: Bucket size, ``"daily"`` or ``"hourly"``.
+            insight_type: One of ``"adblock"``, ``"blocked"``, or ``"inspected"``.
+
+        Returns:
+            Extracted data payload from the response envelope.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_profiles_insights(
+            network_id,
+            start=start,
+            end=end,
+            cadence=cadence,
+            insight_type=insight_type,
+        )
+        return dict(_extract_data(raw_response))

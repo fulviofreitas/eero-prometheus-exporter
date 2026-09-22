@@ -1,0 +1,17 @@
+{
+  "insight_type": "blocked",
+  "insights": [
+    {
+      "name": "Kid One",
+      "num_devices": 2,
+      "insights_url": "/2.2/networks/999001/profiles/1/insights",
+      "sum": 3
+    },
+    {
+      "name": "Kid Two",
+      "num_devices": 1,
+      "insights_url": "/2.2/networks/999001/profiles/2/insights",
+      "sum": 0
+    }
+  ]
+}

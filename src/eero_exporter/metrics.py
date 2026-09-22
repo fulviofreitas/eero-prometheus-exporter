@@ -1708,9 +1708,234 @@ NETWORK_BLACKLISTED_DEVICES_COUNT = _gauge(
 # `NETWORK_PREMIUM_ENABLED` (network_features) and
 # `ACCOUNT_PREMIUM_NEXT_RENEWAL` (account) already carry the premium signals
 # with a real source; this family is a placeholder for the extended-tier
-# premium reads (`get_backup_internet`, `list_backup_access_points`,
-# entitlement features) a later commit will add.
+# backup reads (`get_backup_internet`, `list_backup_access_points`) a later
+# commit will add. Entitlement features are the "entitlements" family below.
 _register_family("premium", "core")
+
+# =============================================================================
+# EXTENDED TIER (commit 7) -- verified, fixed-cost reads that add one GET
+# each per network (§9 #12-19, §11.6/§11.8-11.10 of the v8 probe shape
+# summary). Every family here is gated by `ExporterConfig.include_extended`.
+# =============================================================================
+
+# -----------------------------------------------------------------------
+# Entitlements -- `get_entitlement_features` (§11.8)
+# -----------------------------------------------------------------------
+
+NETWORK_FEATURE_ENTITLED = _gauge(
+    f"{PREFIX}_network_feature_entitled",
+    "Whether a named premium feature is entitled on this network (1=yes, 0=no). "
+    "`multi_ssid` and `one_password` have no `capability` key and are skipped.",
+    ("network_id", "feature"),
+    family="entitlements",
+    source="get_entitlement_features().data.features.<name>.capability.capable",
+    tier="extended",
+)
+
+ACCOUNT_ENTITLEMENT_STATE = _gauge(
+    f"{PREFIX}_account_entitlement_state",
+    "The account's premium entitlement state (1=observed for this state label).",
+    ("network_id", "state"),
+    family="entitlements",
+    source="get_entitlement_features().data.entitlements[].state",
+    tier="extended",
+)
+
+ACCOUNT_ENTITLEMENT_PRODUCT_INFO = _gauge(
+    f"{PREFIX}_account_entitlement_product_info",
+    "The account's premium entitlement product type (1=observed for this type label).",
+    ("network_id", "type"),
+    family="entitlements",
+    source="get_entitlement_features().data.entitlements[].product.type",
+    tier="extended",
+)
+
+ACCOUNT_ENTITLEMENT_CREATED_TIMESTAMP = _gauge(
+    f"{PREFIX}_account_entitlement_created_timestamp_seconds",
+    "When the account's premium entitlement was created (Unix epoch).",
+    ("network_id",),
+    family="entitlements",
+    source="get_entitlement_features().data.entitlements[].created_at",
+    tier="extended",
+)
+
+# -----------------------------------------------------------------------
+# Security -- WPA3 per band, fast transition (§11.10)
+# -----------------------------------------------------------------------
+
+EERO_NETWORK_WPA3_BAND_MODE = _gauge(
+    f"{PREFIX}_network_wpa3_band_mode",
+    "WPA3 mode configured per radio band (state-set: 1 for the observed mode, "
+    "0 for the others in the closed set WPA2|WPA2_WPA3|WPA3).",
+    ("network_id", "band", "mode"),
+    family="security",
+    source="get_wpa3_per_band().data.{band_2_4_ghz,band_5_ghz,band_6_ghz}",
+    tier="extended",
+)
+
+NETWORK_FAST_TRANSITION_ENABLED = _gauge(
+    f"{PREFIX}_network_fast_transition_enabled",
+    "Whether 802.11r fast transition is enabled (1=yes, 0=no).",
+    ("network_id",),
+    family="security",
+    source="get_fast_transition().data.fast_transition",
+    tier="extended",
+)
+
+# -----------------------------------------------------------------------
+# Permissions -- `get_permissions` (§11.9)
+# -----------------------------------------------------------------------
+
+NETWORK_ROLE_INFO = _info(
+    f"{PREFIX}_network_role",
+    "The current user's role on the network.",
+    ("network_id",),
+    family="permissions",
+    source="get_permissions().data.role",
+    tier="extended",
+)
+
+NETWORK_PERMISSION = _gauge(
+    f"{PREFIX}_network_permission",
+    "Whether the current user can read a named capability (1=yes, 0=no). "
+    "`*.password`, `*.multi_ssid`, `network.multistatic_ip`, "
+    "`user.conversations_token`, and `per_eero` are never exported here.",
+    ("network_id", "capability"),
+    family="permissions",
+    source="get_permissions().data.permissions[<dotted key>].read",
+    tier="extended",
+)
+
+# -----------------------------------------------------------------------
+# Members -- `get_members` (§11.10). Count only -- never names/emails/roles.
+# -----------------------------------------------------------------------
+
+NETWORK_MEMBERS_COUNT = _gauge(
+    f"{PREFIX}_network_members_count",
+    "Number of members on the network account.",
+    ("network_id",),
+    family="members",
+    source="len(get_members().data.members)",
+    tier="extended",
+)
+
+# -----------------------------------------------------------------------
+# Notifications -- `get_notification_settings`, `has_unread_notifications`
+# (§11.10)
+# -----------------------------------------------------------------------
+
+NETWORK_NOTIFICATION_ENABLED = _gauge(
+    f"{PREFIX}_network_notification_enabled",
+    "Whether a named notification event is enabled (1=yes, 0=no).",
+    ("network_id", "event"),
+    family="notifications",
+    source="get_notification_settings().data[<dotted key>]",
+    tier="extended",
+)
+
+NETWORK_NOTIFICATIONS_UNREAD = _gauge(
+    f"{PREFIX}_network_notifications_unread",
+    "Whether there are unread notifications (1=yes, 0=no). The API returns a bool, not a count.",
+    ("network_id",),
+    family="notifications",
+    source="has_unread_notifications().data.has_unread",
+    tier="extended",
+)
+
+# -----------------------------------------------------------------------
+# DNS advanced content filter -- `get_advanced_content_filter` (§11.10).
+# Premium-only; gated by `include_premium` as well as `include_extended`.
+# -----------------------------------------------------------------------
+
+DNS_POLICY_ALLOWED_DOMAINS_COUNT = _gauge(
+    f"{PREFIX}_dns_policy_allowed_domains_count",
+    "Number of domains on the advanced content filter's allow list.",
+    ("network_id",),
+    family="dns_policy",
+    source="len(get_advanced_content_filter().data.allowed_list)",
+    tier="extended",
+)
+
+DNS_POLICY_BLOCKED_DOMAINS_COUNT = _gauge(
+    f"{PREFIX}_dns_policy_blocked_domains_count",
+    "Number of domains on the advanced content filter's block list.",
+    ("network_id",),
+    family="dns_policy",
+    source="len(get_advanced_content_filter().data.blocked_list)",
+    tier="extended",
+)
+
+# -----------------------------------------------------------------------
+# Subnets -- `get_subnets_config` (§11.10). Never name/password/ssid.
+# -----------------------------------------------------------------------
+
+SUBNET_ENABLED = _gauge(
+    f"{PREFIX}_subnet_enabled",
+    "Whether the subnet is enabled (1=yes, 0=no).",
+    ("network_id", "subnet_kind", "subnet_type"),
+    family="subnets",
+    source="get_subnets_config().data[].enabled",
+    tier="extended",
+)
+
+SUBNET_WAN_ACCESS = _gauge(
+    f"{PREFIX}_subnet_wan_access",
+    "Whether the subnet has WAN access (1=yes, 0=no).",
+    ("network_id", "subnet_kind", "subnet_type"),
+    family="subnets",
+    source="get_subnets_config().data[].wan_access",
+    tier="extended",
+)
+
+SUBNET_LAN_ACCESS = _gauge(
+    f"{PREFIX}_subnet_lan_access",
+    "Whether the subnet has LAN access (1=yes, 0=no).",
+    ("network_id", "subnet_kind", "subnet_type"),
+    family="subnets",
+    source="get_subnets_config().data[].lan_access",
+    tier="extended",
+)
+
+SUBNET_OPEN_NETWORK = _gauge(
+    f"{PREFIX}_subnet_open_network",
+    "Whether the subnet is an open (unencrypted) network (1=yes, 0=no).",
+    ("network_id", "subnet_kind", "subnet_type"),
+    family="subnets",
+    source="get_subnets_config().data[].open_network",
+    tier="extended",
+)
+
+SUBNET_NAT_PORT_RANDOMIZATION = _gauge(
+    f"{PREFIX}_subnet_nat_port_randomization",
+    "Whether NAT port randomization is enabled on the subnet (1=yes, 0=no).",
+    ("network_id", "subnet_kind", "subnet_type"),
+    family="subnets",
+    source="get_subnets_config().data[].nat_port_randomization",
+    tier="extended",
+)
+
+SUBNET_IGMP_SNOOPING_ENABLED = _gauge(
+    f"{PREFIX}_subnet_igmp_snooping_enabled",
+    "Whether IGMP snooping is enabled on the subnet (1=yes, 0=no).",
+    ("network_id", "subnet_kind", "subnet_type"),
+    family="subnets",
+    source="get_subnets_config().data[].igmp_snooping_enable",
+    tier="extended",
+)
+
+# -----------------------------------------------------------------------
+# Profile-level insights -- `get_profiles_insights` (§11.6, list-level: one
+# call per insight type covers every profile on the network).
+# -----------------------------------------------------------------------
+
+PROFILE_INSIGHTS_TOTAL = _gauge(
+    f"{PREFIX}_profile_insights_total",
+    "Total insight events observed for a profile in the insights window, by type.",
+    ("network_id", "profile_id", "type"),
+    family="profile_insights",
+    source="get_profiles_insights().data.insights[].sum (id from .insights_url)",
+    tier="extended",
+)
 
 
 def reset_all_metrics() -> None:

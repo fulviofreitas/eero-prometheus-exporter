@@ -22,6 +22,9 @@ from .eero_adapter import (
     _parse_network_status,
 )
 from .metrics import (
+    ACCOUNT_ENTITLEMENT_CREATED_TIMESTAMP,
+    ACCOUNT_ENTITLEMENT_PRODUCT_INFO,
+    ACCOUNT_ENTITLEMENT_STATE,
     ACCOUNT_NETWORKS_COUNT,
     ACCOUNT_PREMIUM_NEXT_RENEWAL,
     API_STATUS_VALUES,
@@ -63,6 +66,8 @@ from .metrics import (
     DEVICE_WIFI_GENERATION,
     DEVICE_WIRELESS,
     DNS_CONFIG_INFO,
+    DNS_POLICY_ALLOWED_DOMAINS_COUNT,
+    DNS_POLICY_BLOCKED_DOMAINS_COUNT,
     EERO_BAND_SUPPORTED,
     EERO_CONNECTED_CLIENTS,
     EERO_CONNECTED_WIRED_CLIENTS,
@@ -79,6 +84,7 @@ from .metrics import (
     EERO_LED_BRIGHTNESS,
     EERO_LED_ON,
     EERO_MESH_QUALITY,
+    EERO_NETWORK_WPA3_BAND_MODE,
     EERO_NIGHTLIGHT_BRIGHTNESS,
     EERO_NIGHTLIGHT_ENABLED,
     EERO_NIGHTLIGHT_SCHEDULE_ENABLED,
@@ -135,16 +141,23 @@ from .metrics import (
     NETWORK_DNS_SERVER_COUNT,
     NETWORK_DOUBLE_NAT_DETECTED,
     NETWORK_EEROS_COUNT,
+    NETWORK_FAST_TRANSITION_ENABLED,
+    NETWORK_FEATURE_ENTITLED,
     NETWORK_GUEST_ENABLED,
     NETWORK_INFO,
     NETWORK_IPV6_ENABLED,
     NETWORK_ISP_UP,
     NETWORK_LAST_REBOOT,
     NETWORK_MALWARE_BLOCK_ENABLED,
+    NETWORK_MEMBERS_COUNT,
     NETWORK_MLO_MODE_INFO,
+    NETWORK_NOTIFICATION_ENABLED,
+    NETWORK_NOTIFICATIONS_UNREAD,
+    NETWORK_PERMISSION,
     NETWORK_PORT_FORWARDS_COUNT,
     NETWORK_POWER_SAVING_ENABLED,
     NETWORK_PREMIUM_ENABLED,
+    NETWORK_ROLE_INFO,
     NETWORK_SQM_ENABLED,
     NETWORK_STATUS,
     NETWORK_THREAD_ENABLED,
@@ -162,11 +175,18 @@ from .metrics import (
     PROFILE_CONNECTED_DEVICES_COUNT,
     PROFILE_CONTENT_FILTERS_SET,
     PROFILE_DEVICES_COUNT,
+    PROFILE_INSIGHTS_TOTAL,
     PROFILE_PAUSED,
     PROFILE_SCHEDULES_COUNT,
     SPEED_DOWNLOAD_MBPS,
     SPEED_TEST_TIMESTAMP,
     SPEED_UPLOAD_MBPS,
+    SUBNET_ENABLED,
+    SUBNET_IGMP_SNOOPING_ENABLED,
+    SUBNET_LAN_ACCESS,
+    SUBNET_NAT_PORT_RANDOMIZATION,
+    SUBNET_OPEN_NETWORK,
+    SUBNET_WAN_ACCESS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -185,6 +205,24 @@ def _extract_id_from_url(url: Any) -> str:
     url_str = str(url).split("?", 1)[0]
     parts = url_str.rstrip("/").split("/")
     return parts[-1] if parts else ""
+
+
+_PROFILE_ID_RE = re.compile(r"/profiles/([^/?]+)")
+
+
+def _extract_profile_id_from_url(url: Any) -> str:
+    """Extract a profile ID from a ``.../profiles/<id>/...`` URL path.
+
+    Falls back to :func:`_extract_id_from_url` (last path segment) if the
+    ``profiles/<id>`` pattern is not present, since the exact URL shape of
+    ``insights_url`` was redacted in the v8 probe (§11.6).
+    """
+    if not url:
+        return ""
+    match = _PROFILE_ID_RE.search(str(url))
+    if match:
+        return match.group(1)
+    return _extract_id_from_url(url)
 
 
 def _parse_signal_strength(signal_str: str | None) -> float | None:
@@ -299,6 +337,41 @@ def _sanitize_label_value(value: str) -> str:
         The sanitised label value.
     """
     return _LABEL_SANITIZE_RE.sub("_", value.strip().lower())
+
+
+# WPA3-per-band field name -> band label, and the closed 3-value mode enum
+# (§11.10 of the v8 probe shape summary). The SDK's setter only accepts two
+# bands; the API has three.
+_WPA3_BAND_FIELDS: dict[str, str] = {
+    "band_2_4_ghz": "2_4_ghz",
+    "band_5_ghz": "5_ghz",
+    "band_6_ghz": "6_ghz",
+}
+_WPA3_MODES: tuple[str, ...] = ("WPA2", "WPA2_WPA3", "WPA3")
+
+# Permission dict keys skipped defensively -- redacted-class shapes
+# (`*.password`, `*.multi_ssid`) or keys with no useful CRUD signal
+# (`network.multistatic_ip`, `user.conversations_token`); `per_eero` is a
+# list, not a CRUD dict, and is skipped by its own explicit check (§11.9).
+_PERMISSION_SKIP_SUFFIXES: tuple[str, ...] = (".password", ".multi_ssid")
+_PERMISSION_SKIP_KEYS: frozenset[str] = frozenset(
+    {"network.multistatic_ip", "user.conversations_token"}
+)
+
+# Subnet boolean field -> metric, populated after the metrics module is
+# imported (see the import block above); §11.10 of the v8 probe.
+_SUBNET_BOOL_FIELDS: dict[str, Any] = {
+    "enabled": SUBNET_ENABLED,
+    "wan_access": SUBNET_WAN_ACCESS,
+    "lan_access": SUBNET_LAN_ACCESS,
+    "open_network": SUBNET_OPEN_NETWORK,
+    "nat_port_randomization": SUBNET_NAT_PORT_RANDOMIZATION,
+    "igmp_snooping_enable": SUBNET_IGMP_SNOOPING_ENABLED,
+}
+
+# The three insight types the API supports, shared with profile-level
+# insights (§11.6).
+_PROFILE_INSIGHT_TYPES: tuple[str, ...] = ("adblock", "blocked", "inspected")
 
 
 # Three timestamp shapes coexist across the eero API (§11.0 of the v8 probe
@@ -880,7 +953,19 @@ class EeroCollector:
             return result, None
 
     async def collect(self) -> bool:
-        """Collect metrics from the eero API."""
+        """Collect metrics from the eero API.
+
+        Default GET budget per network per cycle (§9 of the v8 probe shape
+        summary): 2 (account+networks) + network envelope (1) + eeros (1,
+        skipped when `eeros_from_envelope`) + devices (1) + profiles (1) +
+        data usage (len(data_usage_periods) + 1 breakdown) + insights (3) +
+        profile insights (3) -- roughly 21 with every core/extended family
+        on. Commit 7 adds the "extended" tier's 9 fixed-cost reads
+        (entitlements, wpa3, fast_transition, permissions, members,
+        notifications x2, dns_filter, subnets) plus the 3 profile-insights
+        calls, all gated by `include_extended` (and `dns_filter` additionally
+        by `include_premium`).
+        """
         start_time = time.monotonic()
         success = False
         self.last_error_kind = None
@@ -1098,6 +1183,9 @@ class EeroCollector:
 
         if self._include_insights:
             await self._collect_insights_metrics(client, network_id)
+
+        if self._include_extended:
+            await self._collect_extended_metrics(client, network_id)
 
     async def _collect_eero_metrics(
         self,
@@ -2755,3 +2843,297 @@ class EeroCollector:
                         total = None
                     if total is not None:
                         metric.labels(network_id=network_id, category=insight_type).set(total)
+
+    async def _collect_extended_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect the extended tier (§9 #12-19, §11.6/§11.8-11.10 of the v8 probe).
+
+        Nine fixed-cost verified reads, one GET each (notifications issues
+        two: settings + has-unread), plus three profile-insights calls (one
+        per insight type, list-level -- covers every profile in one GET
+        each). Every sub-collector is independently guarded so a partial
+        failure never drops the rest of the tier.
+        """
+        await self._collect_entitlement_metrics(client, network_id)
+        await self._collect_wpa3_metrics(client, network_id)
+        await self._collect_fast_transition_metrics(client, network_id)
+        await self._collect_permission_metrics(client, network_id)
+        await self._collect_member_metrics(client, network_id)
+        await self._collect_notification_metrics(client, network_id)
+        await self._collect_dns_filter_metrics(client, network_id)
+        await self._collect_subnet_metrics(client, network_id)
+        await self._collect_profile_insights_metrics(client, network_id)
+
+    async def _collect_entitlement_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect entitlement features and account entitlement metadata (§11.8).
+
+        `multi_ssid` and `one_password` have no `capability` key at all on
+        the observed payload and are skipped rather than guessed at.
+        """
+        data, exc = await self._api_get("entitlements", client.get_entitlement_features(network_id))
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get entitlement features: {exc}")
+            return
+
+        features = data.get("features")
+        if isinstance(features, dict):
+            for name, spec in features.items():
+                if not isinstance(spec, dict):
+                    continue
+                capability = spec.get("capability")
+                if not isinstance(capability, dict):
+                    continue
+                capable = capability.get("capable")
+                if not isinstance(capable, bool):
+                    continue
+                NETWORK_FEATURE_ENTITLED.labels(
+                    network_id=network_id, feature=_sanitize_label_value(str(name))
+                ).set(1 if capable else 0)
+
+        entitlements = data.get("entitlements")
+        if not isinstance(entitlements, list):
+            return
+        for idx, item in enumerate(entitlements):
+            try:
+                if not isinstance(item, dict):
+                    continue
+                state = item.get("state")
+                if state:
+                    ACCOUNT_ENTITLEMENT_STATE.labels(
+                        network_id=network_id, state=_sanitize_label_value(str(state))
+                    ).set(1)
+
+                product = item.get("product")
+                product_type = product.get("type") if isinstance(product, dict) else None
+                if product_type:
+                    ACCOUNT_ENTITLEMENT_PRODUCT_INFO.labels(
+                        network_id=network_id, type=_sanitize_label_value(str(product_type))
+                    ).set(1)
+
+                created_ts = _parse_timestamp(item.get("created_at"))
+                if created_ts is not None:
+                    ACCOUNT_ENTITLEMENT_CREATED_TIMESTAMP.labels(network_id=network_id).set(
+                        created_ts
+                    )
+            except Exception as item_exc:
+                _LOGGER.warning(
+                    "Skipping entitlement item %d: %s: %s", idx, type(item_exc).__name__, item_exc
+                )
+                continue
+
+    async def _collect_wpa3_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect the per-band WPA3 mode state-set gauge (§11.10).
+
+        Three bands, closed 3-value mode enum -- 1 for the observed mode, 0
+        for the other two, so a dashboard can alert on "not WPA3" cleanly.
+        """
+        data, exc = await self._api_get("wpa3", client.get_wpa3_per_band(network_id))
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get WPA3 per-band mode: {exc}")
+            return
+
+        for field, band_label in _WPA3_BAND_FIELDS.items():
+            mode = data.get(field)
+            if not isinstance(mode, str) or mode not in _WPA3_MODES:
+                continue
+            for candidate in _WPA3_MODES:
+                EERO_NETWORK_WPA3_BAND_MODE.labels(
+                    network_id=network_id, band=band_label, mode=candidate
+                ).set(1 if candidate == mode else 0)
+
+    async def _collect_fast_transition_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect the fast-transition (802.11r) boolean (§11.10)."""
+        data, exc = await self._api_get("fast_transition", client.get_fast_transition(network_id))
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get fast transition: {exc}")
+            return
+
+        enabled = data.get("fast_transition")
+        if isinstance(enabled, bool):
+            NETWORK_FAST_TRANSITION_ENABLED.labels(network_id=network_id).set(1 if enabled else 0)
+
+    async def _collect_permission_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect the flat dotted-key permission booleans and role (§11.9).
+
+        `permissions.permissions` is a flat dict, not a tree -- walked
+        directly. `*.password`/`*.multi_ssid`/`network.multistatic_ip`/
+        `user.conversations_token` are redacted-class keys and skipped;
+        `per_eero` is a list, not a CRUD dict, and skipped here too.
+        """
+        data, exc = await self._api_get("permissions", client.get_permissions(network_id))
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get permissions: {exc}")
+            return
+
+        role = data.get("role")
+        if role:
+            NETWORK_ROLE_INFO.labels(network_id=network_id).info({"role": str(role)})
+
+        permissions = data.get("permissions")
+        if not isinstance(permissions, dict):
+            return
+        for key, value in permissions.items():
+            if key == "per_eero":
+                continue
+            if key in _PERMISSION_SKIP_KEYS or key.endswith(_PERMISSION_SKIP_SUFFIXES):
+                continue
+            if not isinstance(value, dict):
+                continue
+            read_perm = value.get("read")
+            if not isinstance(read_perm, bool):
+                continue
+            NETWORK_PERMISSION.labels(
+                network_id=network_id, capability=_sanitize_label_value(key)
+            ).set(1 if read_perm else 0)
+
+    async def _collect_member_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect the member count (§11.10). Never the member list itself."""
+        data, exc = await self._api_get("members", client.get_members(network_id))
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get members: {exc}")
+            return
+
+        members = data.get("members")
+        if isinstance(members, list):
+            NETWORK_MEMBERS_COUNT.labels(network_id=network_id).set(len(members))
+
+    async def _collect_notification_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect notification-setting booleans and the unread flag (§11.10).
+
+        Two independently-guarded GETs: `get_notification_settings` (flat
+        dotted-key booleans) and `has_unread_notifications` (a bool, not a
+        count).
+        """
+        settings, exc = await self._api_get(
+            "notifications", client.get_notification_settings(network_id)
+        )
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get notification settings: {exc}")
+        else:
+            for key, value in settings.items():
+                if isinstance(value, bool):
+                    NETWORK_NOTIFICATION_ENABLED.labels(
+                        network_id=network_id, event=_sanitize_label_value(key)
+                    ).set(1 if value else 0)
+
+        unread, exc = await self._api_get(
+            "notifications_unread", client.has_unread_notifications(network_id)
+        )
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get unread-notifications flag: {exc}")
+            return
+
+        has_unread = unread.get("has_unread")
+        if isinstance(has_unread, bool):
+            NETWORK_NOTIFICATIONS_UNREAD.labels(network_id=network_id).set(1 if has_unread else 0)
+
+    async def _collect_dns_filter_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect the advanced content filter's list lengths (§11.10).
+
+        Premium-only: gated by `include_premium` in addition to
+        `include_extended`. `EeroPremiumRequiredError` is an expected state
+        on non-subscribed accounts, not a scrape error (handled by
+        `_api_get`/`_record_api_result`, which log it at DEBUG).
+        """
+        if not self._include_premium:
+            return
+
+        data, exc = await self._api_get(
+            "dns_filter", client.get_advanced_content_filter(network_id)
+        )
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get advanced content filter: {exc}")
+            return
+
+        allowed_list = data.get("allowed_list")
+        if isinstance(allowed_list, list):
+            DNS_POLICY_ALLOWED_DOMAINS_COUNT.labels(network_id=network_id).set(len(allowed_list))
+
+        blocked_list = data.get("blocked_list")
+        if isinstance(blocked_list, list):
+            DNS_POLICY_BLOCKED_DOMAINS_COUNT.labels(network_id=network_id).set(len(blocked_list))
+
+    async def _collect_subnet_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect per-subnet booleans (§11.10). Never name/password/ssid.
+
+        Labelled by `subnet_kind` (closed enum: guest|main) and
+        `subnet_type`, per the commit brief -- never `subnet_id`, `name`, or
+        `password`.
+        """
+        subnets, exc = await self._api_get("subnets", client.get_subnets_config(network_id))
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get subnets config: {exc}")
+            return
+        if not isinstance(subnets, list):
+            return
+
+        for idx, subnet in enumerate(subnets):
+            try:
+                if not isinstance(subnet, dict):
+                    continue
+                labels = {
+                    "network_id": network_id,
+                    "subnet_kind": str(subnet.get("subnet_kind") or "unknown"),
+                    "subnet_type": str(subnet.get("subnet_type") or "unknown"),
+                }
+                for field, metric in _SUBNET_BOOL_FIELDS.items():
+                    value = subnet.get(field)
+                    if isinstance(value, bool):
+                        metric.labels(**labels).set(1 if value else 0)
+            except Exception as item_exc:
+                _LOGGER.warning(
+                    "Skipping subnet item %d: %s: %s", idx, type(item_exc).__name__, item_exc
+                )
+                continue
+
+    async def _collect_profile_insights_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect per-profile insight totals (§11.6, list-level).
+
+        One GET per insight type covers every profile on the network --
+        `data.insights[]` carries one item per profile, keyed to a profile
+        by `.insights_url` (the request-response cadence is the same
+        24-hour trailing window as `_collect_insights_metrics`).
+        """
+        now = datetime.now(UTC)
+        end_str = _format_utc_z(now)
+        start_str = _format_utc_z(now - timedelta(hours=24))
+
+        for insight_type in _PROFILE_INSIGHT_TYPES:
+            data, exc = await self._api_get(
+                "profiles_insights",
+                client.get_profiles_insights(
+                    network_id,
+                    start=start_str,
+                    end=end_str,
+                    cadence="daily",
+                    insight_type=insight_type,
+                ),
+            )
+            if exc is not None:
+                _LOGGER.debug(f"Failed to get {insight_type} profile insights: {exc}")
+                continue
+
+            insights = data.get("insights")
+            if not isinstance(insights, list):
+                continue
+
+            for idx, item in enumerate(insights):
+                try:
+                    if not isinstance(item, dict):
+                        continue
+                    profile_id = _extract_profile_id_from_url(item.get("insights_url"))
+                    if not profile_id:
+                        continue
+                    total = item.get("sum")
+                    if total is None:
+                        continue
+                    PROFILE_INSIGHTS_TOTAL.labels(
+                        network_id=network_id, profile_id=profile_id, type=insight_type
+                    ).set(float(total))
+                except Exception as item_exc:
+                    _LOGGER.warning(
+                        "Skipping profile insights item %d: %s: %s",
+                        idx,
+                        type(item_exc).__name__,
+                        item_exc,
+                    )
+                    continue

@@ -1,0 +1,12 @@
+{
+  "device.new": false,
+  "device.restrict.new.private": false,
+  "network.updated": false,
+  "network.dataUsageReport": false,
+  "network.scheduledUpdate.earlyNotification": false,
+  "network.scheduledUpdate.lateNotification": false,
+  "premium.activity.weeklyReport": false,
+  "permissions.updates": false,
+  "backup.internet.status.change": false,
+  "port.security.blocked": true
+}

@@ -62,6 +62,16 @@ def _mock_client(network_details: dict, data_usage_periods: int = 3) -> MagicMoc
     client.get_reservations = AsyncMock(return_value=[])
     client.get_blacklist = AsyncMock(return_value=[])
     client.get_insights = AsyncMock(return_value={})
+    client.get_entitlement_features = AsyncMock(return_value={})
+    client.get_wpa3_per_band = AsyncMock(return_value={})
+    client.get_fast_transition = AsyncMock(return_value={})
+    client.get_permissions = AsyncMock(return_value={})
+    client.get_members = AsyncMock(return_value={})
+    client.get_notification_settings = AsyncMock(return_value={})
+    client.has_unread_notifications = AsyncMock(return_value={})
+    client.get_advanced_content_filter = AsyncMock(return_value={})
+    client.get_subnets_config = AsyncMock(return_value=[])
+    client.get_profiles_insights = AsyncMock(return_value={})
     return client
 
 
@@ -170,6 +180,7 @@ async def test_requests_last_cycle_matches_adapter_call_count() -> None:
         include_devices=False,
         include_data_usage=False,
         include_premium=False,
+        include_extended=False,
     )
     collector = EeroCollector(session_file="/tmp/session.json", config=config)  # nosec B108
     mock_client = _mock_client(network_details)
@@ -178,5 +189,5 @@ async def test_requests_last_cycle_matches_adapter_call_count() -> None:
         await collector.collect()
 
     # get_networks + get_network only, with eeros_from_envelope=True and
-    # every optional family disabled.
+    # every optional family (including the extended tier) disabled.
     assert EXPORTER_API_REQUESTS_LAST_CYCLE._value.get() == 2
