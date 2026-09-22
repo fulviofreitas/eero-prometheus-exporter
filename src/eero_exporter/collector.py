@@ -1351,8 +1351,12 @@ class EeroCollector:
 
         NETWORK_EEROS_COUNT.labels(network_id=network_id, name=network_name).set(len(eeros))
 
-        # Count eeros with updates available
-        updates_count = sum(1 for e in eeros if e.get("update_available", False))
+        # Count eeros with updates available. `isinstance` guard so a single
+        # malformed (non-dict) item can't crash this count before the
+        # per-item try/except loop below gets a chance to isolate it.
+        updates_count = sum(
+            1 for e in eeros if isinstance(e, dict) and e.get("update_available", False)
+        )
         NETWORK_UPDATES_AVAILABLE.labels(network_id=network_id, name=network_name).set(
             updates_count
         )
@@ -1698,12 +1702,19 @@ class EeroCollector:
             _LOGGER.warning(f"Failed to get devices: {exc}")
             return None
 
-        connected_count = sum(1 for d in devices if d.get("connected", False))
+        # `isinstance` guards so a single malformed (non-dict) item can't
+        # crash these counts before the per-item try/except loop below gets
+        # a chance to isolate it.
+        connected_count = sum(
+            1 for d in devices if isinstance(d, dict) and d.get("connected", False)
+        )
         NETWORK_CLIENTS_COUNT.labels(network_id=network_id, name=network_name).set(connected_count)
 
         # Count guest network clients
         guest_count = sum(
-            1 for d in devices if d.get("connected", False) and d.get("is_guest", False)
+            1
+            for d in devices
+            if isinstance(d, dict) and d.get("connected", False) and d.get("is_guest", False)
         )
         GUEST_NETWORK_CONNECTED_CLIENTS.labels(network_id=network_id, name=network_name).set(
             guest_count
