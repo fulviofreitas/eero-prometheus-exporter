@@ -407,21 +407,24 @@ def session_info(
     console.print(f"\n[bold blue]Eero Prometheus Exporter v{__version__}[/bold blue]\n")
     console.print(f"Session file: [dim]{session_path}[/dim]")
 
-    exists = session_path.exists()
-    console.print(f"Exists: {exists}")
-
-    if not exists:
-        console.print("\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
-        raise typer.Exit(1)
-
+    # `Path.exists()` is not uniformly safe: on Python 3.12/3.13 it re-raises
+    # any OSError it does not consider "missing file" (a directory the user
+    # cannot traverse, for example), while 3.14 returns False. Stat once,
+    # inside the handler, and derive existence from the result.
     try:
         st = session_path.stat()
-        mode = stat.filemode(st.st_mode)
-        console.print(f"Mode: {mode} ({oct(st.st_mode & 0o777)})")
-        console.print(f"Owned by current user: {st.st_uid == os.getuid()}")
+    except FileNotFoundError:
+        console.print("Exists: False")
+        console.print("\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
+        raise typer.Exit(1)
     except OSError as e:
         console.print(f"[bold red]Could not stat session file:[/bold red] {e}")
         raise typer.Exit(1)
+
+    console.print("Exists: True")
+    mode = stat.filemode(st.st_mode)
+    console.print(f"Mode: {mode} ({oct(st.st_mode & 0o777)})")
+    console.print(f"Owned by current user: {st.st_uid == os.getuid()}")
 
     parent_writable = os.access(session_path.parent, os.W_OK)
     console.print(f"Directory writable: {parent_writable}")
