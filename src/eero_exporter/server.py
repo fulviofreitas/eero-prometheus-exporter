@@ -824,6 +824,11 @@ async def collection_loop(
         except SystemExit:
             raise
         except Exception as e:
+            # Log before recording: the failure path above tells operators to
+            # "check logs for details", and an unexpected exception here (a
+            # parser bug, an SDK exception the adapter does not map) would
+            # otherwise appear only in the /health JSON, with its type lost.
+            _LOGGER.exception("Collection cycle raised %s", type(e).__name__)
             _health_state["last_collection_success"] = False
             _health_state["session_valid"] = False
             collections_failed = _health_state["collections_failed"]
