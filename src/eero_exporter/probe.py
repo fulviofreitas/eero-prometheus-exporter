@@ -570,7 +570,11 @@ def _merge_scalar_markers(
     if type_name == "str":
         values = sorted(_collect_kept_values(left_raw) | _collect_kept_values(right_raw))
         merged: dict[str, Any] = {"_type": "str"}
-        if values and len(values) <= _MAX_MERGED_VALUES:
+        if values and all(_ISO8601_RE.match(item) for item in values):
+            # Per-item timestamps (e.g. device last_active) are behavioural data;
+            # across a list only the fact that the field is a timestamp matters.
+            merged["_iso8601"] = True
+        elif values and len(values) <= _MAX_MERGED_VALUES:
             merged["_values"] = values
         if "_value" in left and left.get("_value") == right.get("_value"):
             merged["_value"] = left["_value"]
@@ -596,7 +600,9 @@ def _merge_list_markers(left: Mapping[str, Any], right: Mapping[str, Any]) -> di
             right_item if right_item is not None else {"_type": "null"},
         )
     values = sorted(set(left.get("_values", [])) | set(right.get("_values", [])))
-    if values and len(values) <= _MAX_MERGED_VALUES:
+    if values and all(_ISO8601_RE.match(item) for item in values):
+        merged["_iso8601"] = True
+    elif values and len(values) <= _MAX_MERGED_VALUES:
         merged["_values"] = values
     if "_value" in left and left.get("_value") == right.get("_value"):
         merged["_value"] = left["_value"]

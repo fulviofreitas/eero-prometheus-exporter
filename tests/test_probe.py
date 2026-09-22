@@ -366,6 +366,18 @@ class TestRedaction:
         assert tree["meta"]["server_time"] == "2026-09-21T10:11:12Z"
         assert tree["data"]["created"] == "2024-01-02T03:04:05Z"
 
+    def test_per_item_timestamps_collapse_across_a_list(self) -> None:
+        """Distinct timestamps across list items are behavioural data: keep only the fact."""
+        payload = [
+            {"last_active": "2026-09-20T01:02:03Z"},
+            {"last_active": "2026-09-20T04:05:06.123Z"},
+            {"last_active": "2026-09-21T07:08:09.123456789Z"},
+        ]
+        item = redact(payload)["_item"]
+        assert item["last_active"] == {"_type": "str", "_iso8601": True}
+        assert "_values" not in item["last_active"]
+        assert "2026-09-20T01:02:03Z" not in json.dumps(item)
+
     def test_numbers_and_booleans_survive(self, kitchen_sink: dict[str, Any]) -> None:
         data = redact(kitchen_sink)["data"]
         assert data["client_count"] == 37
