@@ -64,6 +64,11 @@ ignore = [
     "B904",  # Within except clause, raise with from (not always needed for CLI exits)
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# The dashboard generator embeds PromQL expressions as single string literals;
+# breaking them to fit the line limit would make the queries unreadable.
+"scripts/gen_dashboard.py" = ["E501"]
+
 [tool.isort]
 profile = "black"
 line_length = 100

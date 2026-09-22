@@ -11,6 +11,8 @@ colour schemes) -- see ``claude/rules/grafana-dashboard.md``.
 
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +20,9 @@ import pytest
 
 from eero_exporter.metrics import REMOVED_IN_4_0_0, describe_metrics
 
-DASHBOARD = Path(__file__).resolve().parent.parent / "grafana" / "eero-dashboard.json"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DASHBOARD = REPO_ROOT / "grafana" / "eero-dashboard.json"
+GENERATOR = REPO_ROOT / "scripts" / "gen_dashboard.py"
 
 NETWORK_SCOPE = 'network_id=~"$network_id"'
 
@@ -98,6 +102,24 @@ def _overlaps(panels: list[dict[str, Any]]) -> list[tuple[int, int]]:
 # ---------------------------------------------------------------------------
 # Envelope
 # ---------------------------------------------------------------------------
+
+
+def test_generator_reproduces_the_committed_dashboard() -> None:
+    """The committed JSON must be exactly what ``scripts/gen_dashboard.py`` emits.
+
+    The dashboard is generated, not hand-edited: this fails when someone edits
+    the JSON directly, or adds a metric without regenerating.
+    """
+    result = subprocess.run(
+        [sys.executable, str(GENERATOR), "--check"],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0, (
+        "grafana/eero-dashboard.json is out of date -- run "
+        f"`uv run python scripts/gen_dashboard.py`\n{result.stdout}{result.stderr}"
+    )
 
 
 def test_dashboard_is_valid_json() -> None:
