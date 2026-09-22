@@ -277,9 +277,9 @@ def test_every_registry_metric_is_charted(metric: Any) -> None:
     if metric.name in UNCHARTED_ALLOWLIST:
         pytest.skip("explicitly allowlisted as uncharted")
     exprs = "\n".join(_exprs(_dashboard()))
-    assert _mentions(_exposed_name(metric), exprs), (
-        f"{metric.name} ({metric.tier}/{metric.family}) is not charted on the dashboard"
-    )
+    assert _mentions(
+        _exposed_name(metric), exprs
+    ), f"{metric.name} ({metric.tier}/{metric.family}) is not charted on the dashboard"
 
 
 def test_uncharted_allowlist_only_names_registry_metrics() -> None:

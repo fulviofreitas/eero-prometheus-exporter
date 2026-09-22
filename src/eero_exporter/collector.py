@@ -2820,9 +2820,9 @@ class EeroCollector:
                     ).info(
                         {
                             "neighbor_type": str(neighbor_type) if neighbor_type else "unknown",
-                            "neighbor_port": str(neighbor_port)
-                            if neighbor_port is not None
-                            else "unknown",
+                            "neighbor_port": (
+                                str(neighbor_port) if neighbor_port is not None else "unknown"
+                            ),
                         }
                     )
 

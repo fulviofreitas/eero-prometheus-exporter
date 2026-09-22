@@ -126,9 +126,9 @@ class TestCoerceNumeric:
         debug_records = [
             r for r in caplog.records if r.levelno == logging.DEBUG and "uptime" in r.message
         ]
-        assert len(debug_records) == 1, (
-            f"Expected exactly 1 DEBUG log for same field+keys, got {len(debug_records)}"
-        )
+        assert (
+            len(debug_records) == 1
+        ), f"Expected exactly 1 DEBUG log for same field+keys, got {len(debug_records)}"
 
     def test_unknown_shape_logs_separately_per_field(
         self, caplog: pytest.LogCaptureFixture

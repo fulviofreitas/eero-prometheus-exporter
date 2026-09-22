@@ -212,9 +212,9 @@ def test_every_option_envvar_matches_the_derived_name() -> None:
         if command_name == "probe" and isinstance(actual, str):
             if actual.startswith("EERO_EXPORTER_PROBE_"):
                 continue
-        assert actual == expected, (
-            f"{command_name} {long_opt}: envvar {actual!r} != expected {expected!r}"
-        )
+        assert (
+            actual == expected
+        ), f"{command_name} {long_opt}: envvar {actual!r} != expected {expected!r}"
 
 
 def test_every_option_shows_envvar_in_help() -> None:

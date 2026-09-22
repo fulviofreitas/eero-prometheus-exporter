@@ -436,8 +436,7 @@ _TRAVERSE_KEYS = frozenset({"geo_ip", "name_servers"})
 _ENUM_VALUE_RE = re.compile(r"^[A-Za-z0-9_./-]{1,32}$")
 
 _ISO8601_RE = re.compile(
-    r"^\d{4}-\d{2}-\d{2}"
-    r"(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$"
+    r"^\d{4}-\d{2}-\d{2}" r"(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$"
 )
 
 #: Values that look like an identifier are never kept, even under an enum key.

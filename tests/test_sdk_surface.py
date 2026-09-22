@@ -181,9 +181,9 @@ class TestAdapterCallsValidSignatures:
         for match in data_usage_calls:
             call_args = match.group(2)
             for required in ("start=", "end=", "cadence="):
-                assert required in call_args, (
-                    f"{match.group(1)} must pass {required} as a keyword: {call_args.strip()}"
-                )
+                assert (
+                    required in call_args
+                ), f"{match.group(1)} must pass {required} as a keyword: {call_args.strip()}"
 
     def test_removed_methods_not_called(self) -> None:
         """Methods removed from the SDK in v8 must not be called by the adapter."""
