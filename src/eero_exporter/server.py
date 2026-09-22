@@ -10,7 +10,7 @@ import signal
 import threading
 import time
 import urllib.parse
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Thread
 from typing import Any
@@ -344,8 +344,15 @@ def _render_auth_html(
 """.encode()
 
 
-class MetricsHandler(SimpleHTTPRequestHandler):
-    """HTTP handler for Prometheus metrics endpoint."""
+class MetricsHandler(BaseHTTPRequestHandler):
+    """HTTP handler for the exporter's fixed set of endpoints.
+
+    Deliberately built on `BaseHTTPRequestHandler`, not
+    `SimpleHTTPRequestHandler`: the latter's inherited `do_HEAD`/`send_head`
+    serve files from the process working directory, which would let an
+    unauthenticated client enumerate files (existence, size, mtime) next to
+    the exporter. Only the routes matched in `do_GET`/`do_POST` exist.
+    """
 
     def log_message(self, format: str, *args: object) -> None:
         """Override to use our logger."""
@@ -609,9 +616,20 @@ class MetricsHandler(SimpleHTTPRequestHandler):
         return {key: values[0] for key, values in parsed.items()}
 
     def _auth_token_and_csrf_ok(self, state: "AuthUiState", form: dict[str, str]) -> bool:
-        """Constant-time check of the submitted token and CSRF field."""
-        token_ok = hmac.compare_digest(form.get("token", ""), state.token)
-        csrf_ok = hmac.compare_digest(form.get("csrf", ""), state.csrf_token)
+        """Constant-time check of the submitted token and CSRF field.
+
+        Both operands are encoded to bytes first: `hmac.compare_digest`
+        raises `TypeError` on `str` arguments containing non-ASCII
+        characters, and `_read_form` decodes the body with
+        `errors="replace"`, so any invalid byte in the submitted token
+        would otherwise crash the handler before any authorization check.
+        """
+        token_ok = hmac.compare_digest(
+            form.get("token", "").encode("utf-8"), state.token.encode("utf-8")
+        )
+        csrf_ok = hmac.compare_digest(
+            form.get("csrf", "").encode("utf-8"), state.csrf_token.encode("utf-8")
+        )
         return token_ok and csrf_ok
 
     def _send_auth_denied(self, state: "AuthUiState") -> None:
@@ -683,15 +701,14 @@ class MetricsHandler(SimpleHTTPRequestHandler):
             return
 
         form = self._read_form()
-        if not self._auth_token_and_csrf_ok(state, form):
-            self._send_auth_denied(state)
-            return
-
         identifier = form.get("identifier", "")
-        if not identifier:
-            self._serve_auth_page(
-                status=400, message="An email address or phone number is required."
-            )
+        # A missing identifier is denied exactly like a wrong token or CSRF:
+        # a distinguishable response here would be a free oracle telling an
+        # attacker that a guessed access token is correct, without ever
+        # sending a verification code. The form marks the field `required`,
+        # so a browser never submits this case.
+        if not self._auth_token_and_csrf_ok(state, form) or not identifier:
+            self._send_auth_denied(state)
             return
 
         try:
@@ -720,17 +737,14 @@ class MetricsHandler(SimpleHTTPRequestHandler):
             return
 
         form = self._read_form()
-        if not self._auth_token_and_csrf_ok(state, form):
+        code = form.get("code", "")
+        # Wrong token, wrong CSRF, missing code and "no pending flow" all
+        # produce the identical 403 and all count toward the rate limit, so
+        # none of them can be used to test a guessed access token.
+        if not self._auth_token_and_csrf_ok(state, form) or not state.has_pending() or not code:
             self._send_auth_denied(state)
             return
 
-        if not state.has_pending():
-            self._serve_auth_page(
-                status=400, message="No pending verification -- start over below."
-            )
-            return
-
-        code = form.get("code", "")
         try:
             state.verify(code)
         except EeroAuthError as e:

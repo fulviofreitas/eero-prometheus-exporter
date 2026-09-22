@@ -90,15 +90,28 @@ def auth_server():  # type: ignore[no-untyped-def]
     srv.shutdown()
 
 
-def test_login_missing_identifier_reprompts_with_400(auth_server: _AuthServer) -> None:
+def test_login_missing_identifier_is_denied_exactly_like_a_wrong_token(
+    auth_server: _AuthServer,
+) -> None:
+    """A correct token with no identifier must not be distinguishable from a wrong token.
+
+    Anything else is an oracle: the CSRF value is served by an unauthenticated
+    GET, so an attacker could otherwise test access-token guesses without ever
+    triggering a verification code.
+    """
     _status, _headers, body = auth_server.request("GET", "/auth")
     csrf = _csrf_from_body(body)
 
-    status, _headers, body = auth_server.request(
+    good_token = auth_server.request(
         "POST", "/auth/login", body=f"token={_TOKEN}&identifier=&csrf={csrf}"
     )
-    assert status == 400
-    assert "email address or phone number is required" in body.lower()
+    bad_token = auth_server.request(
+        "POST", "/auth/login", body=f"token=wrong-token-value&identifier=&csrf={csrf}"
+    )
+
+    assert good_token[0] == 403
+    assert good_token[0] == bad_token[0]
+    assert good_token[2] == bad_token[2]
 
 
 @pytest.mark.parametrize(
@@ -125,15 +138,41 @@ def test_login_adapter_error_reprompts_with_400(auth_server: _AuthServer, exc: E
     assert type(exc).__name__ in body
 
 
-def test_verify_no_pending_flow_reprompts_with_400(auth_server: _AuthServer) -> None:
+def test_verify_without_a_pending_flow_is_denied_like_a_wrong_token(
+    auth_server: _AuthServer,
+) -> None:
+    """Verify with no pending flow must look identical to a wrong token."""
+    _status, _headers, body = auth_server.request("GET", "/auth")
+    csrf = _csrf_from_body(body)
+
+    good_token = auth_server.request(
+        "POST", "/auth/verify", body=f"token={_TOKEN}&code=123456&csrf={csrf}"
+    )
+    bad_token = auth_server.request(
+        "POST", "/auth/verify", body=f"token=wrong-token-value&code=123456&csrf={csrf}"
+    )
+
+    assert good_token[0] == 403
+    assert good_token[0] == bad_token[0]
+    assert good_token[2] == bad_token[2]
+
+
+def test_non_ascii_token_does_not_crash_the_handler(auth_server: _AuthServer) -> None:
+    """A non-ASCII byte in the token field must be denied, not raise TypeError.
+
+    `hmac.compare_digest` rejects `str` operands with non-ASCII characters, and
+    the body is decoded with `errors="replace"`, so any invalid byte would
+    otherwise escape as an unhandled exception before authorization runs.
+    """
     _status, _headers, body = auth_server.request("GET", "/auth")
     csrf = _csrf_from_body(body)
 
     status, _headers, body = auth_server.request(
-        "POST", "/auth/verify", body=f"token={_TOKEN}&code=123456&csrf={csrf}"
+        "POST", "/auth/login", body=f"token=%C3%A9x&identifier=me@example.com&csrf={csrf}"
     )
-    assert status == 400
-    assert "no pending verification" in body.lower()
+
+    assert status == 403
+    assert "forbidden" in body.lower()
 
 
 @pytest.mark.parametrize(

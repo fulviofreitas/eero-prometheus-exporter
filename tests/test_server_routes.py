@@ -190,6 +190,25 @@ def test_unknown_get_path_404(basic_server: _BasicServer) -> None:
     assert status == 404
 
 
+def test_head_does_not_serve_files_from_the_working_directory(
+    basic_server: _BasicServer,
+) -> None:
+    """The handler must not inherit SimpleHTTPRequestHandler's directory serving.
+
+    That base class answers HEAD from `send_head()`, which would let an
+    unauthenticated client confirm the existence, size and mtime of files
+    next to the exporter process.
+    """
+    conn = http.client.HTTPConnection("127.0.0.1", basic_server.port, timeout=5)
+    try:
+        conn.request("HEAD", "/pyproject.toml")
+        resp = conn.getresponse()
+        resp.read()
+        assert resp.status == 501
+    finally:
+        conn.close()
+
+
 def test_auth_get_404_when_auth_ui_disabled(basic_server: _BasicServer) -> None:
     status, _headers, _body = basic_server.request("GET", "/auth")
     assert status == 404
