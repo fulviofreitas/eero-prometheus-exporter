@@ -1,0 +1,40 @@
+{
+  "utilization": [
+    {
+      "eero_id": 1,
+      "channel": 6,
+      "band": "band_2_4GHz",
+      "frequency": 2437,
+      "center_channel": 6,
+      "channel_bandwidth": "20MHz",
+      "minutes_over_busy_threshold": 3,
+      "average_utilization": 12,
+      "max_utilization": 44,
+      "p99_utilization": 40,
+      "acs_events": [{"timestamp": 1758000000, "from_channel": 1, "to_channel": 6}],
+      "time_series_data": [
+        {"timestamp": 1758000000, "busy": 10, "noise": 2, "rx_tx": 5, "rx_other": 3},
+        {"timestamp": 1758000300, "busy": 14, "noise": 3, "rx_tx": 6, "rx_other": 5}
+      ]
+    },
+    {
+      "eero_id": 1,
+      "channel": 36,
+      "band": "band_5GHz_low",
+      "frequency": 5180,
+      "center_channel": 42,
+      "channel_bandwidth": "80MHz",
+      "minutes_over_busy_threshold": 0,
+      "average_utilization": 5,
+      "max_utilization": 9,
+      "p99_utilization": 8,
+      "acs_events": [],
+      "time_series_data": []
+    }
+  ],
+  "bands": ["band_2_4GHz", "band_5GHz", "band_6GHz"],
+  "eeros": [
+    {"eero_id": 1, "role": "gateway", "location": "Living Room", "wired": true, "ring_lte_state": "off"},
+    {"eero_id": 2, "role": "leaf", "location": "Bedroom", "wired": false, "ring_lte_state": "off"}
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "applications": [
+    {"name": "app1", "display_name": "App One", "is_blocked": false, "categories": ["social"]},
+    {"name": "app2", "display_name": "App Two", "is_blocked": true, "categories": ["gaming"]}
+  ],
+  "categories_list": [
+    {"id": "cat1", "title": "Social", "hide_from_app_list": false}
+  ]
+}

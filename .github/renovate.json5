@@ -108,18 +108,16 @@
     },
 
     // ==========================================================================
-    // 🟢 eero-api - Internal dependency (MUST BE LAST to override other rules)
+    // 🟢 eero-api minor/patch updates (keep current behaviour)
     // ==========================================================================
     // Updates trigger minor version bump via feat(deps): prefix.
-    // This rule is placed LAST so it takes precedence over all other rules.
+    // This rule handles minor and patch updates (not major).
     {
       matchPackageNames: ["eero-api"],
       matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
+      matchUpdateTypes: ["minor", "patch"],
       groupName: "eero-api",
-      description: "🟢 eero-api update (triggers minor release, requires review)",
-      // Constraint in pyproject.toml pins major+minor (e.g. ~=4.6.0).
-      // "bump" rewrites the manifest on every new release so a PR is raised
-      // even when the new version technically satisfies the existing range.
+      description: "🟢 eero-api minor/patch update (triggers minor release, requires review)",
       rangeStrategy: "bump",
       automerge: false,
       addLabels: ["eero-api", "feature", "critical", "needs-review"],
@@ -129,7 +127,7 @@
       commitMessageTopic: "eero-api",
       commitMessageExtra: "to {{{newVersion}}}",
       prBodyNotes: [
-        "## 🟢 eero-api Update",
+        "## 🟢 eero-api Minor/Patch Update",
         "",
         "This PR updates `eero-api`, the core API client for eero network communication.",
         "",
@@ -139,7 +137,56 @@
         "- [eero-api Releases](https://github.com/fulviofreitas/eero-api/releases)",
       ],
     },
+
+    // ==========================================================================
+    // 🔴 eero-api major updates (breaking changes)
+    // ==========================================================================
+    // Major version updates are breaking changes. Marked do-not-merge to prevent
+    // accidental landing via automerge, and chore(deps): prefix prevents a bare
+    // bump from cutting a release.
+    {
+      matchPackageNames: ["eero-api"],
+      matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
+      matchUpdateTypes: ["major"],
+      groupName: "eero-api-major",
+      description: "🔴 eero-api major update (breaking change, requires manual integration)",
+      rangeStrategy: "bump",
+      automerge: false,
+      addLabels: ["eero-api", "breaking-change", "needs-review", "do-not-merge"],
+      reviewers: ["fulviofreitas"],
+      prPriority: 15,
+      commitMessagePrefix: "chore(deps):",
+      commitMessageTopic: "eero-api",
+      commitMessageExtra: "to {{{newVersion}}}",
+      prBodyNotes: [
+        "## 🔴 eero-api Major Update (BREAKING CHANGE)",
+        "",
+        "This PR updates `eero-api` to a new major version, which includes breaking changes.",
+        "This requires careful integration and testing. The `do-not-merge` label prevents",
+        "accidental landing via automerge. Remove it only after thorough testing and review.",
+        "",
+        "### Links",
+        "- [eero-api on PyPI](https://pypi.org/project/eero-api/)",
+        "- [eero-api Repository](https://github.com/fulviofreitas/eero-api)",
+        "- [eero-api Releases](https://github.com/fulviofreitas/eero-api/releases)",
+        "- [eero-api Changelog](https://github.com/fulviofreitas/eero-api/wiki/Deprecations)",
+      ],
+    },
   ],
+
+  // ============================================================================
+  // 🔧 Lock File Maintenance (uv.lock via pep621)
+  // ============================================================================
+  // Refreshes uv.lock transitive pins on a schedule. Not automerged: the lock
+  // now drives the Docker image, so a lock refresh is reviewed like any dep PR.
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ["before 4am on monday"],
+    automerge: false,
+    addLabels: ["needs-review"],
+    commitMessagePrefix: "chore(deps):",
+    commitMessageTopic: "lock file",
+  },
 
   // Vulnerability alerts
   vulnerabilityAlerts: {

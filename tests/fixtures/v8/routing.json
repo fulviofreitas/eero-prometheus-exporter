@@ -1,0 +1,7 @@
+{
+  "url": "/2.2/networks/999001/routing",
+  "devices": {"url": "/2.2/networks/999001/routing/devices", "data": [{"url": "x", "mac": "REDACTED", "nickname": null}]},
+  "reservations": {"url": "/2.2/networks/999001/routing/reservations", "data": []},
+  "forwards": {"url": "/2.2/networks/999001/routing/forwards", "data": []},
+  "pinholes": {"url": "/2.2/networks/999001/routing/pinholes", "data": []}
+}

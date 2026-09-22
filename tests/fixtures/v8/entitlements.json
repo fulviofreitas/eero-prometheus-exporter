@@ -1,0 +1,46 @@
+{
+  "entitlements": [
+    {
+      "branding_id": "eero",
+      "display_name": "Eero Plus",
+      "id": "ent-1",
+      "product": {
+        "id": "prod-1",
+        "branding_id": "eero",
+        "type": "Premium",
+        "tier": "plus_annual",
+        "renewal_mode": "auto_renew",
+        "purchasing_channel": "apple"
+      },
+      "renewal_info": {
+        "renewal_mode": "auto_renew",
+        "next_renewal_at": null
+      },
+      "state": "Active",
+      "source": "APPLE",
+      "created_at": "2023-07-22T15:24:19.058Z"
+    }
+  ],
+  "features": {
+    "channel_utilization": {"capability": {"capable": true}, "actions": {}},
+    "event_stream": {"capability": {"capable": true}, "actions": {}},
+    "guardian_vpn": {"capability": {"capable": true}, "actions": {}},
+    "historical_data_usage": {"capability": {"capable": true}, "actions": {}},
+    "identity_protection": {"capability": {"capable": true}, "actions": {}},
+    "internet_backup": {"capability": {"capable": true}, "actions": {}},
+    "malwarebytes": {"capability": {"capable": true}, "actions": {}},
+    "ad_blocking": {"capability": {"capable": false}, "actions": {}},
+    "block_and_allow_sites": {
+      "capability": {"capable": false},
+      "actions": {
+        "block_sites": {"capability": {"capable": false}},
+        "allow_sites": {"capability": {"capable": false}}
+      }
+    },
+    "block_apps": {"capability": {"capable": false}, "actions": {}},
+    "content_filter": {"capability": {"capable": false}, "actions": {}},
+    "dynamic_dns": {"capability": {"capable": false}, "actions": {}},
+    "multi_ssid": {"actions": {}},
+    "one_password": {"actions": {}}
+  }
+}

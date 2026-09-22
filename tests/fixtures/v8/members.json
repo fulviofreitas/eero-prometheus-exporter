@@ -1,0 +1,16 @@
+{
+  "members": [
+    {
+      "user_id": "fake-user-1",
+      "user_role": "admin",
+      "user_name": "Fake Person One",
+      "user_tags": []
+    },
+    {
+      "user_id": "fake-user-2",
+      "user_role": "member",
+      "user_name": "Fake Person Two",
+      "user_tags": [null]
+    }
+  ]
+}

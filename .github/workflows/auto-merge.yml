@@ -254,6 +254,6 @@ jobs:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
           app-private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
           merge-labels: "automerge"
-          blocking-labels: "wip,do-not-merge,needs-review"
+          blocking-labels: "wip,do-not-merge,needs-review,breaking-change"
           merge-method: "squash"
           required-approvals: "1"

@@ -4,7 +4,12 @@
 # Builds multi-platform Docker images and publishes to GitHub Container Registry.
 # Uses reusable workflow from workflow-arsenal for native ARM64 builds.
 #
-# Chain: CI → Release → Docker
+# Gate: the image is only built and pushed when the Release workflow actually
+# published a version. Release uploads a `release-published` artifact in that
+# case; this workflow looks it up on the triggering run and skips otherwise, so
+# `latest` never moves on a merge that did not cut a release.
+#
+# Chain: CI → Release (artifact when released) → Docker
 # ============================================================================
 
 name: 🐳 Docker Build & Publish
@@ -21,11 +26,60 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ============================================================================
+  # 🔍 Was a release actually published by the triggering run?
+  # ============================================================================
+  check-release:
+    name: 🔍 Check for published release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      released: ${{ steps.check.outputs.released }}
+    steps:
+      - name: 🔍 Look up release-published artifact
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // A manual dispatch is for re-publishing a release whose image
+            // build failed, not for pushing an arbitrary commit. The reusable
+            // publisher always writes the `latest` tag, so dispatching from a
+            // branch would move `latest` to an unreleased commit -- exactly
+            // what this gate exists to prevent. Require a tag ref.
+            if (context.eventName === 'workflow_dispatch') {
+              const isTag = context.ref.startsWith('refs/tags/');
+              core.info(isTag
+                ? `Manual dispatch from tag ${context.ref} — building`
+                : `Manual dispatch from ${context.ref}, which is not a tag — skipping. `
+                  + 'Re-run this workflow from the release tag to republish its image.');
+              core.setOutput('released', isTag ? 'true' : 'false');
+              return;
+            }
+            const run = context.payload.workflow_run;
+            if (!run || run.conclusion !== 'success') {
+              core.info('Triggering Release run did not succeed — skipping');
+              core.setOutput('released', 'false');
+              return;
+            }
+            const artifacts = await github.paginate(
+              github.rest.actions.listWorkflowRunArtifacts,
+              { owner: context.repo.owner, repo: context.repo.repo, run_id: run.id },
+            );
+            const found = artifacts.some((a) => a.name === 'release-published');
+            core.info(found
+              ? 'release-published artifact found — building image'
+              : 'No release-published artifact — no version was released, skipping');
+            core.setOutput('released', found ? 'true' : 'false');
+
+  # ============================================================================
+  # 🐳 Build & publish (gated on a real release)
+  # ============================================================================
   docker:
     name: 🐳 Docker
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    needs: check-release
+    if: needs.check-release.outputs.released == 'true'
     uses: fulviofreitas/workflow-arsenal/.github/workflows/docker-build.yml@master
     permissions:
       contents: read
@@ -43,6 +97,6 @@ jobs:
         org.opencontainers.image.description=Modern Prometheus exporter for eero mesh WiFi networks
         org.opencontainers.image.url=https://github.com/${{ github.repository }}
         org.opencontainers.image.source=https://github.com/${{ github.repository }}
-        org.opencontainers.image.licenses=Apache-2.0
+        org.opencontainers.image.licenses=MIT
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}

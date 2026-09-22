@@ -3,74 +3,167 @@
 ## Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/fulviofreitas/eero-prometheus-exporter.git
 cd eero-prometheus-exporter
-
-# Install with dev dependencies
-pip install -e ".[dev]"
+uv sync --frozen --extra dev          # or: pip install -e ".[dev]"
 ```
 
-## Running Tests
+Gates run by CI (all must pass before a commit):
 
 ```bash
-pytest
+uv run ruff check src/ tests/
+uv run ruff format --check src/ tests/
+uv run mypy src/
+uv run pytest -q
+uv run pytest --cov=eero_exporter --cov-report=term-missing
 ```
 
-## Type Checking
+Commits follow Conventional Commits; semantic-release derives the version from them
+(`feat!:` or a `BREAKING CHANGE:` footer cuts a major).
+
+## Layout
+
+```
+src/eero_exporter/
+├── cli.py            Typer commands; describe_options() walks the command tree
+├── config.py         ExporterConfig, precedence (CLI > env > YAML > default), envvar_name()
+├── eero_adapter.py   The only module that imports eero-api; read-only surface; error mapping
+├── collector.py      EeroCollector: one cycle = one client, one network envelope, tiers
+├── metrics.py        Registry: every metric declared with family/tier/source/evidence
+├── probe.py          Read-only live API probe (write guard, budget, redaction)
+└── server.py         /metrics, /health, /ready, / and the opt-in /auth page
+scripts/
+├── gen_metrics_doc.py   renders wiki/Metrics.md from the registry
+├── gen_config_doc.py    renders the option tables in wiki/Configuration.md
+└── probe_api.py         thin wrapper around `eero-exporter probe`
+tests/fixtures/v8/       redacted API payloads (one per endpoint) used by the parser tests
+```
+
+## The SDK: eero-api 8.x
+
+- `eero-api` is pinned to `>=8.0.2,<9`. Docker images install from `uv.lock`, so an image
+  never resolves a newer SDK than the lock.
+- **The SDK hands back raw envelopes, not Pydantic models.** (It does depend on Pydantic
+  internally -- see `uv.lock` -- but no model instance reaches a caller.) Every call returns
+  the raw `{"meta": ..., "data": ...}`
+  envelope; the adapter extracts `data` and the collector parses dicts and lists defensively
+  (`isinstance` before `.get`, nullable everywhere).
+- `get_network()` is called once per cycle. The client caches that envelope and injects it as
+  the parent for later network-scoped reads, and the collector reads dozens of settings
+  (DNS, DHCP, updates, health, speed, capabilities, guest, premium) straight from it -- zero
+  extra requests. Alias reads (`sqm`, `premium`, `updates`, `guest`) are gone.
+- Data usage comes from `get_data_usage(start, end, cadence)` (time series) and
+  `get_data_usage_breakdown()` (network, per-eero, per-device and per-profile totals in one
+  GET).
+
+### Error-class mapping
+
+The adapter catches the SDK's `EeroException` base and maps **by class** to local exceptions;
+the collector classifies **by class**, never by message text, and the API envelope never
+reaches a message or a log line (it can carry account data).
+
+| SDK exception | Local class | `status` label |
+|---|---|---|
+| `EeroAuthenticationException` | `EeroAuthError` (sibling of `EeroAPIError`, not a subclass) | `auth` -- aborts the network scrape |
+| `EeroNotFoundException` | `EeroNotFoundError` | `not_found` (expected state) |
+| `EeroAccessDeniedException` | `EeroAccessDeniedError` | `access_denied` |
+| `EeroPremiumRequiredException` | `EeroPremiumRequiredError` | `premium_required` (expected state) |
+| `EeroFeatureUnavailableException` | `EeroFeatureUnavailableError` | `feature_unavailable` (expected state) |
+| `EeroRateLimitException` | `EeroRateLimitError` | `rate_limited` |
+| `EeroValidationException` | `EeroValidationError` | `validation` |
+| `EeroNetworkException`, `EeroTimeoutException` | `EeroTransportError` | `transport` |
+| anything else (`EeroAPIException`, `EeroClientBlockedException`, ...) | `EeroAPIError` | `error` |
+
+Every `EeroAPIError` carries `status_code`, `error_code` and `group`
+(`eero.classify_error_code`). `collector._record_api_result()` is the single place the
+`status` label is produced; `metrics.API_STATUS_VALUES` is the closed vocabulary and
+`tests/test_collector_api_status.py` pins it.
+
+## Registry and tiers
+
+Every metric in `metrics.py` is declared through `_gauge` / `_counter` / `_info` with four
+provenance fields:
+
+```python
+EERO_UPTIME_SECONDS = _gauge(
+    f"{PREFIX}_eero_uptime_seconds",
+    "Eero device uptime in seconds since last reboot.",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].uptime.since_last_reboot_s",
+    evidence="verified",          # verified | documented | inferred
+    tier="core",                  # core | extended | rf | per_profile | per_device | per_eero | unverified
+)
+```
+
+- Metrics are created **unregistered**; `register_metrics(config)` registers only the
+  families whose tier / family flag is on, so `/metrics` never shows empty `# HELP` lines.
+- `FAMILY_TIER` maps family -> tier; `describe_metrics()` returns the provenance records
+  (the docs generator reads them); `REMOVED_IN_4_0_0` lists names that must never come back.
+- `tests/test_metrics_registry.py` checks provenance completeness, tier gating, forbidden
+  label names and that removed names are gone.
+
+### Adding a metric
+
+1. **Capture the shape first.** Run `eero-exporter probe` against a real mesh and read the
+   key tree for the endpoint. Never guess keys.
+2. Add or extend a fixture in `tests/fixtures/v8/` shaped like the real envelope (redacted
+   values are fine; types and key names must match).
+3. Declare the metric in `metrics.py` with `family`, `source`, `evidence` and `tier`. New
+   families with a per-item cost go in an opt-in tier; unseen payloads go in `unverified`.
+4. Parse it in `collector.py` through `_api_get()` / `_record_api_result()` so failures are
+   classified and isolated per item.
+5. Add a fixture-driven test in the matching `tests/test_collector_*.py`.
+6. Regenerate the docs and commit them together with the code:
+   ```bash
+   uv run python scripts/gen_metrics_doc.py
+   uv run python scripts/gen_config_doc.py    # only if a flag changed
+   ```
+   `tests/test_metrics_doc.py` fails when the wiki and the registry drift, and the
+   generator refuses to run if a new family, tier or removed metric lacks a description.
+7. Check the Grafana dashboard test (`tests/test_dashboard.py`) still passes.
+
+## Read-only guarantee
+
+- `tests/test_sdk_surface.py` imports the real `eero.EeroClient` and asserts every method the
+  adapter calls exists with a compatible signature and none matches a write-name pattern.
+- `tests/test_collector_readonly.py` runs a full cycle with every tier on under the probe's
+  write guard (`BaseAPI.post/put/delete` replaced with functions that raise) and asserts the
+  GET counts: 29 with the defaults, 58 on the fixture mesh with everything on.
+- Any new adapter method must be a documented read in the eero-api API reference. Every data
+  operation is a GET; the only POSTs are authentication -- `login` / `verify` (CLI and
+  `/auth`), and the SDK's transparent session refresh, which it replays for the caller (see
+  `tests/test_adapter_refresh_replay.py`).
+
+## Probe workflow
 
 ```bash
-mypy src/
+uv run eero-exporter probe --dry-run                 # the step list
+uv run eero-exporter probe --out /tmp/probes         # ~60 GETs, 1 req/s, on a copy of the session
 ```
 
-## Linting
+The report is redacted (types, lengths, enums, timestamps -- never values), but **do not
+commit it to the public repository**: it still describes one household's network layout.
+Keep reports in a private location and derive fixtures from them by hand.
 
-```bash
-ruff check src/
-```
+## Config surface
 
-## Code Style
+Every CLI option must have an `envvar` derived by `config.envvar_name()`; a test walks the
+Typer tree and fails otherwise. New `ExporterConfig` fields need a flag, an env var, a YAML
+key, a `to_dict()` entry and a `merge_overrides()` pass-through (CLI options default to
+`None` so YAML values survive).
 
-This project uses:
-
-- **Ruff** for linting and formatting
-- **MyPy** for type checking
-- **Pytest** for testing
-
-## Prometheus Compliance
-
-This exporter follows the [official Prometheus exporter guidelines](https://prometheus.io/docs/instrumenting/writing_exporters/):
-
-### Standards Implemented
+## Prometheus compliance
 
 | Guideline | Implementation |
-|-----------|----------------|
-| **Port Allocation** | Port 10052 registered in [Prometheus wiki](https://github.com/prometheus/prometheus/wiki/Default-port-allocations) |
-| **Up Metric** | `eero_up` gauge (1=success, 0=failure) for alerting |
-| **Metric Naming** | `eero_` prefix, snake_case, base units documented |
-| **Labels** | Minimal labels, no target label conflicts |
-| **Help Strings** | Include units, source API fields, typical ranges |
-| **Landing Page** | Version, status, links at `/` |
-| **Caching** | Collection interval with timestamp metrics |
-| **Health Endpoint** | `/health` for detailed status, `/ready` for probes |
-
-### Key Metrics for Monitoring the Exporter
-
-```promql
-# Is the exporter working?
-eero_up == 1
-
-# How stale is the data?
-time() - eero_exporter_last_collection_timestamp_seconds
-
-# Scrape success rate
-rate(eero_exporter_scrape_errors_total[5m])
-
-# API call patterns
-rate(eero_exporter_api_requests_total[5m])
-```
-
-### Alerting Examples
+|---|---|
+| Port allocation | 10052, registered in the Prometheus default-port wiki |
+| Up metric | `eero_up` |
+| Naming | `eero_` prefix, snake_case, base units in the name |
+| Help strings | Units, source and typical ranges |
+| Landing page | `/` |
+| Caching | Background collection loop with `eero_exporter_last_collection_timestamp_seconds` |
+| Health | `/health` (503 when unhealthy) and `/ready` (liveness) |
 
 ```yaml
 groups:
@@ -79,48 +172,20 @@ groups:
       - alert: EeroExporterDown
         expr: eero_up == 0
         for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Eero exporter is not scraping successfully"
-
       - alert: EeroDataStale
         expr: time() - eero_exporter_last_collection_timestamp_seconds > 300
         for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Eero metrics data is stale (>5min old)"
+      - alert: EeroApiFailures
+        expr: sum(rate(eero_exporter_api_requests_total{status!~"success|premium_required|feature_unavailable|not_found"}[10m])) > 0
+        for: 15m
 ```
 
-## Dependencies
+## Acknowledgments
 
-This project uses the **[eero-api](https://pypi.org/project/eero-api/)** library for communicating with eero's cloud services. The eero-api library provides:
-
-- 🚀 **Async-first** — Built on `aiohttp` for non-blocking operations
-- 📦 **Type-safe** — Pydantic models with full type hints
-- 🔒 **Secure** — System keyring integration for credential storage
-
-Install from PyPI: `pip install eero-api` ([GitHub](https://github.com/fulviofreitas/eero-api))
-
-## Acknowledgments & Credits
-
-This project is a **complete revamp** inspired by and building upon the excellent work of:
-
-- **[fulviofreitas/eero-api](https://github.com/fulviofreitas/eero-api)** — The modern, async Python client for the eero API that powers this exporter. Built on the foundation laid by [@343max](https://github.com/343max/eero-client).
-
-- **[brmurphy/eero-exporter](https://github.com/brmurphy/eero-exporter)** — The original eero Prometheus exporter that started it all. Huge thanks to [@brmurphy](https://github.com/brmurphy) for pioneering this concept.
-
-- **[acaranta/docker-eero-prometheus-exporter](https://github.com/acaranta/docker-eero-prometheus-exporter)** — Docker containerization approach that made deployment a breeze. Thanks to [@acaranta](https://github.com/acaranta) for the container-first thinking.
-
-This revamp modernizes the codebase with:
-
-- Async eero-api library integration
-- Full async/await architecture
-- Type hints throughout
-- Modern Python packaging (pyproject.toml)
-- Rich CLI experience with Typer
-- Extended metrics coverage
-- Improved error handling and logging
-
-Standing on the shoulders of giants 💪
+- [fulviofreitas/eero-api](https://github.com/fulviofreitas/eero-api) -- the async client
+  this exporter is built on, itself descended from
+  [@343max's eero-client](https://github.com/343max/eero-client).
+- [brmurphy/eero-exporter](https://github.com/brmurphy/eero-exporter) -- the original eero
+  Prometheus exporter.
+- [acaranta/docker-eero-prometheus-exporter](https://github.com/acaranta/docker-eero-prometheus-exporter)
+  -- the container-first approach.

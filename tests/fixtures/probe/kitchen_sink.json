@@ -1,0 +1,187 @@
+{
+  "meta": {
+    "code": 200,
+    "server_time": "2026-09-21T10:11:12Z"
+  },
+  "data": {
+    "url": "/2.2/networks/PLANTED-NETWORK-URL",
+    "id": "PLANTED-NETWORK-ID",
+    "name": "PLANTED-NETWORK-NAME",
+    "status": "connected",
+    "mode": "auto",
+    "type": "gateway",
+    "wifi_generation": "6",
+    "schema_version": "2",
+    "bands": ["2.4", "5"],
+    "health": "ok",
+    "connection_mode": "dhcp",
+    "created": "2024-01-02T03:04:05Z",
+    "premium_status": "active",
+    "upstream_bandwidth_mbps": 942.5,
+    "client_count": 37,
+    "sqm": true,
+    "ipv6_upstream": null,
+    "password": "PLANTED-WIFI-PASSWORD",
+    "psk": "PLANTED-PSK-VALUE",
+    "passphrase": "PLANTED-PASSPHRASE-VALUE",
+    "session_token": "PLANTED-SESSION-TOKEN",
+    "api_key": "PLANTED-API-KEY",
+    "cookie": "s=PLANTED-COOKIE-VALUE",
+    "secret": "PLANTED-SECRET-VALUE",
+    "public_ip": "203.0.113.77",
+    "ip": "192.168.4.1",
+    "ips": ["192.168.4.1", "192.168.4.2"],
+    "ipv6": ["fd00:0000:0000:0000:0000:0000:0000:0001"],
+    "mac": "aa:bb:cc:dd:ee:ff",
+    "hostname": "PLANTED-HOSTNAME",
+    "bssid": "11:22:33:44:55:66",
+    "bssids": ["11:22:33:44:55:66"],
+    "bssids_with_bands": {
+      "11:22:33:44:55:66": "2.4",
+      "11:22:33:44:55:67": "5"
+    },
+    "ssid": "PLANTED-SSID",
+    "ssids": ["PLANTED-NEIGHBOUR-SSID"],
+    "ddns": {
+      "enabled": true,
+      "subdomain": "PLANTED-DDNS-SUBDOMAIN"
+    },
+    "geo_ip": {
+      "isp": "PLANTED-ISP-NAME",
+      "city": "PLANTED-CITY",
+      "countryName": "PLANTED-COUNTRY",
+      "latitude": 12.3456,
+      "longitude": -65.4321,
+      "postalCode": "PLANTED-POSTCODE"
+    },
+    "owner": {
+      "first_name": "PLANTED-FIRST-NAME",
+      "last_name": "PLANTED-LAST-NAME",
+      "email": {
+        "value": "planted.person@example.invalid",
+        "verified": true
+      },
+      "phone": {
+        "value": "+15550101999",
+        "verified": false
+      }
+    },
+    "members": [
+      {
+        "name": "PLANTED-MEMBER-NAME",
+        "email": "planted.member@example.invalid",
+        "role": "admin",
+        "created": "2025-06-01T00:00:00Z"
+      },
+      {
+        "name": "PLANTED-MEMBER-TWO",
+        "email": "planted.two@example.invalid",
+        "role": "viewer",
+        "paused": false,
+        "created": "2025-06-02T00:00:00Z"
+      }
+    ],
+    "guest_network": {
+      "enabled": false,
+      "name": "PLANTED-GUEST-SSID",
+      "password": "PLANTED-GUEST-PASSWORD"
+    },
+    "backup_access_points": [
+      {
+        "ssid": "PLANTED-BACKUP-SSID",
+        "psk": "PLANTED-BACKUP-PSK",
+        "connected": false
+      }
+    ],
+    "subnets": [
+      {
+        "subnet_kind": "iot",
+        "password": "PLANTED-SUBNET-PASSWORD",
+        "enabled": true
+      }
+    ],
+    "eeros": {
+      "count": 2,
+      "data": [
+        {
+          "url": "/2.2/eeros/9911223344",
+          "serial": "PLANTED-EERO-SERIAL",
+          "location": "PLANTED-EERO-LOCATION",
+          "os_version": "7.1.0-1234",
+          "status": "green",
+          "wired": true,
+          "uptime": 987654,
+          "last_heartbeat": "2026-09-21T10:00:00Z",
+          "bands": ["2.4", "5"]
+        },
+        {
+          "url": "/2.2/eeros/9911223355",
+          "serial": "PLANTED-EERO-SERIAL-TWO",
+          "location": "PLANTED-EERO-LOCATION-TWO",
+          "os_version": "7.1.0-1234",
+          "status": "green",
+          "wired": false,
+          "uptime": 12345,
+          "mesh_quality_bars": 5,
+          "bands": ["2.4", "6"]
+        }
+      ]
+    },
+    "resources": {
+      "devices": "/2.2/networks/PLANTED-NETWORK-URL/devices",
+      "profiles": "/2.2/networks/PLANTED-NETWORK-URL/profiles"
+    },
+    "free_text_note": "PLANTED-FREE-TEXT-NOTE-THAT-IS-LONG",
+    "conflicting_ssid": true,
+    "enable_credential_syncing": false,
+    "gateway": true,
+    "features": {
+      "multi_ssid": true,
+      "one_password": false
+    },
+    "utilization": [
+      {"band": "band_2_4GHz", "busy_percent": 12},
+      {"band": "band_5GHz_full", "busy_percent": 34}
+    ],
+    "statuses": [
+      {"speed": "1gbps"},
+      {"speed": "100mbps"}
+    ],
+    "insight_series": [
+      {"insight_type": "adblock", "count": 1},
+      {"insight_type": "bandwidth", "count": 2},
+      {"insight_type": "blocked", "count": 3},
+      {"insight_type": "inspected", "count": 4},
+      {"insight_type": "malware", "count": 5},
+      {"insight_type": "spam", "count": 6},
+      {"insight_type": "vpn", "count": 7}
+    ],
+    "bandwidth_usage": [10, 20, 30],
+    "ethernet_status": [
+      {"port": 1, "connected": true},
+      {"port": 2, "connected": false},
+      {"port": 3, "connected": true}
+    ],
+    "device_summaries": [
+      {
+        "organization": {"org_id": "PLANTED-ORG-ID", "billing": {"plan": "premium"}},
+        "homekit": {"enabled": true}
+      },
+      {
+        "organization": null,
+        "homekit": true
+      }
+    ],
+    "network_interfaces": {
+      "lldpInfo": {
+        "chassisId": "PLANTED-CHASSIS-ID",
+        "portId": "PLANTED-PORT-ID",
+        "systemDescription": "PLANTED-SYSTEM-DESCRIPTION"
+      }
+    },
+    "name_servers": {
+      "mode": "auto",
+      "servers": ["203.0.113.53"]
+    }
+  }
+}

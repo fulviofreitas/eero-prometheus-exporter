@@ -80,6 +80,26 @@ jobs:
           github-token: ${{ steps.app-token.outputs.token }}
           dry-run: ${{ github.event.inputs.dry_run || 'false' }}
 
+      - name: 📤 Create release-published artifact (for docker-publish gate)
+        if: steps.release.outputs.released == 'true' && github.event.inputs.dry_run != 'true'
+        # The version reaches the script through the environment, never through
+        # `${{ }}` interpolation into the shell: expressions expanded inline are
+        # the standard workflow script-injection vector.
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          echo "released" > /tmp/release-published.txt
+          echo "Version: ${RELEASE_VERSION}" >> /tmp/release-published.txt
+
+      - name: 📦 Upload release artifact
+        if: steps.release.outputs.released == 'true' && github.event.inputs.dry_run != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-published
+          path: /tmp/release-published.txt
+          retention-days: 1
+          overwrite: true
+
   # ============================================================================
   # 📦 Publish to TestPyPI (validation step)
   # ============================================================================

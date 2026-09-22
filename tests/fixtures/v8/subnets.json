@@ -1,0 +1,46 @@
+[
+  {
+    "subnet_id": "subnet-1",
+    "network_id": "999001",
+    "name": "Main",
+    "password": "should-never-leak-1",
+    "subnet_type": "main",
+    "subnet_kind": "main",
+    "subnet_label": "MAINLBL1",
+    "enabled": true,
+    "wan_access": true,
+    "lan_access": false,
+    "nat_port_randomization": false,
+    "open_network": false,
+    "igmp_snooping_enable": false,
+    "vlan": "1",
+    "dedicated_subnet": {
+      "subnet_ip": "10.0.0.0",
+      "start_ip": "10.0.0.10",
+      "end_ip": "10.0.0.250",
+      "subnet_mask": "255.255.255.0"
+    }
+  },
+  {
+    "subnet_id": "subnet-2",
+    "network_id": "999001",
+    "name": "Guest",
+    "password": "should-never-leak-2",
+    "subnet_type": "guest",
+    "subnet_kind": "guest",
+    "subnet_label": "GUESTLBL1",
+    "enabled": true,
+    "wan_access": true,
+    "lan_access": false,
+    "nat_port_randomization": false,
+    "open_network": true,
+    "igmp_snooping_enable": false,
+    "vlan": "2",
+    "dedicated_subnet": {
+      "subnet_ip": "10.0.1.0",
+      "start_ip": "10.0.1.10",
+      "end_ip": "10.0.1.250",
+      "subnet_mask": "255.255.255.0"
+    }
+  }
+]

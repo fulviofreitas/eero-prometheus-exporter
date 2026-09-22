@@ -1,0 +1,22 @@
+{
+  "role": "standard-admin",
+  "permissions": {
+    "amazon.account": {"create": false, "read": true, "update": false, "delete": false},
+    "eeros": {"create": false, "read": true, "update": false, "delete": false},
+    "network": {"create": false, "read": true, "update": true, "delete": false},
+    "network.admin_invites": {"create": false, "read": true, "update": false, "delete": false},
+    "network.transfer": {"create": false, "read": false, "update": false, "delete": false},
+    "network.subnets.main.password": {
+      "create": false,
+      "read": true,
+      "update": false,
+      "delete": false
+    },
+    "network.multi_ssid": {"create": false, "read": true, "update": false, "delete": false},
+    "network.multistatic_ip": {"create": false, "read": true, "update": false, "delete": false},
+    "user.conversations_token": {"create": false, "read": true, "update": false, "delete": false},
+    "per_eero": [
+      {"id": "eero-1", "eero": {"create": false, "read": true, "update": false, "delete": false}}
+    ]
+  }
+}

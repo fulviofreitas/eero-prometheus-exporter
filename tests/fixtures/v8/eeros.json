@@ -1,0 +1,360 @@
+[
+  {
+    "url": "/2.2/eeros/1",
+    "location": "Living Room",
+    "model": "eero Pro 6E",
+    "model_number": "K000001",
+    "serial": "SERIAL1",
+    "status": "green",
+    "state": "ONLINE",
+    "gateway": true,
+    "is_primary_node": true,
+    "using_wan": true,
+    "wired": true,
+    "provides_wifi": true,
+    "heartbeat_ok": true,
+    "connected_clients_count": 5,
+    "connected_wired_clients_count": 2,
+    "connected_wireless_clients_count": 3,
+    "led_on": true,
+    "led_brightness": 100,
+    "update_available": false,
+    "os_version": "6.20.1",
+    "joined": "2025-03-05T01:16:11+0000",
+    "last_heartbeat": "2026-09-21T23:46:07.185Z",
+    "last_reboot": "2026-09-15T03:45:09.573Z",
+    "connection_type": "WIRED",
+    "bands": ["band_2_4GHz", "band_5GHz_full", "band_6GHz"],
+    "bssids_with_bands": ["bssid1", "bssid2", "bssid3"],
+    "power_info": {
+      "power_source": "USB"
+    },
+    "uptime": {
+      "since_last_reboot_s": 604800,
+      "since_cloud_connection_s": 604700
+    },
+    "nightlight": null,
+    "power_saving": {
+      "schedule": {
+        "active": false,
+        "start": null,
+        "end": null
+      }
+    },
+    "ethernet_status": {
+      "wiredInternet": true,
+      "statuses": [
+        {
+          "interfaceNumber": 1,
+          "hasCarrier": true,
+          "speed": "P1000",
+          "isWanPort": true,
+          "isLte": true,
+          "isLeafWiredToUpstream": false,
+          "power_saving": false,
+          "port_name": "eth0",
+          "neighbor": {
+            "type": "EERO",
+            "metadata": {
+              "port": 2,
+              "port_name": "eth1",
+              "location": "Bedroom",
+              "url": "/2.2/eeros/2"
+            }
+          },
+          "lldpInfo": []
+        }
+      ]
+    },
+    "radio_channel_stats": {
+      "band_2_4GHz": {
+        "channel": 6,
+        "channel_width": 20,
+        "tx_power": 20,
+        "channel_utilization": 15,
+        "client_count": 3
+      },
+      "band_5GHz_low": {
+        "channel": 40,
+        "channel_width": 80,
+        "tx_power": 24,
+        "channel_utilization": 10,
+        "client_count": 2
+      },
+      "band_5GHz_high": {
+        "channel": 149,
+        "channel_width": 80,
+        "tx_power": 28,
+        "channel_utilization": 12,
+        "client_count": 5
+      },
+      "band_5GHz_full": {
+        "channel": 40,
+        "channel_width": 160,
+        "tx_power": 25,
+        "channel_utilization": 20,
+        "client_count": 4
+      },
+      "band_6GHz": {
+        "channel": 133,
+        "channel_width": 320,
+        "tx_power": 24,
+        "channel_utilization": 5,
+        "client_count": 1
+      }
+    }
+  },
+  {
+    "url": "/2.2/eeros/2",
+    "location": "Bedroom",
+    "model": "eero Pro 6E",
+    "model_number": "K000001",
+    "serial": "SERIAL2",
+    "status": "green",
+    "state": "ONLINE",
+    "gateway": false,
+    "is_primary_node": false,
+    "using_wan": false,
+    "wired": true,
+    "provides_wifi": true,
+    "heartbeat_ok": true,
+    "connected_clients_count": 3,
+    "connected_wired_clients_count": 0,
+    "connected_wireless_clients_count": 3,
+    "led_on": true,
+    "led_brightness": 80,
+    "update_available": false,
+    "os_version": "6.20.1",
+    "joined": "2025-03-05T01:20:44+0000",
+    "last_heartbeat": "2026-09-21T23:46:05.000Z",
+    "last_reboot": "2026-09-15T03:45:12.133141770Z",
+    "uptime": {
+      "since_last_reboot_s": 604500,
+      "since_cloud_connection_s": 604400
+    },
+    "nightlight": null,
+    "power_saving": {
+      "schedule": {
+        "active": false,
+        "start": null,
+        "end": null
+      }
+    },
+    "ethernet_status": {
+      "wiredInternet": true,
+      "statuses": []
+    },
+    "radio_channel_stats": {
+      "band_2_4GHz": {
+        "channel": 11,
+        "channel_width": 20,
+        "tx_power": 18,
+        "channel_utilization": 8,
+        "client_count": 1
+      },
+      "band_5GHz_low": {
+        "channel": 36,
+        "channel_width": 80,
+        "tx_power": 22,
+        "channel_utilization": 6,
+        "client_count": 1
+      },
+      "band_5GHz_high": {
+        "channel": 157,
+        "channel_width": 80,
+        "tx_power": 26,
+        "channel_utilization": 9,
+        "client_count": 1
+      },
+      "band_5GHz_full": {
+        "channel": 36,
+        "channel_width": 160,
+        "tx_power": 23,
+        "channel_utilization": 11,
+        "client_count": 2
+      },
+      "band_6GHz": {
+        "channel": 37,
+        "channel_width": 320,
+        "tx_power": 22,
+        "channel_utilization": 3,
+        "client_count": 0
+      }
+    }
+  },
+  {
+    "url": "/2.2/eeros/3",
+    "location": "Office",
+    "model": "eero Pro 6E",
+    "model_number": "K000001",
+    "serial": "SERIAL3",
+    "status": "green",
+    "state": "ONLINE",
+    "gateway": false,
+    "is_primary_node": false,
+    "using_wan": false,
+    "wired": true,
+    "provides_wifi": true,
+    "heartbeat_ok": true,
+    "connected_clients_count": 2,
+    "connected_wired_clients_count": 1,
+    "connected_wireless_clients_count": 1,
+    "led_on": true,
+    "led_brightness": 60,
+    "update_available": false,
+    "os_version": "6.20.1",
+    "joined": "2025-03-05T01:22:00+0000",
+    "last_heartbeat": "2026-09-21T23:46:03.000Z",
+    "last_reboot": "2026-09-14T00:00:00.000Z",
+    "uptime": {
+      "since_last_reboot_s": 700000,
+      "since_cloud_connection_s": 699900
+    },
+    "nightlight": null,
+    "power_saving": {
+      "schedule": {
+        "active": false,
+        "start": null,
+        "end": null
+      }
+    },
+    "ethernet_status": {
+      "wiredInternet": true,
+      "statuses": [
+        {
+          "interfaceNumber": 1,
+          "hasCarrier": true,
+          "speed": "P100",
+          "isWanPort": false,
+          "isLte": false,
+          "isLeafWiredToUpstream": true,
+          "power_saving": false,
+          "port_name": "eth0",
+          "neighbor": null,
+          "lldpInfo": []
+        }
+      ]
+    },
+    "radio_channel_stats": {
+      "band_2_4GHz": {
+        "channel": 1,
+        "channel_width": 20,
+        "tx_power": 20,
+        "channel_utilization": 5,
+        "client_count": 0
+      },
+      "band_5GHz_low": {
+        "channel": 44,
+        "channel_width": 80,
+        "tx_power": 24,
+        "channel_utilization": 4,
+        "client_count": 0
+      },
+      "band_5GHz_high": {
+        "channel": 161,
+        "channel_width": 80,
+        "tx_power": 28,
+        "channel_utilization": 3,
+        "client_count": 1
+      },
+      "band_5GHz_full": {
+        "channel": 44,
+        "channel_width": 160,
+        "tx_power": 25,
+        "channel_utilization": 6,
+        "client_count": 1
+      },
+      "band_6GHz": {
+        "channel": 213,
+        "channel_width": 320,
+        "tx_power": 24,
+        "channel_utilization": 1,
+        "client_count": 0
+      }
+    }
+  },
+  {
+    "url": "/2.2/eeros/4",
+    "location": "Garage",
+    "model": "eero Beacon",
+    "model_number": "K000002",
+    "serial": "SERIAL4",
+    "status": "green",
+    "state": "ONLINE",
+    "gateway": false,
+    "is_primary_node": false,
+    "using_wan": false,
+    "wired": false,
+    "provides_wifi": true,
+    "heartbeat_ok": true,
+    "connected_clients_count": 1,
+    "connected_wired_clients_count": 0,
+    "connected_wireless_clients_count": 1,
+    "led_on": true,
+    "led_brightness": 40,
+    "update_available": false,
+    "os_version": "6.20.1",
+    "joined": "2025-03-05T01:25:30+0000",
+    "last_heartbeat": "2026-09-21T23:46:01.000Z",
+    "last_reboot": "2026-09-13T12:00:00.999999999Z",
+    "uptime": {
+      "since_last_reboot_s": 800000,
+      "since_cloud_connection_s": 799900
+    },
+    "nightlight": {
+      "enabled": true,
+      "brightness": 50,
+      "schedule": {
+        "enabled": false
+      }
+    },
+    "power_saving": {
+      "schedule": {
+        "active": true,
+        "start": null,
+        "end": null
+      }
+    },
+    "ethernet_status": {
+      "wiredInternet": false,
+      "statuses": []
+    },
+    "radio_channel_stats": {
+      "band_2_4GHz": {
+        "channel": 6,
+        "channel_width": 20,
+        "tx_power": 16,
+        "channel_utilization": 2,
+        "client_count": 1
+      },
+      "band_5GHz_low": {
+        "channel": 40,
+        "channel_width": 40,
+        "tx_power": 18,
+        "channel_utilization": 1,
+        "client_count": 0
+      },
+      "band_5GHz_high": {
+        "channel": 149,
+        "channel_width": 40,
+        "tx_power": 20,
+        "channel_utilization": 1,
+        "client_count": 0
+      },
+      "band_5GHz_full": {
+        "channel": 40,
+        "channel_width": 80,
+        "tx_power": 19,
+        "channel_utilization": 2,
+        "client_count": 0
+      },
+      "band_6GHz": {
+        "channel": 37,
+        "channel_width": 160,
+        "tx_power": 18,
+        "channel_utilization": 0,
+        "client_count": 0
+      }
+    }
+  }
+]

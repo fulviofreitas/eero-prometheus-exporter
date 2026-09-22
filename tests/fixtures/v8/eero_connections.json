@@ -1,0 +1,12 @@
+{
+  "provide_device_power": null,
+  "node_actions": [{"type": "ETHERNET_CABLE_CHECK", "position": 0}],
+  "ports": {
+    "layout": {"position_rank_order": [0, 1], "layout_type": "horizontal"},
+    "interfaces": []
+  },
+  "wireless_devices": [
+    {"type": "CLIENT_DEVICE", "metadata": {"display_name": "Laptop", "device_type": "laptop"}},
+    {"type": "CLIENT_DEVICE", "metadata": {"display_name": "Phone", "device_type": "phone"}}
+  ]
+}

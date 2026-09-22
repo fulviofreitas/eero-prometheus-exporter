@@ -1,189 +1,163 @@
 # 🐳 Docker
 
-## Quick Start with Docker Compose
+The image runs as the non-root user `eero` and keeps its session file in
+`/home/eero/.config/eero-exporter/`. Since 4.0.0 that directory **must be writable**:
+the eero-api client rewrites the credential record (see [Session file and schema 2](#session-file-and-schema-2)).
 
-**1. Authenticate locally** (one-time setup):
+## Image
 
-```bash
-# Install from PyPI
-pip install eero-prometheus-exporter
+- Registry: `ghcr.io/fulviofreitas/eero-prometheus-exporter`
+- Tags: `latest` and one tag per release version. `latest` moves **only when a release is
+  published**, never on an ordinary merge. Pin a version tag or a digest if you want to
+  control when a major upgrade arrives.
+- Dependencies are installed from the repository's `uv.lock`, so an image always ships the
+  exact `eero-api` version the release was tested with.
 
-# Login with your eero account (email or phone)
-eero-exporter login your-email@example.com
-# Or: eero-exporter login +15551234567
-# Enter verification code when prompted
+## Quick start with Docker Compose
+
+The repository's `docker-compose.yml` mounts a named volume on the config directory:
+
+```yaml
+services:
+  eero-exporter:
+    image: ghcr.io/fulviofreitas/eero-prometheus-exporter:latest
+    restart: unless-stopped
+    ports:
+      - "10052:10052"
+    volumes:
+      # Read-write: the client migrates and refreshes the session record in place
+      - eero-config:/home/eero/.config/eero-exporter
+    environment:
+      - TZ=UTC
+      # Any option can be set here, e.g. EERO_EXPORTER_INTERVAL=120
+
+volumes:
+  eero-config:
 ```
 
-**2. Copy your session file:**
+**1. Create the session inside the volume** (one-time). Either log in through the container:
 
 ```bash
-cp ~/.config/eero-exporter/session.json ./session.json
+docker compose run --rm eero-exporter login your-email@example.com
+# enter the verification code when prompted
 ```
 
-**3. Launch the exporter:**
+or copy a session you created elsewhere (the file is rewritten to schema 2 on first use):
 
 ```bash
-docker-compose up -d
+docker compose run --rm --entrypoint sh eero-exporter -c \
+  'cat > /home/eero/.config/eero-exporter/session.json && chmod 600 /home/eero/.config/eero-exporter/session.json' \
+  < ~/.config/eero-exporter/session.json
 ```
 
-**4. Add the full monitoring stack** (optional):
+**2. Start the exporter:**
 
 ```bash
-docker-compose --profile monitoring up -d
+docker compose up -d
+docker compose exec eero-exporter eero-exporter session-info   # schema 2, mode 0600, dir writable
+curl -s localhost:10052/health
 ```
 
-## Using Docker Run
+**3. Optional full stack** (Prometheus + Grafana with the bundled dashboard):
 
 ```bash
-# Run the exporter
-docker run -d \
-  -p 10052:10052 \
-  -v ./session.json:/home/eero/.config/eero-exporter/session.json:ro \
-  --name eero-exporter \
+docker compose --profile monitoring up -d
+```
+
+### Alternative: sign in from the browser
+
+If you would rather not run commands in the container, enable the opt-in login page. Pass
+the shared secret through the environment (not on the command line):
+
+```yaml
+    environment:
+      - EERO_EXPORTER_AUTH_UI=true
+      - EERO_EXPORTER_AUTH_UI_TOKEN=change-me-to-a-long-random-secret
+```
+
+`serve` then starts without a session file and `http://<host>:10052/auth` walks you through
+the identifier-then-code login. Put it behind TLS or on a trusted network; see
+[Security](Security#web-login-page-auth).
+
+## Docker run
+
+```bash
+docker volume create eero-config
+
+# one-time login into the volume
+docker run --rm -it -v eero-config:/home/eero/.config/eero-exporter \
+  ghcr.io/fulviofreitas/eero-prometheus-exporter:latest login your-email@example.com
+
+# run
+docker run -d --name eero-exporter -p 10052:10052 \
+  -v eero-config:/home/eero/.config/eero-exporter \
   ghcr.io/fulviofreitas/eero-prometheus-exporter:latest
 ```
 
-## Building from Source
+Re-authenticate later with `docker exec -it eero-exporter eero-exporter login you@example.com`
+(or the `/auth` page).
+
+### Bind-mounting a host directory instead of a volume
+
+A bind mount works the same way, but the directory has to be writable by the container's
+`eero` user. Find its UID with `docker run --rm --entrypoint id <image>` and `chown` the host
+directory accordingly, or run the container with `--user "$(id -u):$(id -g)"` and a home
+directory you own.
+
+### Keeping the session file read-only
+
+If your platform cannot give the container a writable mount, migrate the file **once** with
+4.0.0 on any machine, then mount that migrated file `:ro`:
 
 ```bash
-docker build -t eero-exporter .
-docker run -p 10052:10052 \
+pip install 'eero-prometheus-exporter>=4'
+eero-exporter validate --session-file ./session.json      # rewrites it to schema 2
+eero-exporter session-info --session-file ./session.json  # confirms "Schema version: 2"
+docker run -d -p 10052:10052 \
   -v ./session.json:/home/eero/.config/eero-exporter/session.json:ro \
-  eero-exporter
+  ghcr.io/fulviofreitas/eero-prometheus-exporter:latest
 ```
 
----
+Collection works with a read-only file; the only cost is that any later save the client
+attempts (a server-side token refresh) is logged as an error and lost, so you may have to
+re-login sooner. There is no need for the old trick of creating an empty `{}` placeholder
+file -- it is not a valid credential record and 4.0.0 treats it as "not authenticated".
 
-## 📦 Full Observability Stack
+## Session file and schema 2
 
-#### Exporter + Prometheus + Grafana
+eero-api 8.x stores the session as `{"session_id": "...", "schema_version": 2}` with mode
+`0600`, written atomically (temporary file plus rename in the same directory). On first use
+4.0.0 migrates a 3.x file to this format in place. Two consequences:
 
-If you're deploying to a server with Portainer or Docker, follow these steps:
+- The **directory** must be writable, not just the file.
+- **3.x cannot read a schema-2 file.** It treats the token as expired and overwrites it with
+  a null token. Back up the file before upgrading; see [Installation](Installation#upgrading-from-3x).
 
-### 1. Run the Setup Script
+`eero-exporter session-info` prints the path, mode, owner match, directory writability,
+schema version and whether a token is present -- never the token itself.
 
-Create and run this setup script on your server to prepare the directory structure and fix permissions:
+## Backup before upgrading
 
 ```bash
-#!/bin/bash
-# setup-eero-exporter.sh
-# Run this on your server before deploying the stack
-
-BASE_DIR="/volume1/docker/eero"
-
-echo "Setting up eero-exporter directory structure..."
-
-# Create directories
-mkdir -p "$BASE_DIR"
-mkdir -p "$BASE_DIR/prometheus_data"
-mkdir -p "$BASE_DIR/grafana_data"
-mkdir -p "$BASE_DIR/grafana/provisioning/datasources"
-mkdir -p "$BASE_DIR/grafana/provisioning/dashboards"
-
-# Fix Prometheus permissions (runs as nobody:nobody = 65534:65534)
-chown -R 65534:65534 "$BASE_DIR/prometheus_data"
-
-# Fix Grafana permissions (runs as grafana = 472:472)
-chown -R 472:472 "$BASE_DIR/grafana_data"
-
-# Create empty session.json (to be populated after login)
-if [ ! -f "$BASE_DIR/session.json" ]; then
-    echo '{}' > "$BASE_DIR/session.json"
-    echo "Created empty session.json"
-fi
-
-# Create prometheus.yml config
-if [ ! -f "$BASE_DIR/prometheus.yml" ]; then
-    cat > "$BASE_DIR/prometheus.yml" << 'EOF'
-global:
-  scrape_interval: 60s
-  evaluation_interval: 60s
-
-scrape_configs:
-  - job_name: 'eero'
-    static_configs:
-      - targets: ['eero-exporter:10052']
-    metrics_path: /metrics
-
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['localhost:9090']
-EOF
-    echo "Created prometheus.yml"
-fi
-
-# Create Grafana datasource provisioning (auto-configures Prometheus)
-cat > "$BASE_DIR/grafana/provisioning/datasources/prometheus.yml" << 'EOF'
-apiVersion: 1
-datasources:
-  - name: Prometheus
-    type: prometheus
-    access: proxy
-    url: http://prometheus:9090
-    isDefault: true
-    editable: false
-    jsonData:
-      timeInterval: "15s"
-      httpMethod: POST
-EOF
-echo "Created Grafana datasource provisioning"
-
-# Create Grafana dashboard provisioning
-cat > "$BASE_DIR/grafana/provisioning/dashboards/dashboards.yml" << 'EOF'
-apiVersion: 1
-providers:
-  - name: "Eero Dashboards"
-    orgId: 1
-    folder: ""
-    type: file
-    disableDeletion: false
-    updateIntervalSeconds: 30
-    allowUiUpdates: true
-    options:
-      path: /var/lib/grafana/dashboards
-EOF
-echo "Created Grafana dashboard provisioning"
-
-# Download the Grafana dashboard
-echo "Downloading Grafana dashboard..."
-curl -fsSL -o "$BASE_DIR/grafana/eero-dashboard.json" \
-  https://raw.githubusercontent.com/fulviofreitas/eero-prometheus-exporter/master/grafana/eero-dashboard.json
-echo "Downloaded eero-dashboard.json"
-
-echo ""
-echo "Done! Directory structure:"
-ls -la "$BASE_DIR"
-ls -la "$BASE_DIR/grafana/"
-echo ""
-echo "Next steps:"
-echo "1. Login locally: eero-exporter login your-email@example.com"
-echo "2. Copy session: scp ~/.config/eero-exporter/session.json user@nas:$BASE_DIR/"
-echo "3. Deploy the stack in Portainer"
+docker cp eero-exporter:/home/eero/.config/eero-exporter/session.json ./session.json.schema1.bak
+chmod 600 ./session.json.schema1.bak
 ```
 
-Save as `setup-eero-exporter.sh`, make executable (`chmod +x setup-eero-exporter.sh`), and run with `sudo`.
+Keep the backup outside any repository. To roll back, stop the 4.x container, restore the
+backup over the session file, and start the previous version tag.
 
-### 2. Authenticate and Copy Session
+## Health checks
 
-On your local machine:
+The image's `HEALTHCHECK` (and the compose file) use `/ready`, which is 200 whenever the HTTP
+server is up. Use `/health` for monitoring: it returns 503 while the session is invalid or
+the last collection failed, which would otherwise make the container restart in a loop.
 
-```bash
-# Login with your eero account (email or phone)
-eero-exporter login your-email@example.com
-# Or: eero-exporter login +15551234567
+## Full observability stack on a server
 
-# Validate it works
-eero-exporter validate
-
-# Copy to server
-scp ~/.config/eero-exporter/session.json user@your-nas:/volume1/docker/eero/
-```
-
-### 3. Deploy the Stack
-
-The setup script already downloaded the dashboard. Now deploy using Portainer or Docker Compose.
-
-Use this compose file with absolute paths for server deployment. **Grafana will auto-configure the Prometheus datasource and import the dashboard on startup!**
+For a server deployment with absolute paths (Prometheus and Grafana included), prepare a base
+directory, put `prometheus.yml`, the Grafana provisioning files and `grafana/eero-dashboard.json`
+from this repository in it, and use a compose file like the one below. Grafana provisions
+the datasource and imports the dashboard on start.
 
 ```yaml
 services:
@@ -194,15 +168,9 @@ services:
     ports:
       - "10052:10052"
     volumes:
-      - /volume1/docker/eero/session.json:/home/eero/.config/eero-exporter/session.json:ro
+      - /srv/eero/exporter-config:/home/eero/.config/eero-exporter   # writable, owned by the container user
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:10052/ready')",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:10052/ready')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -214,8 +182,8 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - /volume1/docker/eero/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - /volume1/docker/eero/prometheus_data:/prometheus
+      - /srv/eero/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /srv/eero/prometheus_data:/prometheus        # chown 65534:65534
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -227,27 +195,32 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - /volume1/docker/eero/grafana_data:/var/lib/grafana
-      # Auto-provisioning: datasource + dashboard
-      - /volume1/docker/eero/grafana/provisioning:/etc/grafana/provisioning:ro
-      - /volume1/docker/eero/grafana/eero-dashboard.json:/var/lib/grafana/dashboards/eero-dashboard.json:ro
+      - /srv/eero/grafana_data:/var/lib/grafana      # chown 472:472
+      - /srv/eero/grafana/provisioning:/etc/grafana/provisioning:ro
+      - /srv/eero/grafana/eero-dashboard.json:/var/lib/grafana/dashboards/eero-dashboard.json:ro
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 ```
 
-> 💡 **Auto-provisioning**: When Grafana starts, it automatically:
->
-> 1. Creates the Prometheus datasource pointing to `http://prometheus:9090`
-> 2. Imports the Eero dashboard from the mounted JSON file
->
-> No manual configuration needed—just deploy and open Grafana!
+`prometheus.yml` for the stack:
 
-### Common Issues
+```yaml
+global:
+  scrape_interval: 60s
 
-| Issue                     | Solution                                                        |
-| ------------------------- | --------------------------------------------------------------- |
-| Prometheus won't start    | Run `chown -R 65534:65534 /volume1/docker/eero/prometheus_data` |
-| Grafana permission denied | Run `chown -R 472:472 /volume1/docker/eero/grafana_data`        |
-| Session invalid errors    | Re-run login locally and copy new `session.json` to server      |
-| Health check failing      | Use `/ready` endpoint (always 200) instead of `/health`         |
-| Dashboard not showing     | Verify `eero-dashboard.json` exists in the grafana folder       |
+scrape_configs:
+  - job_name: "eero"
+    static_configs:
+      - targets: ["eero-exporter:10052"]
+```
+
+### Common issues
+
+| Issue | Solution |
+|---|---|
+| `auth_storage` / "could not save credentials" errors every cycle | The config directory is mounted read-only or owned by another user. Mount it read-write, or migrate the file first and accept the limitation. |
+| Container starts, `eero_up 0`, `/health` says `session_valid: false` | Run `eero-exporter login` in the container (or use `/auth`); a terminal auth failure deletes the session file. |
+| Prometheus won't start | `chown -R 65534:65534 <prometheus_data>` |
+| Grafana permission denied | `chown -R 472:472 <grafana_data>` |
+| Health check failing | Use `/ready` for the container health check, `/health` for monitoring. |
+| Dashboard not showing | Verify `eero-dashboard.json` is mounted where the provisioning file expects it. |

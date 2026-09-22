@@ -1,0 +1,10 @@
+{
+  "url": "/2.2/networks/999001/thread",
+  "name": "REDACTED",
+  "xpan_id": "REDACTED",
+  "pan_id": "REDACTED",
+  "enabled": false,
+  "enable_credential_syncing": true,
+  "channel": 25,
+  "border_agent": {"ip": "REDACTED", "port": 49191}
+}

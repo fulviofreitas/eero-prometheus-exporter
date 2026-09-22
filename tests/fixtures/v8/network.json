@@ -1,0 +1,114 @@
+{
+  "url": "/2.2/networks/999001",
+  "name": "Test Network",
+  "status": "connected",
+  "geo_ip": {
+    "isp": "Example ISP"
+  },
+  "wan_type": "DHCP",
+  "gateway_ip": "192.0.2.1",
+  "connection": {
+    "mode": "nat"
+  },
+  "mlo_mode": "disabled",
+  "wireless_mode": "default",
+  "ip_settings": {
+    "double_nat": false,
+    "public_ip": "203.0.113.99"
+  },
+  "last_reboot": "2026-09-15T03:45:09.573Z",
+  "health": {
+    "internet": {
+      "status": "connected",
+      "isp_up": true
+    },
+    "eero_network": {
+      "status": "connected"
+    }
+  },
+  "speed": {
+    "status": "none",
+    "date": "2026-09-21T12:47:05Z",
+    "up": {"value": 500.0, "units": "Mbps"},
+    "down": {"value": 500.0, "units": "Mbps"}
+  },
+  "wpa3": false,
+  "band_steering": true,
+  "sqm": false,
+  "upnp": true,
+  "thread": false,
+  "ipv6_upstream": true,
+  "dns": {
+    "mode": "custom",
+    "caching": false,
+    "custom": {
+      "ips": ["203.0.113.10", "203.0.113.11"]
+    },
+    "parent": {
+      "ips": ["203.0.113.1", "203.0.113.2"]
+    }
+  },
+  "dhcp": {
+    "mode": "custom"
+  },
+  "premium_dns": {
+    "dns_policies": {
+      "ad_block": true,
+      "block_malware": true
+    }
+  },
+  "power_saving": false,
+  "guest_network_enabled": false,
+  "guest_network": {
+    "name": "Guest",
+    "enabled": false
+  },
+  "backup_internet_enabled": true,
+  "premium_status": "active",
+  "premium_details": {
+    "tier": "plus",
+    "next_billing_event_date": "2026-09-29T03:00:26Z"
+  },
+  "timezone": {
+    "value": "UTC"
+  },
+  "updates": {
+    "has_update": true,
+    "update_required": false,
+    "target_firmware": "6.21.0-abc"
+  },
+  "ddns": {
+    "enabled": true
+  },
+  "capabilities": {
+    "sqm": {"capable": true},
+    "wpa3": {"capable": true},
+    "block_apps": {"capable": false},
+    "eero_business_license_key": {"foo": "bar"}
+  },
+  "eeros": {
+    "count": 2,
+    "data": [
+      {
+        "url": "/2.2/eeros/1",
+        "location": "Living Room",
+        "model": "eero Pro 6E",
+        "serial": "SERIAL1",
+        "status": "green",
+        "gateway": true,
+        "heartbeat_ok": true,
+        "connected_clients_count": 5
+      },
+      {
+        "url": "/2.2/eeros/2",
+        "location": "Bedroom",
+        "model": "eero Pro 6E",
+        "serial": "SERIAL2",
+        "status": "green",
+        "gateway": false,
+        "heartbeat_ok": true,
+        "connected_clients_count": 3
+      }
+    ]
+  }
+}

@@ -12,12 +12,18 @@ services:
     ports:
       - "10052:10052"
     volumes:
-      # Mount session file for authentication (read-only)
-      - ./session.json:/home/eero/.config/eero-exporter/session.json:ro
-      # Optional: mount config file
-      # - ./config.yml:/home/eero/.config/eero-exporter/config.yml:ro
+      # The config directory must be writable: eero-api 8.x rewrites the
+      # session record (schema 2, atomic temp file + rename) in place.
+      # Create the session inside the volume once with
+      #   docker compose run --rm eero-exporter login you@example.com
+      # or enable the /auth page (EERO_EXPORTER_AUTH_UI / _AUTH_UI_TOKEN).
+      # A bind mount works too if the directory is owned by the container user.
+      - eero-config:/home/eero/.config/eero-exporter
     environment:
       - TZ=UTC
+      # Every CLI option has an EERO_EXPORTER_* variable, e.g.
+      # - EERO_EXPORTER_INTERVAL=120
+      # - EERO_EXPORTER_INCLUDE_PER_EERO=true
     # Health check uses /ready (always 200 if running) for container liveness
     # Use /health endpoint for detailed status monitoring
     healthcheck:
@@ -75,5 +81,6 @@ services:
       - monitoring
 
 volumes:
+  eero-config:
   prometheus_data:
   grafana_data:
