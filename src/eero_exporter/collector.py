@@ -33,7 +33,6 @@ from .metrics import (
     BACKUP_ACCESS_POINTS_COUNT,
     CELLULAR_BACKUP_OUTAGES_COUNT,
     CELLULAR_BACKUP_USAGE_ITEMS_COUNT,
-    DATA_USAGE_ACTIVE_CLIENTS,
     DATA_USAGE_DOWNLOAD_BYTES,
     DATA_USAGE_UPLOAD_BYTES,
     DEVICE_BLOCKED,
@@ -2793,15 +2792,6 @@ class EeroCollector:
                 elif direction == "upload":
                     DATA_USAGE_UPLOAD_BYTES.labels(network_id=network_id).set(total)
 
-        totals = usage.get("totals", {})
-        if isinstance(totals, dict):
-            active = totals.get("active_clients") or totals.get("active_client_count")
-            if active is not None:
-                try:
-                    DATA_USAGE_ACTIVE_CLIENTS.labels(network_id=network_id).set(float(active))
-                except (TypeError, ValueError):
-                    pass
-
     def _set_device_trailing_usage(self, network_id: str, items: list[Any]) -> None:
         """Set the manufacturer/device_type-labelled trailing-hour usage gauges.
 
@@ -3093,8 +3083,13 @@ class EeroCollector:
             return
 
         for field, band_label in _WPA3_BAND_FIELDS.items():
-            mode = data.get(field)
-            if not isinstance(mode, str) or mode not in _WPA3_MODES:
+            raw_mode = data.get(field)
+            # The API returns the mode in lower case ("wpa2", "wpa3"); the label
+            # value is the upper-case form of the closed enum.
+            mode = raw_mode.upper() if isinstance(raw_mode, str) else None
+            if mode not in _WPA3_MODES:
+                if raw_mode is not None:
+                    _LOGGER.debug("wpa3 %s: unrecognised mode (len=%d)", field, len(str(raw_mode)))
                 continue
             for candidate in _WPA3_MODES:
                 EERO_NETWORK_WPA3_BAND_MODE.labels(

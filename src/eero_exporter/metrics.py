@@ -217,6 +217,8 @@ def _info(
 
 REMOVED_IN_4_0_0: frozenset[str] = frozenset(
     {
+        # get_data_usage() has no `totals` object (probe 2026-09-21); never populated.
+        f"{PREFIX}_data_usage_active_clients",
         f"{PREFIX}_eero_memory_usage_percent",
         f"{PREFIX}_eero_temperature_celsius",
         f"{PREFIX}_eero_backup_connection",
@@ -1571,15 +1573,6 @@ DATA_USAGE_UPLOAD_BYTES = _gauge(
     family="data_usage",
     source="get_data_usage().data.series[type=upload].sum",
     evidence="verified",
-)
-
-DATA_USAGE_ACTIVE_CLIENTS = _gauge(
-    f"{PREFIX}_data_usage_active_clients",
-    "Number of active clients observed in the trailing collection window.",
-    ("network_id",),
-    family="data_usage",
-    source="get_data_usage().data.totals.active_clients",
-    evidence="inferred",
 )
 
 DEVICE_DATA_USAGE_DOWNLOAD_BYTES = _gauge(

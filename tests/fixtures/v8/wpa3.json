@@ -1,5 +1,5 @@
 {
-  "band_2_4_ghz": "WPA2",
-  "band_5_ghz": "WPA2_WPA3",
-  "band_6_ghz": "WPA3"
+  "band_2_4_ghz": "wpa2",
+  "band_5_ghz": "wpa2_wpa3",
+  "band_6_ghz": "wpa3"
 }
