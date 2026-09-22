@@ -35,6 +35,7 @@ from .eero_adapter import (
     _extract_network_id,
     _parse_network_status,
 )
+from .metrics import register_metrics
 from .probe import DEFAULT_BUDGET as DEFAULT_PROBE_BUDGET
 from .probe import DEFAULT_OUT_DIR as DEFAULT_PROBE_OUT_DIR
 from .probe import DEFAULT_RATE as DEFAULT_PROBE_RATE
@@ -360,10 +361,9 @@ def test(
             console.print("\nRun: [bold]eero-exporter login <email-or-phone>[/bold]")
             raise typer.Exit(1)
 
-        collector = EeroCollector(
-            session_file=str(session_path),
-            config=ExporterConfig(include_devices=True, include_profiles=True),
-        )
+        test_config = ExporterConfig(include_devices=True, include_profiles=True)
+        register_metrics(test_config)
+        collector = EeroCollector(session_file=str(session_path), config=test_config)
 
         with Progress(
             SpinnerColumn(),
@@ -553,13 +553,6 @@ def serve(
         show_envvar=True,
         help="Include blacklist metrics",
     ),
-    include_diagnostics: bool | None = typer.Option(
-        None,
-        "--include-diagnostics/--no-diagnostics",
-        envvar=envvar_name("--include-diagnostics"),
-        show_envvar=True,
-        help="Include diagnostics metrics",
-    ),
     include_insights: bool | None = typer.Option(
         None,
         "--include-insights/--no-insights",
@@ -710,7 +703,6 @@ def serve(
         include_port_forwards=include_port_forwards,
         include_reservations=include_reservations,
         include_blacklist=include_blacklist,
-        include_diagnostics=include_diagnostics,
         include_insights=include_insights,
         include_extended=include_extended,
         include_rf=include_rf,

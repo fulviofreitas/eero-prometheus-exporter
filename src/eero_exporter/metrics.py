@@ -1,979 +1,312 @@
-"""Prometheus metrics definitions for Eero Exporter."""
+"""Prometheus metrics definitions for Eero Exporter.
 
-from prometheus_client import Counter, Gauge, Info
+Reorganised (4.0.0, commit 4) by API resource and collection tier. Every
+metric is declared through :func:`_gauge`/:func:`_counter`/:func:`_info`,
+which records its family, tier, source path, and evidence level in
+:data:`_METRIC_PROVENANCE` (read via :func:`describe_metrics`) and appends the
+metric object to :data:`_FAMILY_METRICS` (consumed by :func:`register_metrics`
+for tier gating).
+
+Metrics are created **unregistered** (``registry=None``): the collector can
+set them at any time regardless of whether they are currently exposed, and
+:func:`register_metrics` decides -- based on :class:`~eero_exporter.config.
+ExporterConfig` -- which families actually get registered into the
+Prometheus registry that ``/metrics`` renders. This keeps disabled tiers/
+families out of the exposition entirely (no empty ``# HELP`` lines) without
+the collector needing any tier-awareness of its own.
+
+See ``claude/tasks/probes/2026-09-21-shape-summary.md`` (the v8 probe shape
+summary) for the source of truth on which metrics have a real API source.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, cast
+
+from prometheus_client import REGISTRY, Counter, Gauge, Info
 
 # Metric prefix
 PREFIX = "eero"
 
 # =============================================================================
-# INFO METRICS - Static information about the eero network
+# Provenance / tier-gating machinery
 # =============================================================================
 
-NETWORK_INFO = Info(
-    f"{PREFIX}_network",
-    "Information about the eero network. Source: eero API /networks endpoint.",
-    labelnames=["network_id"],
-)
+#: The closed vocabulary of collection tiers a metric family can belong to.
+#: "core" families are always registered (subject to their own per-family
+#: ``include_*`` flag); every other tier is gated by the matching
+#: ``ExporterConfig.include_<tier>`` flag.
+TierName = str
 
-EERO_INFO = Info(
-    f"{PREFIX}_eero",
-    "Information about an eero device. Source: eero API /networks/{id}/eeros endpoint.",
-    labelnames=["network_id", "eero_id", "serial"],
-)
+#: family name -> tier name. Every family declared below must have an entry
+#: here. In this commit every kept family is "core" -- no metric yet lives in
+#: extended/rf/per_profile/per_device/per_eero/unverified; those tiers exist
+#: in `ExporterConfig` ahead of the families that will populate them.
+FAMILY_TIER: dict[str, TierName] = {}
 
-DEVICE_INFO = Info(
-    f"{PREFIX}_device",
-    "Information about a connected device. Source: eero API /networks/{id}/devices endpoint.",
-    labelnames=["network_id", "device_id", "mac"],
-)
+#: metric name -> family name, for every declared metric.
+METRIC_FAMILY: dict[str, str] = {}
 
-ETHERNET_PORT_INFO = Info(
-    f"{PREFIX}_ethernet_port",
-    "Information about an Ethernet port",
-    labelnames=["network_id", "eero_id", "port_number"],
-)
+#: The `ExporterConfig` boolean field gating each non-core tier.
+_TIER_INCLUDE_FLAG: dict[str, str] = {
+    "extended": "include_extended",
+    "rf": "include_rf",
+    "per_profile": "include_per_profile",
+    "per_device": "include_per_device",
+    "per_eero": "include_per_eero",
+    "unverified": "include_unverified",
+}
 
-# =============================================================================
-# NETWORK METRICS
-# =============================================================================
+#: The `ExporterConfig` boolean field gating each core-tier family that has
+#: its own dedicated toggle. Core families with no entry here are always on.
+_FAMILY_INCLUDE_FLAG: dict[str, str] = {
+    "devices": "include_devices",
+    "profiles": "include_profiles",
+    "data_usage": "include_data_usage",
+    "premium": "include_premium",
+    "ethernet": "include_ethernet",
+    "thread": "include_thread",
+    "port_forwards": "include_port_forwards",
+    "reservations": "include_reservations",
+    "blacklist": "include_blacklist",
+    "insights": "include_insights",
+}
 
-NETWORK_STATUS = Gauge(
-    f"{PREFIX}_network_status",
-    "Network status (1=online, 0=offline)",
-    labelnames=["network_id", "name"],
-)
 
-NETWORK_CLIENTS_COUNT = Gauge(
-    f"{PREFIX}_network_clients_count",
-    "Total number of clients on the network",
-    labelnames=["network_id", "name"],
-)
+@dataclass(frozen=True)
+class MetricProvenance:
+    """Where one declared metric's value comes from, for docs generation."""
 
-NETWORK_EEROS_COUNT = Gauge(
-    f"{PREFIX}_network_eeros_count",
-    "Number of eero devices in the network",
-    labelnames=["network_id", "name"],
-)
+    name: str
+    type: str
+    labels: tuple[str, ...]
+    tier: TierName
+    family: str
+    source: str
+    evidence: str
 
-# =============================================================================
-# SPEED TEST METRICS
-# =============================================================================
 
-SPEED_UPLOAD_MBPS = Gauge(
-    f"{PREFIX}_speed_upload_mbps",
-    "Latest speed test upload result in megabits per second (Mbps). "
-    "Note: Uses Mbps as industry-standard unit for network speeds.",
-    labelnames=["network_id"],
-)
+#: metric name -> its provenance record. Populated by `_gauge`/`_counter`/`_info`.
+_METRIC_PROVENANCE: dict[str, MetricProvenance] = {}
 
-SPEED_DOWNLOAD_MBPS = Gauge(
-    f"{PREFIX}_speed_download_mbps",
-    "Latest speed test download result in megabits per second (Mbps). "
-    "Note: Uses Mbps as industry-standard unit for network speeds.",
-    labelnames=["network_id"],
-)
+#: family name -> the metric objects declared under it, in declaration order.
+_FAMILY_METRICS: dict[str, list[Any]] = {}
 
-SPEED_TEST_TIMESTAMP = Gauge(
-    f"{PREFIX}_speed_test_timestamp_seconds",
-    "Timestamp of the last speed test (Unix epoch)",
-    labelnames=["network_id"],
-)
 
-# =============================================================================
-# HEALTH METRICS
-# =============================================================================
+def _register_family(family: str, tier: TierName) -> None:
+    FAMILY_TIER.setdefault(family, tier)
+    _FAMILY_METRICS.setdefault(family, [])
 
-HEALTH_STATUS = Gauge(
-    f"{PREFIX}_health_status",
-    "Health status of network components (1=healthy, 0=unhealthy)",
-    labelnames=["network_id", "source"],
-)
 
-# =============================================================================
-# EERO DEVICE METRICS
-# =============================================================================
+def _declare(
+    cls: type,
+    name: str,
+    doc: str,
+    labelnames: tuple[str, ...] = (),
+    *,
+    family: str,
+    source: str,
+    evidence: str = "verified",
+    tier: TierName = "core",
+) -> Any:
+    """Create one Prometheus metric object and record its provenance.
 
-EERO_STATUS = Gauge(
-    f"{PREFIX}_eero_status",
-    "Eero device status (1=online, 0=offline)",
-    labelnames=["network_id", "eero_id", "location", "model"],
-)
+    Args:
+        cls: ``Gauge``, ``Counter``, or ``Info``.
+        name: Full metric name, e.g. ``f"{PREFIX}_up"``.
+        doc: Human-readable HELP text.
+        labelnames: Label names, if any.
+        family: The resource family this metric belongs to (organisational
+            grouping, drives tier gating alongside ``tier``).
+        source: The API path this metric's value is read from, e.g.
+            ``"network.data.dns.caching"``.
+        evidence: One of ``"verified"`` (path observed live and parseable),
+            ``"documented"`` (SDK/API docs only), or ``"inferred"`` (kept from
+            a pre-v8 metric whose exact source path was not directly
+            re-verified by the v8 probe).
+        tier: The collection tier this metric's family belongs to.
 
-EERO_IS_GATEWAY = Gauge(
-    f"{PREFIX}_eero_is_gateway",
-    "Whether the eero is the gateway (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location"],
-)
+    Returns:
+        The created (unregistered -- ``registry=None``) metric object.
+    """
+    _register_family(family, tier)
+    metric = cls(name, doc, labelnames=list(labelnames), registry=None)
+    _METRIC_PROVENANCE[name] = MetricProvenance(
+        name=name,
+        type=cls.__name__.lower(),
+        labels=tuple(labelnames),
+        tier=tier,
+        family=family,
+        source=source,
+        evidence=evidence,
+    )
+    METRIC_FAMILY[name] = family
+    _FAMILY_METRICS[family].append(metric)
+    return metric
 
-EERO_CONNECTED_CLIENTS = Gauge(
-    f"{PREFIX}_eero_connected_clients_count",
-    "Number of clients connected to this eero",
-    labelnames=["network_id", "eero_id", "location", "model"],
-)
 
-EERO_CONNECTED_WIRED_CLIENTS = Gauge(
-    f"{PREFIX}_eero_connected_wired_clients_count",
-    "Number of wired clients connected to this eero",
-    labelnames=["network_id", "eero_id", "location"],
-)
+def _gauge(
+    name: str,
+    doc: str,
+    labelnames: tuple[str, ...] = (),
+    *,
+    family: str,
+    source: str,
+    evidence: str = "verified",
+    tier: TierName = "core",
+) -> Gauge:
+    return cast(
+        Gauge,
+        _declare(
+            Gauge, name, doc, labelnames, family=family, source=source, evidence=evidence, tier=tier
+        ),
+    )
 
-EERO_CONNECTED_WIRELESS_CLIENTS = Gauge(
-    f"{PREFIX}_eero_connected_wireless_clients_count",
-    "Number of wireless clients connected to this eero",
-    labelnames=["network_id", "eero_id", "location"],
-)
 
-EERO_MESH_QUALITY = Gauge(
-    f"{PREFIX}_eero_mesh_quality_bars",
-    "Mesh quality indicator 0-5 bars. Source: eero API field 'mesh_quality_bars'.",
-    labelnames=["network_id", "eero_id", "location", "model"],
-)
+def _counter(
+    name: str,
+    doc: str,
+    labelnames: tuple[str, ...] = (),
+    *,
+    family: str,
+    source: str,
+    evidence: str = "verified",
+    tier: TierName = "core",
+) -> Counter:
+    return cast(
+        Counter,
+        _declare(
+            Counter,
+            name,
+            doc,
+            labelnames,
+            family=family,
+            source=source,
+            evidence=evidence,
+            tier=tier,
+        ),
+    )
 
-EERO_UPTIME_SECONDS = Gauge(
-    f"{PREFIX}_eero_uptime_seconds",
-    "Eero device uptime in seconds since last reboot. Source: eero API field 'uptime'.",
-    labelnames=["network_id", "eero_id", "location"],
-)
 
-EERO_LED_ON = Gauge(
-    f"{PREFIX}_eero_led_on",
-    "Whether the eero LED is on (1=on, 0=off)",
-    labelnames=["network_id", "eero_id", "location"],
-)
+def _info(
+    name: str,
+    doc: str,
+    labelnames: tuple[str, ...] = (),
+    *,
+    family: str,
+    source: str,
+    evidence: str = "verified",
+    tier: TierName = "core",
+) -> Info:
+    return cast(
+        Info,
+        _declare(
+            Info, name, doc, labelnames, family=family, source=source, evidence=evidence, tier=tier
+        ),
+    )
 
-EERO_UPDATE_AVAILABLE = Gauge(
-    f"{PREFIX}_eero_update_available",
-    "Whether an update is available (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-EERO_HEARTBEAT_OK = Gauge(
-    f"{PREFIX}_eero_heartbeat_ok",
-    "Whether the eero heartbeat is OK (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-EERO_WIRED = Gauge(
-    f"{PREFIX}_eero_wired",
-    "Whether the eero is wired (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-# =============================================================================
-# EERO HARDWARE METRICS
-# =============================================================================
-
-EERO_MEMORY_USAGE = Gauge(
-    f"{PREFIX}_eero_memory_usage_percent",
-    "Eero memory usage as percentage (0-100). Divide by 100 for ratio.",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-EERO_TEMPERATURE = Gauge(
-    f"{PREFIX}_eero_temperature_celsius",
-    "Eero internal temperature in Celsius. Source: eero API field 'temperature'. "
-    "Normal range: 30-60°C.",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-EERO_LED_BRIGHTNESS = Gauge(
-    f"{PREFIX}_eero_led_brightness",
-    "Eero LED brightness level (0-100)",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-EERO_LAST_REBOOT = Gauge(
-    f"{PREFIX}_eero_last_reboot_timestamp_seconds",
-    "Timestamp of last eero reboot (Unix epoch)",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-EERO_PROVIDES_WIFI = Gauge(
-    f"{PREFIX}_eero_provides_wifi",
-    "Whether the eero provides WiFi (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-EERO_BACKUP_CONNECTION = Gauge(
-    f"{PREFIX}_eero_backup_connection",
-    "Whether the eero is using backup connection (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location"],
-)
 
 # =============================================================================
-# EERO ETHERNET PORT METRICS
+# REMOVED IN 4.0.0 (BREAKING) -- families with no eero-api v8 source.
+#
+# See claude/tasks/probes/2026-09-21-shape-summary.md §11.11 and the v8
+# migration plan §5.1 "Removed (BREAKING)" table. Every name here must NOT
+# exist as a metric object below.
 # =============================================================================
 
-ETHERNET_PORT_CARRIER = Gauge(
-    f"{PREFIX}_ethernet_port_carrier",
-    "Whether the Ethernet port has link (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location", "port_number", "port_name"],
-)
-
-ETHERNET_PORT_SPEED = Gauge(
-    f"{PREFIX}_ethernet_port_speed_mbps",
-    "Ethernet port negotiated speed in megabits per second (Mbps). "
-    "Common values: 100 (Fast Ethernet), 1000 (Gigabit), 2500 (2.5G).",
-    labelnames=["network_id", "eero_id", "location", "port_number", "port_name"],
-)
-
-ETHERNET_PORT_IS_WAN = Gauge(
-    f"{PREFIX}_ethernet_port_is_wan",
-    "Whether the Ethernet port is used for WAN (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location", "port_number", "port_name"],
-)
-
-ETHERNET_PORT_POWER_SAVING = Gauge(
-    f"{PREFIX}_ethernet_port_power_saving",
-    "Whether power saving is enabled on the port (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location", "port_number", "port_name"],
-)
-
-EERO_WIRED_INTERNET = Gauge(
-    f"{PREFIX}_eero_wired_internet",
-    "Whether the eero has wired internet connection (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location"],
+REMOVED_IN_4_0_0: frozenset[str] = frozenset(
+    {
+        f"{PREFIX}_eero_memory_usage_percent",
+        f"{PREFIX}_eero_temperature_celsius",
+        f"{PREFIX}_eero_backup_connection",
+        f"{PREFIX}_device_prioritized",
+        f"{PREFIX}_device_signal_strength_avg_dbm",
+        f"{PREFIX}_device_rx_bandwidth_mhz",
+        f"{PREFIX}_device_tx_bandwidth_mhz",
+        f"{PREFIX}_device_adblock_enabled",
+        f"{PREFIX}_sqm_upload_bandwidth_mbps",
+        f"{PREFIX}_sqm_download_bandwidth_mbps",
+        f"{PREFIX}_guest_network_access_duration_enabled",
+        f"{PREFIX}_network_auto_update_enabled",
+        f"{PREFIX}_security_threats_blocked_total",
+        f"{PREFIX}_security_scans_blocked_total",
+        f"{PREFIX}_ethernet_port_power_saving",
+        f"{PREFIX}_exporter_scrape_success",
+        f"{PREFIX}_network_download_bytes_total",
+        f"{PREFIX}_network_upload_bytes_total",
+        f"{PREFIX}_device_download_bytes_total",
+        f"{PREFIX}_device_upload_bytes_total",
+        f"{PREFIX}_eero_rx_bytes_total",
+        f"{PREFIX}_eero_tx_bytes_total",
+        f"{PREFIX}_diagnostics_internet_latency_ms",
+        f"{PREFIX}_diagnostics_dns_latency_ms",
+        f"{PREFIX}_diagnostics_gateway_latency_ms",
+        f"{PREFIX}_diagnostics_last_run_timestamp_seconds",
+        f"{PREFIX}_thread_device_count",
+        f"{PREFIX}_thread_border_router",
+        f"{PREFIX}_eero_nightlight_ambient_enabled",
+        f"{PREFIX}_backup_enabled",
+        f"{PREFIX}_backup_active",
+        f"{PREFIX}_backup_connected",
+        f"{PREFIX}_backup_data_used_bytes_total",
+        f"{PREFIX}_backup_signal_strength",
+    }
 )
 
 # =============================================================================
-# EERO NIGHTLIGHT METRICS (Eero Beacon)
+# EXPORTER -- self-observability, no eero API source
 # =============================================================================
 
-EERO_NIGHTLIGHT_ENABLED = Gauge(
-    f"{PREFIX}_eero_nightlight_enabled",
-    "Whether nightlight is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-EERO_NIGHTLIGHT_BRIGHTNESS = Gauge(
-    f"{PREFIX}_eero_nightlight_brightness",
-    "Nightlight brightness level (0-100)",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-EERO_NIGHTLIGHT_AMBIENT_ENABLED = Gauge(
-    f"{PREFIX}_eero_nightlight_ambient_enabled",
-    "Whether ambient light sensing is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-EERO_NIGHTLIGHT_SCHEDULE_ENABLED = Gauge(
-    f"{PREFIX}_eero_nightlight_schedule_enabled",
-    "Whether nightlight schedule is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-# =============================================================================
-# CLIENT DEVICE METRICS
-# =============================================================================
-
-# Common device labels for consistency:
-# - network_id: network identifier
-# - device_id: unique device identifier
-# - name: display name of device
-# - mac: MAC address
-# - manufacturer: device manufacturer (e.g., "Apple", "Samsung")
-# - device_type: device category (e.g., "computer", "phone", "tv")
-# - connection_type: "wired" or "wireless"
-# - source_eero: location of the eero the device is connected to
-
-DEVICE_CONNECTED = Gauge(
-    f"{PREFIX}_device_connected",
-    "Whether the device is connected (1=yes, 0=no)",
-    labelnames=[
-        "network_id",
-        "device_id",
-        "name",
-        "mac",
-        "manufacturer",
-        "device_type",
-        "connection_type",
-        "source_eero",
-    ],
-)
-
-DEVICE_WIRELESS = Gauge(
-    f"{PREFIX}_device_wireless",
-    "Whether the device is wireless (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
-)
-
-DEVICE_BLOCKED = Gauge(
-    f"{PREFIX}_device_blocked",
-    "Whether the device is blocked (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name", "mac", "manufacturer"],
-)
-
-DEVICE_PAUSED = Gauge(
-    f"{PREFIX}_device_paused",
-    "Whether the device is paused (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
-)
-
-DEVICE_IS_GUEST = Gauge(
-    f"{PREFIX}_device_is_guest",
-    "Whether the device is on guest network (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name", "manufacturer"],
-)
-
-DEVICE_SIGNAL_STRENGTH = Gauge(
-    f"{PREFIX}_device_signal_strength_dbm",
-    "Device signal strength in dBm (decibels relative to 1 milliwatt). "
-    "Source: eero API field 'connectivity.signal'. Range typically -30 (excellent) to -90 (poor).",
-    labelnames=[
-        "network_id",
-        "device_id",
-        "name",
-        "manufacturer",
-        "band",
-        "source_eero",
-    ],
-)
-
-DEVICE_CONNECTION_SCORE = Gauge(
-    f"{PREFIX}_device_connection_score",
-    "Device connection quality score",
-    labelnames=[
-        "network_id",
-        "device_id",
-        "name",
-        "manufacturer",
-        "connection_type",
-        "source_eero",
-    ],
-)
-
-DEVICE_CONNECTION_SCORE_BARS = Gauge(
-    f"{PREFIX}_device_connection_score_bars",
-    "Device connection quality score in bars (0-5)",
-    labelnames=[
-        "network_id",
-        "device_id",
-        "name",
-        "manufacturer",
-        "connection_type",
-        "source_eero",
-    ],
-)
-
-# =============================================================================
-# DEVICE WIRELESS METRICS
-# =============================================================================
-
-# Wireless metrics include band label ("2.4GHz", "5GHz", "6GHz") for filtering
-
-DEVICE_FREQUENCY = Gauge(
-    f"{PREFIX}_device_frequency_mhz",
-    "Device WiFi frequency in MHz",
-    labelnames=["network_id", "device_id", "name", "manufacturer", "band", "source_eero"],
-)
-
-DEVICE_CHANNEL = Gauge(
-    f"{PREFIX}_device_channel",
-    "Device WiFi channel number",
-    labelnames=["network_id", "device_id", "name", "band", "source_eero"],
-)
-
-DEVICE_RX_BITRATE = Gauge(
-    f"{PREFIX}_device_rx_bitrate_mbps",
-    "Device receive (download) bitrate in megabits per second (Mbps). "
-    "PHY layer rate, actual throughput may be lower.",
-    labelnames=["network_id", "device_id", "name", "manufacturer", "band", "source_eero"],
-)
-
-DEVICE_SIGNAL_AVG = Gauge(
-    f"{PREFIX}_device_signal_strength_avg_dbm",
-    "Device average signal strength in dBm",
-    labelnames=["network_id", "device_id", "name", "manufacturer", "band", "source_eero"],
-)
-
-DEVICE_RX_MCS = Gauge(
-    f"{PREFIX}_device_rx_mcs",
-    "Device receive MCS index",
-    labelnames=["network_id", "device_id", "name", "band"],
-)
-
-DEVICE_RX_NSS = Gauge(
-    f"{PREFIX}_device_rx_nss",
-    "Device receive number of spatial streams",
-    labelnames=["network_id", "device_id", "name", "band"],
-)
-
-DEVICE_RX_BANDWIDTH = Gauge(
-    f"{PREFIX}_device_rx_bandwidth_mhz",
-    "Device receive bandwidth in MHz",
-    labelnames=["network_id", "device_id", "name", "band"],
-)
-
-DEVICE_TX_BITRATE = Gauge(
-    f"{PREFIX}_device_tx_bitrate_mbps",
-    "Device transmit (upload) bitrate in megabits per second (Mbps). "
-    "PHY layer rate, actual throughput may be lower.",
-    labelnames=["network_id", "device_id", "name", "manufacturer", "band", "source_eero"],
-)
-
-DEVICE_TX_MCS = Gauge(
-    f"{PREFIX}_device_tx_mcs",
-    "Device transmit MCS index",
-    labelnames=["network_id", "device_id", "name", "band"],
-)
-
-DEVICE_TX_NSS = Gauge(
-    f"{PREFIX}_device_tx_nss",
-    "Device transmit number of spatial streams",
-    labelnames=["network_id", "device_id", "name", "band"],
-)
-
-DEVICE_TX_BANDWIDTH = Gauge(
-    f"{PREFIX}_device_tx_bandwidth_mhz",
-    "Device transmit bandwidth in MHz",
-    labelnames=["network_id", "device_id", "name", "band"],
-)
-
-# =============================================================================
-# DEVICE ADDITIONAL METRICS
-# =============================================================================
-
-DEVICE_PRIORITIZED = Gauge(
-    f"{PREFIX}_device_prioritized",
-    "Whether the device is prioritized for bandwidth (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
-)
-
-DEVICE_PRIVATE = Gauge(
-    f"{PREFIX}_device_private",
-    "Whether the device is marked as private (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name", "manufacturer"],
-)
-
-DEVICE_CONNECTED_TO_GATEWAY = Gauge(
-    f"{PREFIX}_device_connected_to_gateway",
-    "Whether the device is connected directly to gateway (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name", "connection_type"],
-)
-
-DEVICE_DOWNLOAD_BYTES = Counter(
-    f"{PREFIX}_device_download_bytes_total",
-    "Total bytes downloaded by device",
-    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
-)
-
-DEVICE_UPLOAD_BYTES = Counter(
-    f"{PREFIX}_device_upload_bytes_total",
-    "Total bytes uploaded by device",
-    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
-)
-
-# =============================================================================
-# PROFILE METRICS
-# =============================================================================
-
-PROFILE_PAUSED = Gauge(
-    f"{PREFIX}_profile_paused",
-    "Whether the profile is paused (1=yes, 0=no)",
-    labelnames=["network_id", "profile_id", "name"],
-)
-
-PROFILE_DEVICES_COUNT = Gauge(
-    f"{PREFIX}_profile_devices_count",
-    "Number of devices in the profile",
-    labelnames=["network_id", "profile_id", "name"],
-)
-
-# =============================================================================
-# NETWORK FEATURE FLAGS
-# =============================================================================
-
-NETWORK_WPA3_ENABLED = Gauge(
-    f"{PREFIX}_network_wpa3_enabled",
-    "Whether WPA3 is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_BAND_STEERING_ENABLED = Gauge(
-    f"{PREFIX}_network_band_steering_enabled",
-    "Whether band steering is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_SQM_ENABLED = Gauge(
-    f"{PREFIX}_network_sqm_enabled",
-    "Whether Smart Queue Management is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_UPNP_ENABLED = Gauge(
-    f"{PREFIX}_network_upnp_enabled",
-    "Whether UPnP is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_THREAD_ENABLED = Gauge(
-    f"{PREFIX}_network_thread_enabled",
-    "Whether Thread is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_IPV6_ENABLED = Gauge(
-    f"{PREFIX}_network_ipv6_enabled",
-    "Whether IPv6 is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_DNS_CACHING_ENABLED = Gauge(
-    f"{PREFIX}_network_dns_caching_enabled",
-    "Whether DNS caching is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_POWER_SAVING_ENABLED = Gauge(
-    f"{PREFIX}_network_power_saving_enabled",
-    "Whether power saving is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_GUEST_ENABLED = Gauge(
-    f"{PREFIX}_network_guest_enabled",
-    "Whether guest network is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_PREMIUM_ENABLED = Gauge(
-    f"{PREFIX}_network_premium_enabled",
-    "Whether Eero Plus/Secure subscription is active (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_BACKUP_INTERNET_ENABLED = Gauge(
-    f"{PREFIX}_network_backup_internet_enabled",
-    "Whether backup internet is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-# =============================================================================
-# NETWORK TRANSFER METRICS
-# =============================================================================
-
-NETWORK_DOWNLOAD_BYTES = Counter(
-    f"{PREFIX}_network_download_bytes_total",
-    "Total bytes downloaded on the network",
-    labelnames=["network_id"],
-)
-
-NETWORK_UPLOAD_BYTES = Counter(
-    f"{PREFIX}_network_upload_bytes_total",
-    "Total bytes uploaded on the network",
-    labelnames=["network_id"],
-)
-
-# =============================================================================
-# DATA USAGE METRICS
-# =============================================================================
-
-# Source: eero API /networks/{id}/data_usage[/{resource}] endpoint.
-# The "period" label is one of day/week/month for the current calendar window;
-# "cadence" is the sample granularity eero used (hourly for day, daily otherwise);
-# "direction" is download or upload.
-
-NETWORK_DATA_USAGE_BYTES = Gauge(
-    f"{PREFIX}_network_data_usage_bytes",
-    "Network data usage in bytes from the eero data_usage endpoint for the current period.",
-    labelnames=["network_id", "period", "cadence", "direction"],
-)
-
-DEVICE_DATA_USAGE_BYTES = Gauge(
-    f"{PREFIX}_device_data_usage_bytes",
-    "Device data usage in bytes from the eero data_usage endpoint for the current period.",
-    labelnames=["network_id", "device_id", "name", "period", "cadence", "direction"],
-)
-
-EERO_DATA_USAGE_BYTES = Gauge(
-    f"{PREFIX}_eero_data_usage_bytes",
-    "Eero node data usage in bytes from the eero data_usage endpoint for the current period.",
-    labelnames=["network_id", "eero_id", "location", "period", "cadence", "direction"],
-)
-
-# =============================================================================
-# SQM (SMART QUEUE MANAGEMENT) METRICS
-# =============================================================================
-
-SQM_UPLOAD_BANDWIDTH = Gauge(
-    f"{PREFIX}_sqm_upload_bandwidth_mbps",
-    "SQM (Smart Queue Management) upload bandwidth limit in megabits per second (Mbps).",
-    labelnames=["network_id"],
-)
-
-SQM_DOWNLOAD_BANDWIDTH = Gauge(
-    f"{PREFIX}_sqm_download_bandwidth_mbps",
-    "SQM (Smart Queue Management) download bandwidth limit in megabits per second (Mbps).",
-    labelnames=["network_id"],
-)
-
-# =============================================================================
-# BACKUP NETWORK METRICS (Eero Plus)
-# =============================================================================
-
-BACKUP_ENABLED = Gauge(
-    f"{PREFIX}_backup_enabled",
-    "Whether backup network is enabled (1=yes, 0=no)",
-    labelnames=["network_id"],
-)
-
-BACKUP_ACTIVE = Gauge(
-    f"{PREFIX}_backup_active",
-    "Whether backup network is currently active (1=yes, 0=no)",
-    labelnames=["network_id"],
-)
-
-BACKUP_CONNECTED = Gauge(
-    f"{PREFIX}_backup_connected",
-    "Whether backup connection is established (1=yes, 0=no)",
-    labelnames=["network_id"],
-)
-
-BACKUP_DATA_USED = Counter(
-    f"{PREFIX}_backup_data_used_bytes_total",
-    "Total bytes used on backup connection",
-    labelnames=["network_id"],
-)
-
-BACKUP_SIGNAL_STRENGTH = Gauge(
-    f"{PREFIX}_backup_signal_strength",
-    "Backup connection signal strength",
-    labelnames=["network_id"],
-)
-
-# =============================================================================
-# DATA USAGE SUMMARY METRICS (replaces deprecated activity endpoint)
-# =============================================================================
-
-DATA_USAGE_DOWNLOAD_BYTES = Gauge(
-    f"{PREFIX}_data_usage_download_bytes",
-    "Network data usage download bytes for the trailing collection window.",
-    labelnames=["network_id"],
-)
-
-DATA_USAGE_UPLOAD_BYTES = Gauge(
-    f"{PREFIX}_data_usage_upload_bytes",
-    "Network data usage upload bytes for the trailing collection window.",
-    labelnames=["network_id"],
-)
-
-DATA_USAGE_ACTIVE_CLIENTS = Gauge(
-    f"{PREFIX}_data_usage_active_clients",
-    "Number of active clients observed in the trailing collection window.",
-    labelnames=["network_id"],
-)
-
-DEVICE_DATA_USAGE_DOWNLOAD_BYTES = Gauge(
-    f"{PREFIX}_device_data_usage_download_bytes",
-    "Device data usage download bytes for the trailing collection window.",
-    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
-)
-
-DEVICE_DATA_USAGE_UPLOAD_BYTES = Gauge(
-    f"{PREFIX}_device_data_usage_upload_bytes",
-    "Device data usage upload bytes for the trailing collection window.",
-    labelnames=["network_id", "device_id", "name", "manufacturer", "device_type"],
-)
-
-# =============================================================================
-# THREAD METRICS
-# =============================================================================
-
-THREAD_DEVICE_COUNT = Gauge(
-    f"{PREFIX}_thread_device_count",
-    "Number of Thread devices on the network",
-    labelnames=["network_id"],
-)
-
-THREAD_BORDER_ROUTER = Gauge(
-    f"{PREFIX}_thread_border_router",
-    "Number of Thread border routers",
-    labelnames=["network_id"],
-)
-
-# =============================================================================
-# GUEST NETWORK METRICS
-# =============================================================================
-
-GUEST_NETWORK_CONNECTED_CLIENTS = Gauge(
-    f"{PREFIX}_guest_network_connected_clients",
-    "Number of clients connected to guest network",
-    labelnames=["network_id", "name"],
-)
-
-GUEST_NETWORK_INFO = Info(
-    f"{PREFIX}_guest_network",
-    "Guest network information",
-    labelnames=["network_id"],
-)
-
-GUEST_NETWORK_ACCESS_DURATION_ENABLED = Gauge(
-    f"{PREFIX}_guest_network_access_duration_enabled",
-    "Whether time-limited guest access is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-# =============================================================================
-# FIRMWARE/UPDATES METRICS
-# =============================================================================
-
-NETWORK_UPDATES_AVAILABLE = Gauge(
-    f"{PREFIX}_network_updates_available",
-    "Number of eeros with firmware updates available",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_AUTO_UPDATE_ENABLED = Gauge(
-    f"{PREFIX}_network_auto_update_enabled",
-    "Whether auto-update is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-EERO_OS_VERSION_INFO = Info(
-    f"{PREFIX}_eero_os_version",
-    "Eero firmware version information",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-# =============================================================================
-# PORT FORWARDING METRICS
-# =============================================================================
-
-NETWORK_PORT_FORWARDS_COUNT = Gauge(
-    f"{PREFIX}_network_port_forwards_count",
-    "Total number of port forwarding rules",
-    labelnames=["network_id", "name"],
-)
-
-PORT_FORWARD_INFO = Info(
-    f"{PREFIX}_port_forward",
-    "Port forward rule information",
-    labelnames=["network_id", "forward_id"],
-)
-
-PORT_FORWARD_ENABLED = Gauge(
-    f"{PREFIX}_port_forward_enabled",
-    "Whether the port forward is enabled (1=yes, 0=no)",
-    labelnames=["network_id", "forward_id", "port", "protocol"],
-)
-
-# =============================================================================
-# BLACKLIST METRICS
-# =============================================================================
-
-NETWORK_BLACKLISTED_DEVICES_COUNT = Gauge(
-    f"{PREFIX}_network_blacklisted_devices_count",
-    "Number of blacklisted/blocked devices",
-    labelnames=["network_id", "name"],
-)
-
-# =============================================================================
-# DNS CONFIGURATION METRICS
-# =============================================================================
-
-NETWORK_CUSTOM_DNS_ENABLED = Gauge(
-    f"{PREFIX}_network_custom_dns_enabled",
-    "Whether custom DNS is configured (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-NETWORK_DNS_SERVER_COUNT = Gauge(
-    f"{PREFIX}_network_dns_server_count",
-    "Number of DNS servers configured",
-    labelnames=["network_id", "name"],
-)
-
-DNS_CONFIG_INFO = Info(
-    f"{PREFIX}_dns_config",
-    "DNS configuration information",
-    labelnames=["network_id"],
-)
-
-# =============================================================================
-# DIAGNOSTICS METRICS
-# =============================================================================
-
-DIAGNOSTICS_INTERNET_LATENCY = Gauge(
-    f"{PREFIX}_diagnostics_internet_latency_ms",
-    "Internet latency in milliseconds",
-    labelnames=["network_id"],
-)
-
-DIAGNOSTICS_DNS_LATENCY = Gauge(
-    f"{PREFIX}_diagnostics_dns_latency_ms",
-    "DNS resolution latency in milliseconds",
-    labelnames=["network_id"],
-)
-
-DIAGNOSTICS_GATEWAY_LATENCY = Gauge(
-    f"{PREFIX}_diagnostics_gateway_latency_ms",
-    "Gateway response latency in milliseconds",
-    labelnames=["network_id"],
-)
-
-DIAGNOSTICS_LAST_RUN_TIMESTAMP = Gauge(
-    f"{PREFIX}_diagnostics_last_run_timestamp_seconds",
-    "Timestamp of last diagnostic run (Unix epoch)",
-    labelnames=["network_id"],
-)
-
-# =============================================================================
-# ACCOUNT METRICS
-# =============================================================================
-
-ACCOUNT_NETWORKS_COUNT = Gauge(
-    f"{PREFIX}_account_networks_count",
-    "Total number of networks in account",
-)
-
-ACCOUNT_PREMIUM_EXPIRATION = Gauge(
-    f"{PREFIX}_account_premium_expiration_timestamp_seconds",
-    "Premium subscription expiration date (Unix epoch)",
-    labelnames=["network_id"],
-)
-
-# =============================================================================
-# DEVICE CONNECTION DETAILS METRICS
-# =============================================================================
-
-DEVICE_LAST_ACTIVE_TIMESTAMP = Gauge(
-    f"{PREFIX}_device_last_active_timestamp_seconds",
-    "Last time device was active (Unix epoch)",
-    labelnames=["network_id", "device_id", "name", "manufacturer"],
-)
-
-DEVICE_FIRST_SEEN_TIMESTAMP = Gauge(
-    f"{PREFIX}_device_first_seen_timestamp_seconds",
-    "When device was first seen on network (Unix epoch)",
-    labelnames=["network_id", "device_id", "name", "manufacturer"],
-)
-
-DEVICE_WIFI_GENERATION = Gauge(
-    f"{PREFIX}_device_wifi_generation",
-    "WiFi standard (4=WiFi 4, 5=WiFi 5, 6=WiFi 6, 7=WiFi 7)",
-    labelnames=["network_id", "device_id", "name", "manufacturer"],
-)
-
-DEVICE_ADBLOCK_ENABLED = Gauge(
-    f"{PREFIX}_device_adblock_enabled",
-    "Whether ad blocking is enabled for device (1=yes, 0=no)",
-    labelnames=["network_id", "device_id", "name", "manufacturer"],
-)
-
-# =============================================================================
-# EERO SECURITY METRICS (Eero Plus)
-# =============================================================================
-
-SECURITY_THREATS_BLOCKED = Counter(
-    f"{PREFIX}_security_threats_blocked_total",
-    "Total threats blocked by Eero Secure",
-    labelnames=["network_id"],
-)
-
-SECURITY_SCANS_BLOCKED = Counter(
-    f"{PREFIX}_security_scans_blocked_total",
-    "Network scans blocked",
-    labelnames=["network_id"],
-)
-
-NETWORK_AD_BLOCK_ENABLED = Gauge(
-    f"{PREFIX}_network_ad_block_enabled",
-    "Whether ad blocking is enabled network-wide (1=yes, 0=no)",
-    labelnames=["network_id", "name"],
-)
-
-# =============================================================================
-# INSIGHTS METRICS
-# =============================================================================
-
-INSIGHTS_ADBLOCK_TOTAL = Gauge(
-    f"{PREFIX}_insights_adblock_total",
-    "Total ad-block events observed in the insights window, by category.",
-    labelnames=["network_id", "category"],
-)
-
-INSIGHTS_BLOCKED_TOTAL = Gauge(
-    f"{PREFIX}_insights_blocked_total",
-    "Total blocked-threat events observed in the insights window, by category.",
-    labelnames=["network_id", "category"],
-)
-
-INSIGHTS_INSPECTED_TOTAL = Gauge(
-    f"{PREFIX}_insights_inspected_total",
-    "Total inspected-traffic events observed in the insights window, by category.",
-    labelnames=["network_id", "category"],
-)
-
-# =============================================================================
-# DHCP RESERVATIONS METRICS
-# =============================================================================
-
-NETWORK_DHCP_RESERVATIONS_COUNT = Gauge(
-    f"{PREFIX}_network_dhcp_reservations_count",
-    "Number of DHCP reservations configured",
-    labelnames=["network_id", "name"],
-)
-
-# =============================================================================
-# EERO TRANSFER METRICS
-# =============================================================================
-
-EERO_RX_BYTES = Counter(
-    f"{PREFIX}_eero_rx_bytes_total",
-    "Total bytes received by eero device",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-EERO_TX_BYTES = Counter(
-    f"{PREFIX}_eero_tx_bytes_total",
-    "Total bytes transmitted by eero device",
-    labelnames=["network_id", "eero_id", "location"],
-)
-
-# =============================================================================
-# EXPORTER METRICS
-# =============================================================================
-
-# Standard "up" metric following Prometheus exporter conventions
-# See: https://prometheus.io/docs/instrumenting/writing_exporters/#failed-scrapes
-EERO_UP = Gauge(
+EERO_UP = _gauge(
     f"{PREFIX}_up",
     "Whether the eero API is reachable and the last scrape was successful (1=up, 0=down)",
+    family="exporter",
+    source="derived: collect() outcome",
+    evidence="verified",
 )
 
-EXPORTER_SCRAPE_DURATION = Gauge(
+EXPORTER_SCRAPE_DURATION = _gauge(
     f"{PREFIX}_exporter_scrape_duration_seconds",
     "Time taken to collect metrics from eero API",
+    family="exporter",
+    source="derived: collect() wall-clock duration",
+    evidence="verified",
 )
 
-EXPORTER_SCRAPE_SUCCESS = Gauge(
-    f"{PREFIX}_exporter_scrape_success",
-    "Whether the last scrape was successful (1=yes, 0=no). Deprecated: use eero_up instead.",
-)
-
-EXPORTER_LAST_COLLECTION_TIMESTAMP = Gauge(
+EXPORTER_LAST_COLLECTION_TIMESTAMP = _gauge(
     f"{PREFIX}_exporter_last_collection_timestamp_seconds",
     "Unix timestamp of the last successful metrics collection. "
     "Metrics are cached between collections per Prometheus guidelines for expensive APIs.",
+    family="exporter",
+    source="derived: collect() wall-clock time",
+    evidence="verified",
 )
 
-EXPORTER_COLLECTION_INTERVAL = Gauge(
+EXPORTER_COLLECTION_INTERVAL = _gauge(
     f"{PREFIX}_exporter_collection_interval_seconds",
     "Configured collection interval in seconds. Prometheus scrapes may receive cached data.",
+    family="exporter",
+    source="derived: ExporterConfig.collection_interval",
+    evidence="verified",
 )
 
-EXPORTER_SCRAPE_ERRORS = Counter(
+EXPORTER_SCRAPE_ERRORS = _counter(
     f"{PREFIX}_exporter_scrape_errors_total",
     "Total number of scrape errors",
-    labelnames=["error_type"],
+    ("error_type",),
+    family="exporter",
+    source="derived: collect() exception classification",
+    evidence="verified",
 )
 
-EXPORTER_API_REQUESTS = Counter(
+EXPORTER_API_REQUESTS = _counter(
     f"{PREFIX}_exporter_api_requests_total",
     "Total number of API requests made",
-    labelnames=["endpoint", "status"],
+    ("endpoint", "status"),
+    family="exporter",
+    source="derived: _record_api_result()",
+    evidence="verified",
 )
 
 # The complete, closed vocabulary for EXPORTER_API_REQUESTS's `status` label.
@@ -994,10 +327,937 @@ API_STATUS_VALUES: frozenset[str] = frozenset(
     }
 )
 
-EXPORTER_API_REQUESTS_LAST_CYCLE = Gauge(
+EXPORTER_API_REQUESTS_LAST_CYCLE = _gauge(
     f"{PREFIX}_exporter_api_requests_last_cycle",
     "Number of eero API requests issued during the most recently completed collection cycle.",
+    family="exporter",
+    source="derived: EeroCollector._api_requests_this_cycle",
+    evidence="verified",
 )
+
+# =============================================================================
+# ACCOUNT
+# =============================================================================
+
+ACCOUNT_NETWORKS_COUNT = _gauge(
+    f"{PREFIX}_account_networks_count",
+    "Total number of networks in account",
+    family="account",
+    source="account.data.networks.count",
+    evidence="verified",
+)
+
+ACCOUNT_PREMIUM_EXPIRATION = _gauge(
+    f"{PREFIX}_account_premium_expiration_timestamp_seconds",
+    "Premium subscription expiration date (Unix epoch)",
+    ("network_id",),
+    family="account",
+    source="network.data.premium_details.next_billing_event_date",
+    evidence="inferred",
+)
+
+# =============================================================================
+# NETWORK -- identity, status, health, speed test
+# =============================================================================
+
+NETWORK_INFO = _info(
+    f"{PREFIX}_network",
+    "Information about the eero network.",
+    ("network_id",),
+    family="network",
+    source="network.data (name, status, geo_ip.isp, ip_settings.public_ip, wan_type, gateway_ip)",
+    evidence="verified",
+)
+
+NETWORK_STATUS = _gauge(
+    f"{PREFIX}_network_status",
+    "Network status (1=online, 0=offline)",
+    ("network_id", "name"),
+    family="network",
+    source="network.data.status",
+    evidence="verified",
+)
+
+NETWORK_CLIENTS_COUNT = _gauge(
+    f"{PREFIX}_network_clients_count",
+    "Total number of clients on the network",
+    ("network_id", "name"),
+    family="network",
+    source="network.data.clients.count",
+    evidence="verified",
+)
+
+NETWORK_EEROS_COUNT = _gauge(
+    f"{PREFIX}_network_eeros_count",
+    "Number of eero devices in the network",
+    ("network_id", "name"),
+    family="network",
+    source="network.data.eeros.count",
+    evidence="verified",
+)
+
+HEALTH_STATUS = _gauge(
+    f"{PREFIX}_health_status",
+    "Health status of network components (1=healthy, 0=unhealthy)",
+    ("network_id", "source"),
+    family="network",
+    source="network.data.health.{internet,eero_network}.status",
+    evidence="verified",
+)
+
+SPEED_UPLOAD_MBPS = _gauge(
+    f"{PREFIX}_speed_upload_mbps",
+    "Latest speed test upload result in megabits per second (Mbps). "
+    "Note: Uses Mbps as industry-standard unit for network speeds.",
+    ("network_id",),
+    family="network",
+    source="network.data.speed.up.value",
+    evidence="verified",
+)
+
+SPEED_DOWNLOAD_MBPS = _gauge(
+    f"{PREFIX}_speed_download_mbps",
+    "Latest speed test download result in megabits per second (Mbps). "
+    "Note: Uses Mbps as industry-standard unit for network speeds.",
+    ("network_id",),
+    family="network",
+    source="network.data.speed.down.value",
+    evidence="verified",
+)
+
+SPEED_TEST_TIMESTAMP = _gauge(
+    f"{PREFIX}_speed_test_timestamp_seconds",
+    "Timestamp of the last speed test (Unix epoch)",
+    ("network_id",),
+    family="network",
+    source="network.data.speed.date",
+    evidence="verified",
+)
+
+# =============================================================================
+# NETWORK FEATURE FLAGS
+# =============================================================================
+
+NETWORK_WPA3_ENABLED = _gauge(
+    f"{PREFIX}_network_wpa3_enabled",
+    "Whether WPA3 is enabled (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.wpa3",
+    evidence="verified",
+)
+
+NETWORK_BAND_STEERING_ENABLED = _gauge(
+    f"{PREFIX}_network_band_steering_enabled",
+    "Whether band steering is enabled (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.band_steering",
+    evidence="verified",
+)
+
+NETWORK_SQM_ENABLED = _gauge(
+    f"{PREFIX}_network_sqm_enabled",
+    "Whether Smart Queue Management is enabled (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.sqm",
+    evidence="verified",
+)
+
+NETWORK_UPNP_ENABLED = _gauge(
+    f"{PREFIX}_network_upnp_enabled",
+    "Whether UPnP is enabled (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.upnp",
+    evidence="verified",
+)
+
+NETWORK_THREAD_ENABLED = _gauge(
+    f"{PREFIX}_network_thread_enabled",
+    "Whether Thread is enabled (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.thread",
+    evidence="verified",
+)
+
+NETWORK_IPV6_ENABLED = _gauge(
+    f"{PREFIX}_network_ipv6_enabled",
+    "Whether IPv6 is enabled (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.ipv6_upstream",
+    evidence="verified",
+)
+
+NETWORK_DNS_CACHING_ENABLED = _gauge(
+    f"{PREFIX}_network_dns_caching_enabled",
+    "Whether DNS caching is enabled (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.dns.caching",
+    evidence="verified",
+)
+
+NETWORK_POWER_SAVING_ENABLED = _gauge(
+    f"{PREFIX}_network_power_saving_enabled",
+    "Whether power saving is enabled (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.power_saving",
+    evidence="verified",
+)
+
+NETWORK_GUEST_ENABLED = _gauge(
+    f"{PREFIX}_network_guest_enabled",
+    "Whether guest network is enabled (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.guest_network.enabled",
+    evidence="verified",
+)
+
+NETWORK_PREMIUM_ENABLED = _gauge(
+    f"{PREFIX}_network_premium_enabled",
+    "Whether Eero Plus/Secure subscription is active (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.{premium_status,premium_details}",
+    evidence="verified",
+)
+
+NETWORK_BACKUP_INTERNET_ENABLED = _gauge(
+    f"{PREFIX}_network_backup_internet_enabled",
+    "Whether backup internet is enabled (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.backup_internet_enabled",
+    evidence="verified",
+)
+
+NETWORK_UPDATES_AVAILABLE = _gauge(
+    f"{PREFIX}_network_updates_available",
+    "Number of eeros with firmware updates available",
+    ("network_id", "name"),
+    family="network_features",
+    source="eeros.data[].update_available (count)",
+    evidence="verified",
+)
+
+NETWORK_AD_BLOCK_ENABLED = _gauge(
+    f"{PREFIX}_network_ad_block_enabled",
+    "Whether ad blocking is enabled network-wide (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.premium_dns.dns_policies.ad_block",
+    evidence="inferred",
+)
+
+NETWORK_CUSTOM_DNS_ENABLED = _gauge(
+    f"{PREFIX}_network_custom_dns_enabled",
+    "Whether custom DNS is configured (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="derived: len(network.data.dns.custom.ips) > 0",
+    evidence="verified",
+)
+
+NETWORK_DNS_SERVER_COUNT = _gauge(
+    f"{PREFIX}_network_dns_server_count",
+    "Number of DNS servers configured",
+    ("network_id", "name"),
+    family="network_features",
+    source="len(network.data.dns.custom.ips)",
+    evidence="verified",
+)
+
+DNS_CONFIG_INFO = _info(
+    f"{PREFIX}_dns_config",
+    "DNS configuration information",
+    ("network_id",),
+    family="network_features",
+    source="network.data.dns",
+    evidence="verified",
+)
+
+# =============================================================================
+# GUEST NETWORK
+# =============================================================================
+
+GUEST_NETWORK_CONNECTED_CLIENTS = _gauge(
+    f"{PREFIX}_guest_network_connected_clients",
+    "Number of clients connected to guest network",
+    ("network_id", "name"),
+    family="guest",
+    source="derived: count(devices.data[] where connected and is_guest)",
+    evidence="verified",
+)
+
+GUEST_NETWORK_INFO = _info(
+    f"{PREFIX}_guest_network",
+    "Guest network information",
+    ("network_id",),
+    family="guest",
+    source="network.data.guest_network",
+    evidence="verified",
+)
+
+# =============================================================================
+# EEROS
+# =============================================================================
+
+EERO_INFO = _info(
+    f"{PREFIX}_eero",
+    "Information about an eero device.",
+    ("network_id", "eero_id"),
+    family="eeros",
+    source=(
+        "eeros.data[] (location, model, model_number, os_version, serial, mac_address, ip_address)"
+    ),
+    evidence="verified",
+)
+
+EERO_OS_VERSION_INFO = _info(
+    f"{PREFIX}_eero_os_version",
+    "Eero firmware version information",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].os_version",
+    evidence="verified",
+)
+
+EERO_STATUS = _gauge(
+    f"{PREFIX}_eero_status",
+    "Eero device status (1=online, 0=offline)",
+    ("network_id", "eero_id", "location", "model"),
+    family="eeros",
+    source="eeros.data[].status",
+    evidence="verified",
+)
+
+EERO_IS_GATEWAY = _gauge(
+    f"{PREFIX}_eero_is_gateway",
+    "Whether the eero is the gateway (1=yes, 0=no)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].gateway",
+    evidence="verified",
+)
+
+EERO_CONNECTED_CLIENTS = _gauge(
+    f"{PREFIX}_eero_connected_clients_count",
+    "Number of clients connected to this eero",
+    ("network_id", "eero_id", "location", "model"),
+    family="eeros",
+    source="eeros.data[].connected_clients_count",
+    evidence="verified",
+)
+
+EERO_CONNECTED_WIRED_CLIENTS = _gauge(
+    f"{PREFIX}_eero_connected_wired_clients_count",
+    "Number of wired clients connected to this eero",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].connected_wired_clients_count",
+    evidence="verified",
+)
+
+EERO_CONNECTED_WIRELESS_CLIENTS = _gauge(
+    f"{PREFIX}_eero_connected_wireless_clients_count",
+    "Number of wireless clients connected to this eero",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].connected_wireless_clients_count",
+    evidence="verified",
+)
+
+EERO_MESH_QUALITY = _gauge(
+    f"{PREFIX}_eero_mesh_quality_bars",
+    "Mesh quality indicator 0-5 bars.",
+    ("network_id", "eero_id", "location", "model"),
+    family="eeros",
+    source="eeros.data[].mesh_quality_bars",
+    evidence="verified",
+)
+
+EERO_UPTIME_SECONDS = _gauge(
+    f"{PREFIX}_eero_uptime_seconds",
+    "Eero device uptime in seconds since last reboot.",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].uptime.since_last_reboot_s",
+    evidence="verified",
+)
+
+EERO_LED_ON = _gauge(
+    f"{PREFIX}_eero_led_on",
+    "Whether the eero LED is on (1=on, 0=off)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].led_on",
+    evidence="verified",
+)
+
+EERO_UPDATE_AVAILABLE = _gauge(
+    f"{PREFIX}_eero_update_available",
+    "Whether an update is available (1=yes, 0=no)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].update_available",
+    evidence="verified",
+)
+
+EERO_HEARTBEAT_OK = _gauge(
+    f"{PREFIX}_eero_heartbeat_ok",
+    "Whether the eero heartbeat is OK (1=yes, 0=no)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].heartbeat_ok",
+    evidence="verified",
+)
+
+EERO_WIRED = _gauge(
+    f"{PREFIX}_eero_wired",
+    "Whether the eero is wired (1=yes, 0=no)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].wired",
+    evidence="verified",
+)
+
+EERO_LED_BRIGHTNESS = _gauge(
+    f"{PREFIX}_eero_led_brightness",
+    "Eero LED brightness level (0-100)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].led_brightness",
+    evidence="verified",
+)
+
+EERO_LAST_REBOOT = _gauge(
+    f"{PREFIX}_eero_last_reboot_timestamp_seconds",
+    "Timestamp of last eero reboot (Unix epoch)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].last_reboot",
+    evidence="verified",
+)
+
+EERO_PROVIDES_WIFI = _gauge(
+    f"{PREFIX}_eero_provides_wifi",
+    "Whether the eero provides WiFi (1=yes, 0=no)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].provides_wifi",
+    evidence="verified",
+)
+
+EERO_WIRED_INTERNET = _gauge(
+    f"{PREFIX}_eero_wired_internet",
+    "Whether the eero has wired internet connection (1=yes, 0=no)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].ethernet_status.wiredInternet",
+    evidence="verified",
+)
+
+EERO_NIGHTLIGHT_ENABLED = _gauge(
+    f"{PREFIX}_eero_nightlight_enabled",
+    "Whether nightlight is enabled (1=yes, 0=no). Null (unset) on non-Beacon nodes.",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].nightlight.enabled",
+    evidence="verified",
+)
+
+EERO_NIGHTLIGHT_BRIGHTNESS = _gauge(
+    f"{PREFIX}_eero_nightlight_brightness",
+    "Nightlight brightness level (0-100)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].nightlight.brightness",
+    evidence="inferred",
+)
+
+EERO_NIGHTLIGHT_SCHEDULE_ENABLED = _gauge(
+    f"{PREFIX}_eero_nightlight_schedule_enabled",
+    "Whether nightlight schedule is enabled (1=yes, 0=no)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].nightlight.schedule.enabled",
+    evidence="inferred",
+)
+
+# =============================================================================
+# ETHERNET
+# =============================================================================
+
+ETHERNET_PORT_INFO = _info(
+    f"{PREFIX}_ethernet_port",
+    "Information about an Ethernet port",
+    ("network_id", "eero_id", "port_number"),
+    family="ethernet",
+    source="eeros.data[].ethernet_status.statuses[].port_name",
+    evidence="verified",
+)
+
+ETHERNET_PORT_CARRIER = _gauge(
+    f"{PREFIX}_ethernet_port_carrier",
+    "Whether the Ethernet port has link (1=yes, 0=no)",
+    ("network_id", "eero_id", "location", "port_number", "port_name"),
+    family="ethernet",
+    source="eeros.data[].ethernet_status.statuses[].hasCarrier",
+    evidence="verified",
+)
+
+ETHERNET_PORT_SPEED = _gauge(
+    f"{PREFIX}_ethernet_port_speed_mbps",
+    "Ethernet port negotiated speed in megabits per second (Mbps). "
+    "Common values: 100 (Fast Ethernet), 1000 (Gigabit), 2500 (2.5G).",
+    ("network_id", "eero_id", "location", "port_number", "port_name"),
+    family="ethernet",
+    source="eeros.data[].ethernet_status.statuses[].speed (enum P10|P100|P1000|P10000)",
+    evidence="verified",
+)
+
+ETHERNET_PORT_IS_WAN = _gauge(
+    f"{PREFIX}_ethernet_port_is_wan",
+    "Whether the Ethernet port is used for WAN (1=yes, 0=no)",
+    ("network_id", "eero_id", "location", "port_number", "port_name"),
+    family="ethernet",
+    source="eeros.data[].ethernet_status.statuses[].isWanPort",
+    evidence="verified",
+)
+
+# =============================================================================
+# CLIENT DEVICES
+# =============================================================================
+
+DEVICE_INFO = _info(
+    f"{PREFIX}_device",
+    "Information about a connected device.",
+    ("network_id", "device_id", "mac"),
+    family="devices",
+    source=(
+        "devices.data[] (nickname/hostname/display_name, manufacturer, ip, "
+        "device_type, connection_type)"
+    ),
+    evidence="verified",
+)
+
+DEVICE_CONNECTED = _gauge(
+    f"{PREFIX}_device_connected",
+    "Whether the device is connected (1=yes, 0=no)",
+    (
+        "network_id",
+        "device_id",
+        "name",
+        "mac",
+        "manufacturer",
+        "device_type",
+        "connection_type",
+        "source_eero",
+    ),
+    family="devices",
+    source="devices.data[].connected",
+    evidence="verified",
+)
+
+DEVICE_WIRELESS = _gauge(
+    f"{PREFIX}_device_wireless",
+    "Whether the device is wireless (1=yes, 0=no)",
+    ("network_id", "device_id", "name", "manufacturer", "device_type"),
+    family="devices",
+    source="devices.data[].wireless",
+    evidence="verified",
+)
+
+DEVICE_BLOCKED = _gauge(
+    f"{PREFIX}_device_blocked",
+    "Whether the device is blocked (1=yes, 0=no)",
+    ("network_id", "device_id", "name", "mac", "manufacturer"),
+    family="devices",
+    source="devices.data[].blacklisted",
+    evidence="verified",
+)
+
+DEVICE_PAUSED = _gauge(
+    f"{PREFIX}_device_paused",
+    "Whether the device is paused (1=yes, 0=no)",
+    ("network_id", "device_id", "name", "manufacturer", "device_type"),
+    family="devices",
+    source="devices.data[].paused",
+    evidence="verified",
+)
+
+DEVICE_IS_GUEST = _gauge(
+    f"{PREFIX}_device_is_guest",
+    "Whether the device is on guest network (1=yes, 0=no)",
+    ("network_id", "device_id", "name", "manufacturer"),
+    family="devices",
+    source="devices.data[].is_guest",
+    evidence="verified",
+)
+
+DEVICE_PRIVATE = _gauge(
+    f"{PREFIX}_device_private",
+    "Whether the device is marked as private (1=yes, 0=no)",
+    ("network_id", "device_id", "name", "manufacturer"),
+    family="devices",
+    source="devices.data[].is_private",
+    evidence="verified",
+)
+
+DEVICE_CONNECTED_TO_GATEWAY = _gauge(
+    f"{PREFIX}_device_connected_to_gateway",
+    "Whether the device is connected directly to gateway (1=yes, 0=no)",
+    ("network_id", "device_id", "name", "connection_type"),
+    family="devices",
+    source="devices.data[].source.is_gateway",
+    evidence="verified",
+)
+
+DEVICE_SIGNAL_STRENGTH = _gauge(
+    f"{PREFIX}_device_signal_strength_dbm",
+    "Device signal strength in dBm (decibels relative to 1 milliwatt). "
+    "Range typically -30 (excellent) to -90 (poor).",
+    ("network_id", "device_id", "name", "manufacturer", "band", "source_eero"),
+    family="devices",
+    source="devices.data[].connectivity.signal",
+    evidence="verified",
+)
+
+DEVICE_CONNECTION_SCORE = _gauge(
+    f"{PREFIX}_device_connection_score",
+    "Device connection quality score",
+    ("network_id", "device_id", "name", "manufacturer", "connection_type", "source_eero"),
+    family="devices",
+    source="devices.data[].connectivity.score",
+    evidence="verified",
+)
+
+DEVICE_CONNECTION_SCORE_BARS = _gauge(
+    f"{PREFIX}_device_connection_score_bars",
+    "Device connection quality score in bars (0-5)",
+    ("network_id", "device_id", "name", "manufacturer", "connection_type", "source_eero"),
+    family="devices",
+    source="devices.data[].connectivity.score_bars",
+    evidence="verified",
+)
+
+DEVICE_FREQUENCY = _gauge(
+    f"{PREFIX}_device_frequency_mhz",
+    "Device WiFi frequency in MHz",
+    ("network_id", "device_id", "name", "manufacturer", "band", "source_eero"),
+    family="devices",
+    source="devices.data[].connectivity.frequency",
+    evidence="verified",
+)
+
+DEVICE_CHANNEL = _gauge(
+    f"{PREFIX}_device_channel",
+    "Device WiFi channel number",
+    ("network_id", "device_id", "name", "band", "source_eero"),
+    family="devices",
+    source="devices.data[].channel",
+    evidence="verified",
+)
+
+DEVICE_RX_BITRATE = _gauge(
+    f"{PREFIX}_device_rx_bitrate_mbps",
+    "Device receive (download) bitrate in megabits per second (Mbps). "
+    "PHY layer rate, actual throughput may be lower.",
+    ("network_id", "device_id", "name", "manufacturer", "band", "source_eero"),
+    family="devices",
+    source="devices.data[].connectivity.rx_bitrate | connectivity.rx_rate_info.rate_bps",
+    evidence="verified",
+)
+
+DEVICE_TX_BITRATE = _gauge(
+    f"{PREFIX}_device_tx_bitrate_mbps",
+    "Device transmit (upload) bitrate in megabits per second (Mbps). "
+    "PHY layer rate, actual throughput may be lower.",
+    ("network_id", "device_id", "name", "manufacturer", "band", "source_eero"),
+    family="devices",
+    source="devices.data[].connectivity.tx_rate_info.rate_bps / 1e6",
+    evidence="verified",
+)
+
+DEVICE_RX_MCS = _gauge(
+    f"{PREFIX}_device_rx_mcs",
+    "Device receive MCS index",
+    ("network_id", "device_id", "name", "band"),
+    family="devices",
+    source="devices.data[].connectivity.rx_rate_info.mcs",
+    evidence="verified",
+)
+
+DEVICE_RX_NSS = _gauge(
+    f"{PREFIX}_device_rx_nss",
+    "Device receive number of spatial streams",
+    ("network_id", "device_id", "name", "band"),
+    family="devices",
+    source="devices.data[].connectivity.rx_rate_info.nss",
+    evidence="verified",
+)
+
+DEVICE_TX_MCS = _gauge(
+    f"{PREFIX}_device_tx_mcs",
+    "Device transmit MCS index",
+    ("network_id", "device_id", "name", "band"),
+    family="devices",
+    source="devices.data[].connectivity.tx_rate_info.mcs",
+    evidence="verified",
+)
+
+DEVICE_TX_NSS = _gauge(
+    f"{PREFIX}_device_tx_nss",
+    "Device transmit number of spatial streams",
+    ("network_id", "device_id", "name", "band"),
+    family="devices",
+    source="devices.data[].connectivity.tx_rate_info.nss",
+    evidence="verified",
+)
+
+DEVICE_LAST_ACTIVE_TIMESTAMP = _gauge(
+    f"{PREFIX}_device_last_active_timestamp_seconds",
+    "Last time device was active (Unix epoch)",
+    ("network_id", "device_id", "name", "manufacturer"),
+    family="devices",
+    source="devices.data[].last_active",
+    evidence="verified",
+)
+
+DEVICE_FIRST_SEEN_TIMESTAMP = _gauge(
+    f"{PREFIX}_device_first_seen_timestamp_seconds",
+    "When device was first seen on network (Unix epoch)",
+    ("network_id", "device_id", "name", "manufacturer"),
+    family="devices",
+    source="devices.data[].first_active | first_seen",
+    evidence="verified",
+)
+
+DEVICE_WIFI_GENERATION = _gauge(
+    f"{PREFIX}_device_wifi_generation",
+    "WiFi standard (4=WiFi 4, 5=WiFi 5, 6=WiFi 6, 7=WiFi 7)",
+    ("network_id", "device_id", "name", "manufacturer"),
+    family="devices",
+    source="derived: devices.data[].connectivity.{frequency,rx_rate_info.mode}",
+    evidence="inferred",
+)
+
+# =============================================================================
+# PROFILES
+# =============================================================================
+
+PROFILE_PAUSED = _gauge(
+    f"{PREFIX}_profile_paused",
+    "Whether the profile is paused (1=yes, 0=no)",
+    ("network_id", "profile_id", "name"),
+    family="profiles",
+    source="profiles.data[].paused",
+    evidence="verified",
+)
+
+PROFILE_DEVICES_COUNT = _gauge(
+    f"{PREFIX}_profile_devices_count",
+    "Number of devices in the profile",
+    ("network_id", "profile_id", "name"),
+    family="profiles",
+    source="len(profiles.data[].devices)",
+    evidence="verified",
+)
+
+# =============================================================================
+# DATA USAGE
+# =============================================================================
+
+# The "period" label is one of day/week/month for the current calendar
+# window; "cadence" is the sample granularity eero used (hourly for day,
+# daily otherwise); "direction" is download or upload.
+
+NETWORK_DATA_USAGE_BYTES = _gauge(
+    f"{PREFIX}_network_data_usage_bytes",
+    "Network data usage in bytes from the eero data_usage endpoint for the current period.",
+    ("network_id", "period", "cadence", "direction"),
+    family="data_usage",
+    source="get_data_usage().data.series[].sum, keyed by .type",
+    evidence="verified",
+)
+
+DEVICE_DATA_USAGE_BYTES = _gauge(
+    f"{PREFIX}_device_data_usage_bytes",
+    "Device data usage in bytes from the eero data_usage endpoint for the current period.",
+    ("network_id", "device_id", "name", "period", "cadence", "direction"),
+    family="data_usage",
+    source="get_data_usage_breakdown().data.devices[].{upload,download}",
+    evidence="verified",
+)
+
+EERO_DATA_USAGE_BYTES = _gauge(
+    f"{PREFIX}_eero_data_usage_bytes",
+    "Eero node data usage in bytes from the eero data_usage endpoint for the current period.",
+    ("network_id", "eero_id", "location", "period", "cadence", "direction"),
+    family="data_usage",
+    source="get_data_usage_breakdown().data.eeros[].{upload,download}",
+    evidence="verified",
+)
+
+DATA_USAGE_DOWNLOAD_BYTES = _gauge(
+    f"{PREFIX}_data_usage_download_bytes",
+    "Network data usage download bytes for the trailing collection window.",
+    ("network_id",),
+    family="data_usage",
+    source="get_data_usage().data.series[type=download].sum",
+    evidence="verified",
+)
+
+DATA_USAGE_UPLOAD_BYTES = _gauge(
+    f"{PREFIX}_data_usage_upload_bytes",
+    "Network data usage upload bytes for the trailing collection window.",
+    ("network_id",),
+    family="data_usage",
+    source="get_data_usage().data.series[type=upload].sum",
+    evidence="verified",
+)
+
+DATA_USAGE_ACTIVE_CLIENTS = _gauge(
+    f"{PREFIX}_data_usage_active_clients",
+    "Number of active clients observed in the trailing collection window.",
+    ("network_id",),
+    family="data_usage",
+    source="get_data_usage().data.totals.active_clients",
+    evidence="inferred",
+)
+
+DEVICE_DATA_USAGE_DOWNLOAD_BYTES = _gauge(
+    f"{PREFIX}_device_data_usage_download_bytes",
+    "Device data usage download bytes for the trailing collection window.",
+    ("network_id", "device_id", "name", "manufacturer", "device_type"),
+    family="data_usage",
+    source="get_data_usage_breakdown().data.devices[].download",
+    evidence="verified",
+)
+
+DEVICE_DATA_USAGE_UPLOAD_BYTES = _gauge(
+    f"{PREFIX}_device_data_usage_upload_bytes",
+    "Device data usage upload bytes for the trailing collection window.",
+    ("network_id", "device_id", "name", "manufacturer", "device_type"),
+    family="data_usage",
+    source="get_data_usage_breakdown().data.devices[].upload",
+    evidence="verified",
+)
+
+# =============================================================================
+# INSIGHTS
+# =============================================================================
+
+INSIGHTS_ADBLOCK_TOTAL = _gauge(
+    f"{PREFIX}_insights_adblock_total",
+    "Total ad-block events observed in the insights window, by category.",
+    ("network_id", "category"),
+    family="insights",
+    source="get_insights(insight_type=adblock).data.series[].sum",
+    evidence="verified",
+)
+
+INSIGHTS_BLOCKED_TOTAL = _gauge(
+    f"{PREFIX}_insights_blocked_total",
+    "Total blocked-threat events observed in the insights window, by category.",
+    ("network_id", "category"),
+    family="insights",
+    source="get_insights(insight_type=blocked).data.series[].sum",
+    evidence="verified",
+)
+
+INSIGHTS_INSPECTED_TOTAL = _gauge(
+    f"{PREFIX}_insights_inspected_total",
+    "Total inspected-traffic events observed in the insights window, by category.",
+    ("network_id", "category"),
+    family="insights",
+    source="get_insights(insight_type=inspected).data.series[].sum",
+    evidence="verified",
+)
+
+# =============================================================================
+# THREAD
+# =============================================================================
+
+# `eero_thread_device_count`/`eero_thread_border_router` were removed in
+# 4.0.0 -- `get_thread` has neither key (§11.11). `NETWORK_THREAD_ENABLED`
+# (the one thread-related value with a source) lives in the network_features
+# family above, read straight off the network envelope.
+_register_family("thread", "core")
+
+# =============================================================================
+# PORT FORWARDING
+# =============================================================================
+
+NETWORK_PORT_FORWARDS_COUNT = _gauge(
+    f"{PREFIX}_network_port_forwards_count",
+    "Total number of port forwarding rules",
+    ("network_id", "name"),
+    family="port_forwards",
+    source="len(get_forwards())",
+    evidence="verified",
+)
+
+PORT_FORWARD_INFO = _info(
+    f"{PREFIX}_port_forward",
+    "Port forward rule information",
+    ("network_id", "forward_id"),
+    family="port_forwards",
+    source="get_forwards()[] (port, internal_port, protocol, ip_address, nickname)",
+    evidence="verified",
+)
+
+PORT_FORWARD_ENABLED = _gauge(
+    f"{PREFIX}_port_forward_enabled",
+    "Whether the port forward is enabled (1=yes, 0=no)",
+    ("network_id", "forward_id", "port", "protocol"),
+    family="port_forwards",
+    source="get_forwards()[].enabled",
+    evidence="verified",
+)
+
+# =============================================================================
+# DHCP RESERVATIONS
+# =============================================================================
+
+NETWORK_DHCP_RESERVATIONS_COUNT = _gauge(
+    f"{PREFIX}_network_dhcp_reservations_count",
+    "Number of DHCP reservations configured",
+    ("network_id", "name"),
+    family="reservations",
+    source="len(get_reservations())",
+    evidence="verified",
+)
+
+# =============================================================================
+# BLACKLIST
+# =============================================================================
+
+NETWORK_BLACKLISTED_DEVICES_COUNT = _gauge(
+    f"{PREFIX}_network_blacklisted_devices_count",
+    "Number of blacklisted/blocked devices",
+    ("network_id", "name"),
+    family="blacklist",
+    source="len(get_blacklist())",
+    evidence="verified",
+)
+
+# =============================================================================
+# PREMIUM
+# =============================================================================
+
+# `NETWORK_PREMIUM_ENABLED` (network_features) and
+# `ACCOUNT_PREMIUM_EXPIRATION` (account) already carry the premium signals
+# with a real source; this family is a placeholder for the extended-tier
+# premium reads (`get_backup_internet`, `list_backup_access_points`,
+# entitlement features) a later commit will add.
+_register_family("premium", "core")
 
 
 def reset_all_metrics() -> None:
@@ -1008,3 +1268,49 @@ def reset_all_metrics() -> None:
     # Note: Info metrics cannot be reset, they are idempotent
     # Gauges need to be cleared per label set, which we handle in the collector
     pass
+
+
+def describe_metrics() -> list[MetricProvenance]:
+    """Return provenance for every declared metric, for docs generation.
+
+    A docs agent can use this to regenerate ``wiki/Metrics.md`` without
+    re-deriving family/tier/source information by hand.
+
+    Returns:
+        One :class:`MetricProvenance` per declared metric, sorted by name.
+    """
+    return [_METRIC_PROVENANCE[name] for name in sorted(_METRIC_PROVENANCE)]
+
+
+def register_metrics(config: Any, registry: Any = REGISTRY) -> None:
+    """Register every metric whose tier/family is enabled by ``config``.
+
+    Core-tier families are always registered unless they have their own
+    per-family ``include_*`` flag (data_usage, devices, ...), which then
+    gates them the same way it always gated the collector's own reads. Every
+    other tier is gated by the matching ``ExporterConfig.include_<tier>``
+    flag. Safe to call more than once (with the same or a different
+    ``registry``) -- metrics already registered into a given registry are
+    silently skipped rather than raising.
+
+    Args:
+        config: The active ``ExporterConfig``.
+        registry: The Prometheus registry to register into. Defaults to the
+            global default registry ``generate_latest()`` reads from.
+    """
+    for family, metrics in _FAMILY_METRICS.items():
+        tier = FAMILY_TIER[family]
+        if tier == "core":
+            flag_name = _FAMILY_INCLUDE_FLAG.get(family)
+        else:
+            flag_name = _TIER_INCLUDE_FLAG[tier]
+
+        if flag_name is not None and not getattr(config, flag_name, True):
+            continue
+
+        for metric in metrics:
+            try:
+                registry.register(metric)
+            except ValueError:
+                # Already registered into this registry -- idempotent no-op.
+                pass

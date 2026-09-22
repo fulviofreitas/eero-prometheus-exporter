@@ -127,7 +127,6 @@ class ExporterConfig:
     include_port_forwards: bool = True
     include_reservations: bool = True
     include_blacklist: bool = True
-    include_diagnostics: bool = True
     include_insights: bool = True
 
     include_speed_test: bool = False  # Off by default as it generates traffic
@@ -258,7 +257,6 @@ class ExporterConfig:
             "include_port_forwards": self.include_port_forwards,
             "include_reservations": self.include_reservations,
             "include_blacklist": self.include_blacklist,
-            "include_diagnostics": self.include_diagnostics,
             "include_insights": self.include_insights,
             "include_speed_test": self.include_speed_test,
             "speed_test_interval": self.speed_test_interval,

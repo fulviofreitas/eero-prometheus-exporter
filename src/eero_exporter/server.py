@@ -27,6 +27,7 @@ from .eero_adapter import (
     EeroRateLimitError,
     EeroValidationError,
 )
+from .metrics import register_metrics
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -883,6 +884,12 @@ def run_server(config: ExporterConfig) -> None:
     # per_device/per_eero/unverified) are stored as attributes for a later
     # commit.
     collector = EeroCollector(session_file=str(config.session_file), config=config)
+
+    # Register every metric family enabled by `config`'s tier/include_* flags
+    # into the default registry `/metrics` renders (commit 4, §3). Safe to
+    # call again on repeated `run_server` invocations in the same process
+    # (e.g. tests) -- already-registered metrics are skipped.
+    register_metrics(config)
 
     # Create HTTP server
     server = ExporterHTTPServer((config.host, config.port), MetricsHandler)

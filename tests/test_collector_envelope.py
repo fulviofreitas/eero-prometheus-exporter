@@ -61,7 +61,6 @@ def _mock_client(network_details: dict, data_usage_periods: int = 3) -> MagicMoc
     client.get_forwards = AsyncMock(return_value=[])
     client.get_reservations = AsyncMock(return_value=[])
     client.get_blacklist = AsyncMock(return_value=[])
-    client.get_diagnostics = AsyncMock(return_value={})
     client.get_insights = AsyncMock(return_value={})
     return client
 
@@ -72,7 +71,6 @@ def _base_config(**overrides: object) -> ExporterConfig:
         "include_port_forwards": False,
         "include_reservations": False,
         "include_blacklist": False,
-        "include_diagnostics": False,
         "include_insights": False,
         "include_profiles": False,
         "data_usage_periods": ["day", "week", "month"],

@@ -99,7 +99,6 @@ async def test_config_object_wires_every_include_and_tier_flag() -> None:
         include_port_forwards=False,
         include_reservations=False,
         include_blacklist=False,
-        include_diagnostics=False,
         include_insights=False,
         include_data_usage=False,
         include_extended=False,
@@ -122,7 +121,6 @@ async def test_config_object_wires_every_include_and_tier_flag() -> None:
     assert collector._include_port_forwards is False
     assert collector._include_reservations is False
     assert collector._include_blacklist is False
-    assert collector._include_diagnostics is False
     assert collector._include_insights is False
     assert collector._include_data_usage is False
     assert collector._include_extended is False
