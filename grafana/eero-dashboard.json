@@ -9654,6 +9654,148 @@
     {
       "id": 123,
       "type": "bargauge",
+      "title": "Usage per profile — $period",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "mappings": [],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal",
+        "namePlacement": "left",
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color",
+        "minVizHeight": 12,
+        "minVizWidth": 8,
+        "maxVizHeight": 24,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (profile_id, direction) (eero_profile_data_usage_bytes{network_id=~\"$network_id\", period=\"$period\"} * on (network_id, profile_id) group_left(name) sum by (network_id, profile_id, name) (eero_profile_paused{network_id=~\"$network_id\"}))",
+          "refId": "A",
+          "legendFormat": "{{name}} {{direction}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 207
+      }
+    },
+    {
+      "id": 124,
+      "type": "timeseries",
+      "title": "Unprofiled device usage — $period",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "mappings": [],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (direction) (eero_unprofiled_data_usage_bytes{network_id=~\"$network_id\", period=\"$period\"})",
+          "refId": "A",
+          "legendFormat": "{{direction}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 215
+      }
+    },
+    {
+      "id": 125,
+      "type": "bargauge",
       "title": "Top 10 devices download — trailing window",
       "datasource": {
         "type": "prometheus",
@@ -9714,12 +9856,12 @@
       "gridPos": {
         "h": 8,
         "w": 4,
-        "x": 16,
-        "y": 207
+        "x": 8,
+        "y": 215
       }
     },
     {
-      "id": 124,
+      "id": 126,
       "type": "bargauge",
       "title": "Top 10 devices upload — trailing window",
       "datasource": {
@@ -9781,12 +9923,12 @@
       "gridPos": {
         "h": 8,
         "w": 4,
-        "x": 20,
-        "y": 207
+        "x": 12,
+        "y": 215
       }
     },
     {
-      "id": 125,
+      "id": 127,
       "type": "row",
       "title": "Insights",
       "collapsed": false,
@@ -9794,12 +9936,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 215
+        "y": 223
       },
       "panels": []
     },
     {
-      "id": 126,
+      "id": 128,
       "type": "timeseries",
       "title": "Insight events in window",
       "datasource": {
@@ -9881,11 +10023,11 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 216
+        "y": 224
       }
     },
     {
-      "id": 127,
+      "id": 129,
       "type": "bargauge",
       "title": "Ad-block by category",
       "datasource": {
@@ -9948,11 +10090,11 @@
         "h": 8,
         "w": 4,
         "x": 12,
-        "y": 216
+        "y": 224
       }
     },
     {
-      "id": 128,
+      "id": 130,
       "type": "bargauge",
       "title": "Blocked by category",
       "datasource": {
@@ -10015,11 +10157,11 @@
         "h": 8,
         "w": 4,
         "x": 16,
-        "y": 216
+        "y": 224
       }
     },
     {
-      "id": 129,
+      "id": 131,
       "type": "bargauge",
       "title": "Inspected by category",
       "datasource": {
@@ -10082,11 +10224,11 @@
         "h": 8,
         "w": 4,
         "x": 20,
-        "y": 216
+        "y": 224
       }
     },
     {
-      "id": 130,
+      "id": 132,
       "type": "bargauge",
       "title": "Profile insights (top 10)",
       "datasource": {
@@ -10149,11 +10291,11 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 224
+        "y": 232
       }
     },
     {
-      "id": 131,
+      "id": 133,
       "type": "table",
       "title": "Profile insights",
       "datasource": {
@@ -10212,6 +10354,13 @@
           "legendFormat": "__auto",
           "format": "table",
           "instant": true
+        },
+        {
+          "expr": "sum by (profile_id, name, type) (eero_profile_insights_devices{network_id=~\"$network_id\"} * on (network_id, profile_id) group_left(name) sum by (network_id, profile_id, name) (eero_profile_paused{network_id=~\"$network_id\"}))",
+          "refId": "B",
+          "legendFormat": "__auto",
+          "format": "table",
+          "instant": true
         }
       ],
       "transformations": [
@@ -10235,6 +10384,7 @@
             },
             "renameByName": {
               "Value #A": "Events",
+              "Value #B": "Devices",
               "name": "Profile",
               "type": "Type"
             }
@@ -10245,11 +10395,11 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 224
+        "y": 232
       }
     },
     {
-      "id": 132,
+      "id": 134,
       "type": "row",
       "title": "Account and subscription",
       "collapsed": false,
@@ -10257,12 +10407,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 232
+        "y": 240
       },
       "panels": []
     },
     {
-      "id": 133,
+      "id": 135,
       "type": "stat",
       "title": "Eero Plus",
       "datasource": {
@@ -10330,11 +10480,11 @@
         "h": 4,
         "w": 3,
         "x": 0,
-        "y": 233
+        "y": 241
       }
     },
     {
-      "id": 134,
+      "id": 136,
       "type": "stat",
       "title": "Next renewal",
       "datasource": {
@@ -10386,11 +10536,11 @@
         "h": 4,
         "w": 4,
         "x": 3,
-        "y": 233
+        "y": 241
       }
     },
     {
-      "id": 135,
+      "id": 137,
       "type": "stat",
       "title": "Entitlement state",
       "datasource": {
@@ -10436,11 +10586,11 @@
         "h": 4,
         "w": 3,
         "x": 7,
-        "y": 233
+        "y": 241
       }
     },
     {
-      "id": 136,
+      "id": 138,
       "type": "stat",
       "title": "Product",
       "datasource": {
@@ -10486,11 +10636,11 @@
         "h": 4,
         "w": 3,
         "x": 10,
-        "y": 233
+        "y": 241
       }
     },
     {
-      "id": 137,
+      "id": 139,
       "type": "stat",
       "title": "Entitlement created",
       "datasource": {
@@ -10542,11 +10692,11 @@
         "h": 4,
         "w": 4,
         "x": 13,
-        "y": 233
+        "y": 241
       }
     },
     {
-      "id": 138,
+      "id": 140,
       "type": "stat",
       "title": "Members",
       "datasource": {
@@ -10598,11 +10748,11 @@
         "h": 4,
         "w": 2,
         "x": 17,
-        "y": 233
+        "y": 241
       }
     },
     {
-      "id": 139,
+      "id": 141,
       "type": "stat",
       "title": "Unread notifications",
       "datasource": {
@@ -10670,11 +10820,11 @@
         "h": 4,
         "w": 3,
         "x": 19,
-        "y": 233
+        "y": 241
       }
     },
     {
-      "id": 140,
+      "id": 142,
       "type": "stat",
       "title": "Role",
       "datasource": {
@@ -10720,11 +10870,11 @@
         "h": 4,
         "w": 2,
         "x": 22,
-        "y": 233
+        "y": 241
       }
     },
     {
-      "id": 141,
+      "id": 143,
       "type": "table",
       "title": "Feature entitlements",
       "datasource": {
@@ -10850,11 +11000,11 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 237
+        "y": 245
       }
     },
     {
-      "id": 142,
+      "id": 144,
       "type": "table",
       "title": "Permissions (read)",
       "datasource": {
@@ -10980,11 +11130,141 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 237
+        "y": 245
       }
     },
     {
-      "id": 143,
+      "id": 145,
+      "type": "table",
+      "title": "Per-eero permissions",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [],
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Allowed"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "index": 0,
+                        "text": "yes",
+                        "color": "blue"
+                      },
+                      "0": {
+                        "index": 1,
+                        "text": "no",
+                        "color": "#898781"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Eero"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "sum by (eero_id, verb) (eero_network_per_eero_permission{network_id=~\"$network_id\"})",
+          "refId": "A",
+          "legendFormat": "__auto",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "device_id": true,
+              "profile_id": true,
+              "network_id": true,
+              "forward_id": true
+            },
+            "renameByName": {
+              "Value #A": "Allowed",
+              "eero_id": "Eero",
+              "verb": "Verb"
+            }
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 245
+      }
+    },
+    {
+      "id": 146,
       "type": "table",
       "title": "Notification settings",
       "datasource": {
@@ -11109,12 +11389,12 @@
       "gridPos": {
         "h": 8,
         "w": 8,
-        "x": 16,
-        "y": 237
+        "x": 0,
+        "y": 253
       }
     },
     {
-      "id": 144,
+      "id": 147,
       "type": "row",
       "title": "Guest and subnets",
       "collapsed": false,
@@ -11122,12 +11402,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 245
+        "y": 261
       },
       "panels": []
     },
     {
-      "id": 145,
+      "id": 148,
       "type": "stat",
       "title": "Guest network",
       "datasource": {
@@ -11195,11 +11475,11 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 246
+        "y": 262
       }
     },
     {
-      "id": 146,
+      "id": 149,
       "type": "stat",
       "title": "Guest clients",
       "datasource": {
@@ -11251,11 +11531,11 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 246
+        "y": 262
       }
     },
     {
-      "id": 147,
+      "id": 150,
       "type": "stat",
       "title": "Guest SSID",
       "datasource": {
@@ -11301,11 +11581,11 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 246
+        "y": 262
       }
     },
     {
-      "id": 148,
+      "id": 151,
       "type": "stat",
       "title": "Subnets enabled",
       "datasource": {
@@ -11357,11 +11637,11 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 246
+        "y": 262
       }
     },
     {
-      "id": 149,
+      "id": 152,
       "type": "stat",
       "title": "Open (unencrypted) subnets",
       "datasource": {
@@ -11417,11 +11697,11 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 246
+        "y": 262
       }
     },
     {
-      "id": 150,
+      "id": 153,
       "type": "bargauge",
       "title": "Devices by subnet kind",
       "datasource": {
@@ -11484,11 +11764,11 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 246
+        "y": 262
       }
     },
     {
-      "id": 151,
+      "id": 154,
       "type": "table",
       "title": "Subnets",
       "datasource": {
@@ -11825,11 +12105,11 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 250
+        "y": 266
       }
     },
     {
-      "id": 152,
+      "id": 155,
       "type": "row",
       "title": "Exporter health",
       "collapsed": false,
@@ -11837,12 +12117,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 257
+        "y": 273
       },
       "panels": []
     },
     {
-      "id": 153,
+      "id": 156,
       "type": "stat",
       "title": "Exporter",
       "datasource": {
@@ -11910,11 +12190,11 @@
         "h": 4,
         "w": 3,
         "x": 0,
-        "y": 258
+        "y": 274
       }
     },
     {
-      "id": 154,
+      "id": 157,
       "type": "stat",
       "title": "Last collection duration",
       "datasource": {
@@ -11967,11 +12247,11 @@
         "h": 4,
         "w": 3,
         "x": 3,
-        "y": 258
+        "y": 274
       }
     },
     {
-      "id": 155,
+      "id": 158,
       "type": "stat",
       "title": "Collection interval",
       "datasource": {
@@ -12023,11 +12303,11 @@
         "h": 4,
         "w": 3,
         "x": 6,
-        "y": 258
+        "y": 274
       }
     },
     {
-      "id": 156,
+      "id": 159,
       "type": "stat",
       "title": "Since last collection",
       "datasource": {
@@ -12087,11 +12367,11 @@
         "h": 4,
         "w": 3,
         "x": 9,
-        "y": 258
+        "y": 274
       }
     },
     {
-      "id": 157,
+      "id": 160,
       "type": "stat",
       "title": "API requests last cycle",
       "datasource": {
@@ -12143,11 +12423,11 @@
         "h": 4,
         "w": 3,
         "x": 12,
-        "y": 258
+        "y": 274
       }
     },
     {
-      "id": 158,
+      "id": 161,
       "type": "stat",
       "title": "Scrape errors (range)",
       "datasource": {
@@ -12203,11 +12483,11 @@
         "h": 4,
         "w": 3,
         "x": 15,
-        "y": 258
+        "y": 274
       }
     },
     {
-      "id": 159,
+      "id": 162,
       "type": "stat",
       "title": "Failed API requests (range)",
       "datasource": {
@@ -12263,11 +12543,11 @@
         "h": 4,
         "w": 3,
         "x": 18,
-        "y": 258
+        "y": 274
       }
     },
     {
-      "id": 160,
+      "id": 163,
       "type": "stat",
       "title": "API success rate (range)",
       "datasource": {
@@ -12327,11 +12607,11 @@
         "h": 4,
         "w": 3,
         "x": 21,
-        "y": 258
+        "y": 274
       }
     },
     {
-      "id": 161,
+      "id": 164,
       "type": "timeseries",
       "title": "API requests by status",
       "datasource": {
@@ -12554,11 +12834,11 @@
         "h": 8,
         "w": 10,
         "x": 0,
-        "y": 262
+        "y": 278
       }
     },
     {
-      "id": 162,
+      "id": 165,
       "type": "text",
       "title": "API status legend",
       "datasource": {
@@ -12581,11 +12861,11 @@
         "h": 8,
         "w": 6,
         "x": 10,
-        "y": 262
+        "y": 278
       }
     },
     {
-      "id": 163,
+      "id": 166,
       "type": "timeseries",
       "title": "Scrape errors by type",
       "datasource": {
@@ -12657,11 +12937,11 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 262
+        "y": 278
       }
     },
     {
-      "id": 164,
+      "id": 167,
       "type": "timeseries",
       "title": "Collection duration",
       "datasource": {
@@ -12734,11 +13014,11 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 270
+        "y": 286
       }
     },
     {
-      "id": 165,
+      "id": 168,
       "type": "timeseries",
       "title": "API requests by endpoint (top 10)",
       "datasource": {
@@ -12810,11 +13090,11 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 270
+        "y": 286
       }
     },
     {
-      "id": 167,
+      "id": 170,
       "type": "row",
       "title": "Per-profile (--include-per-profile)",
       "collapsed": true,
@@ -12822,11 +13102,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 277
+        "y": 293
       },
       "panels": [
         {
-          "id": 166,
+          "id": 169,
           "type": "table",
           "title": "DNS-policy applications per profile",
           "datasource": {
@@ -12917,13 +13197,13 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 278
+            "y": 294
           }
         }
       ]
     },
     {
-      "id": 170,
+      "id": 173,
       "type": "row",
       "title": "Per-device (--include-per-device)",
       "collapsed": true,
@@ -12931,11 +13211,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 278
+        "y": 294
       },
       "panels": [
         {
-          "id": 168,
+          "id": 171,
           "type": "bargauge",
           "title": "Top 10 device insights",
           "datasource": {
@@ -12998,11 +13278,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 279
+            "y": 295
           }
         },
         {
-          "id": 169,
+          "id": 172,
           "type": "timeseries",
           "title": "Device insights by type",
           "datasource": {
@@ -13074,13 +13354,13 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 279
+            "y": 295
           }
         }
       ]
     },
     {
-      "id": 172,
+      "id": 175,
       "type": "row",
       "title": "Per-eero (--include-per-eero)",
       "collapsed": true,
@@ -13088,11 +13368,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 279
+        "y": 295
       },
       "panels": [
         {
-          "id": 171,
+          "id": 174,
           "type": "table",
           "title": "Per-eero endpoints",
           "datasource": {
@@ -13268,13 +13548,13 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 280
+            "y": 296
           }
         }
       ]
     },
     {
-      "id": 186,
+      "id": 189,
       "type": "row",
       "title": "Unverified shapes (--include-unverified)",
       "collapsed": true,
@@ -13282,11 +13562,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 280
+        "y": 296
       },
       "panels": [
         {
-          "id": 173,
+          "id": 176,
           "type": "stat",
           "title": "Routing: devices",
           "datasource": {
@@ -13338,11 +13618,11 @@
             "h": 4,
             "w": 3,
             "x": 0,
-            "y": 281
+            "y": 297
           }
         },
         {
-          "id": 174,
+          "id": 177,
           "type": "stat",
           "title": "Routing: reservations",
           "datasource": {
@@ -13394,11 +13674,11 @@
             "h": 4,
             "w": 3,
             "x": 3,
-            "y": 281
+            "y": 297
           }
         },
         {
-          "id": 175,
+          "id": 178,
           "type": "stat",
           "title": "Routing: forwards",
           "datasource": {
@@ -13450,11 +13730,11 @@
             "h": 4,
             "w": 3,
             "x": 6,
-            "y": 281
+            "y": 297
           }
         },
         {
-          "id": 176,
+          "id": 179,
           "type": "stat",
           "title": "Routing: pinholes",
           "datasource": {
@@ -13506,11 +13786,11 @@
             "h": 4,
             "w": 3,
             "x": 9,
-            "y": 281
+            "y": 297
           }
         },
         {
-          "id": 177,
+          "id": 180,
           "type": "stat",
           "title": "Backup access points",
           "datasource": {
@@ -13562,11 +13842,11 @@
             "h": 4,
             "w": 3,
             "x": 12,
-            "y": 281
+            "y": 297
           }
         },
         {
-          "id": 178,
+          "id": 181,
           "type": "stat",
           "title": "Cellular backup usage items",
           "datasource": {
@@ -13618,11 +13898,11 @@
             "h": 4,
             "w": 3,
             "x": 15,
-            "y": 281
+            "y": 297
           }
         },
         {
-          "id": 179,
+          "id": 182,
           "type": "stat",
           "title": "Cellular backup outages",
           "datasource": {
@@ -13674,11 +13954,11 @@
             "h": 4,
             "w": 3,
             "x": 18,
-            "y": 281
+            "y": 297
           }
         },
         {
-          "id": 180,
+          "id": 183,
           "type": "stat",
           "title": "Speed tests in window",
           "datasource": {
@@ -13730,11 +14010,11 @@
             "h": 4,
             "w": 3,
             "x": 21,
-            "y": 281
+            "y": 297
           }
         },
         {
-          "id": 181,
+          "id": 184,
           "type": "stat",
           "title": "Conflicting SSID nearby",
           "datasource": {
@@ -13802,11 +14082,11 @@
             "h": 6,
             "w": 4,
             "x": 0,
-            "y": 285
+            "y": 301
           }
         },
         {
-          "id": 182,
+          "id": 185,
           "type": "stat",
           "title": "Multi-static IP",
           "datasource": {
@@ -13874,11 +14154,11 @@
             "h": 6,
             "w": 4,
             "x": 4,
-            "y": 285
+            "y": 301
           }
         },
         {
-          "id": 183,
+          "id": 186,
           "type": "stat",
           "title": "AC compatibility",
           "datasource": {
@@ -13946,11 +14226,11 @@
             "h": 6,
             "w": 4,
             "x": 8,
-            "y": 285
+            "y": 301
           }
         },
         {
-          "id": 184,
+          "id": 187,
           "type": "stat",
           "title": "Power-saving schedules",
           "datasource": {
@@ -14002,11 +14282,11 @@
             "h": 6,
             "w": 4,
             "x": 12,
-            "y": 285
+            "y": 301
           }
         },
         {
-          "id": 185,
+          "id": 188,
           "type": "table",
           "title": "Backup access points",
           "datasource": {
@@ -14153,7 +14433,7 @@
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 285
+            "y": 301
           }
         }
       ]

@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE: do not edit by hand. Regenerate with `uv run python scripts/gen_metrics_doc.py`; tests/test_metrics_doc.py fails when this page and src/eero_exporter/metrics.py drift. -->
 
-The exporter declares **193 metrics** in 29 resource families. Every metric is read from the eero cloud API with GET requests only; the exporter never changes anything on your network.
+The exporter declares **197 metrics** in 29 resource families. Every metric is read from the eero cloud API with GET requests only; the exporter never changes anything on your network.
 
 Each table lists the metric name, its Prometheus type, labels, the collection tier that has to be enabled for it to be exposed, the evidence level for its source, and the API path it is read from. Metrics whose family is disabled do not appear on `/metrics` at all (no empty `# HELP` lines).
 
@@ -20,8 +20,8 @@ Families are grouped into tiers. A tier is enabled with one `serve` flag (or its
 
 | Tier | Enable with | Default | Metrics | Cost per cycle |
 |---|---|---|---:|---|
-| `core` | per-family `--include-*` flags | on | 143 | about 16 GETs: account + networks (2), network envelope, eeros, devices, profiles, data usage (one per period + one breakdown), insights (3), port forwards, reservations, blacklist |
-| `extended` | `--include-extended` | on | 20 | +12 GETs, fixed cost: entitlements, WPA3 per band, fast transition, permissions, members, notification settings, unread flag, DNS content filter, subnets, profile insights (3) |
+| `core` | per-family `--include-*` flags | on | 145 | about 16 GETs: account + networks (2), network envelope, eeros, devices, profiles, data usage (one per period + one breakdown), insights (3), port forwards, reservations, blacklist |
+| `extended` | `--include-extended` | on | 22 | +12 GETs, fixed cost: entitlements, WPA3 per band, fast transition, permissions, members, notification settings, unread flag, DNS content filter, subnets, profile insights (3) |
 | `rf` | `--include-rf` | on | 11 | +1 GET: a single unparameterised channel-utilisation call covering every eero and band |
 | `per_profile` | `--include-per-profile` | off | 1 | +1 GET per profile (DNS policy applications, needs eero Secure) |
 | `per_device` | `--include-per-device` | off | 1 | +3 GETs (list-level device insights, one per insight type); high series cardinality on large meshes |
@@ -45,19 +45,19 @@ Flags that gate reads inside other families rather than a family of their own: `
 - [Ethernet ports](#ethernet-ports) (6)
 - [Client devices](#client-devices) (31)
 - [Profiles](#profiles) (6)
-- [Data usage](#data-usage) (7)
+- [Data usage](#data-usage) (9)
 - [Insights (eero Secure)](#insights-eero-secure) (3)
 - [Port forwards](#port-forwards) (3)
 - [DHCP reservations](#dhcp-reservations) (1)
 - [Blocked devices](#blocked-devices) (1)
 - [Entitlements and subscription](#entitlements-and-subscription) (4)
 - [Wireless security](#wireless-security) (2)
-- [Account permissions](#account-permissions) (2)
+- [Account permissions](#account-permissions) (3)
 - [Network members](#network-members) (1)
 - [Notification settings](#notification-settings) (2)
 - [DNS policy (eero Secure)](#dns-policy-eero-secure) (2)
 - [Subnets](#subnets) (6)
-- [Profile insights](#profile-insights) (1)
+- [Profile insights](#profile-insights) (2)
 - [RF channel utilisation](#rf-channel-utilisation) (11)
 - [Per-profile reads](#per-profile-reads) (1)
 - [Device insights](#device-insights) (1)
@@ -285,6 +285,8 @@ Family `data_usage` -- tier `core`, toggled by `--include-data-usage` (default o
 | `eero_device_data_usage_upload_bytes` | gauge | `network_id`, `device_id`, `name`, `manufacturer`, `device_type` | `core` | `verified` | `get_data_usage_breakdown().data.devices[].upload` |
 | `eero_eero_data_usage_bytes` | gauge | `network_id`, `eero_id`, `location`, `period`, `cadence`, `direction` | `core` | `verified` | `get_data_usage_breakdown().data.eeros[].{upload,download}` |
 | `eero_network_data_usage_bytes` | gauge | `network_id`, `period`, `cadence`, `direction` | `core` | `verified` | `get_data_usage().data.series[].sum, keyed by .type` |
+| `eero_profile_data_usage_bytes` | gauge | `network_id`, `profile_id`, `period`, `cadence`, `direction` | `core` | `verified` | `get_data_usage_breakdown().data.profiles[].{upload,download}` |
+| `eero_unprofiled_data_usage_bytes` | gauge | `network_id`, `period`, `cadence`, `direction` | `core` | `verified` | `sum(get_data_usage_breakdown().data.unprofiled[].{upload,download})` |
 
 ## Insights (eero Secure)
 
@@ -348,6 +350,7 @@ Family `permissions` -- tier `extended`, enabled with `--include-extended` (defa
 
 | Metric | Type | Labels | Tier | Evidence | Source |
 |---|---|---|---|---|---|
+| `eero_network_per_eero_permission` | gauge | `network_id`, `eero_id`, `verb` | `extended` | `verified` | `get_permissions().data.permissions["per_eero"][].eero.{create,read,update,delete}` |
 | `eero_network_permission` | gauge | `network_id`, `capability` | `extended` | `verified` | `get_permissions().data.permissions[<dotted key>].read` |
 | `eero_network_role` | info | `network_id` | `extended` | `verified` | `get_permissions().data.role` |
 
@@ -396,6 +399,7 @@ Family `profile_insights` -- tier `extended`, enabled with `--include-extended` 
 
 | Metric | Type | Labels | Tier | Evidence | Source |
 |---|---|---|---|---|---|
+| `eero_profile_insights_devices` | gauge | `network_id`, `profile_id`, `type` | `extended` | `verified` | `get_profiles_insights().data.insights[].num_devices` |
 | `eero_profile_insights_total` | gauge | `network_id`, `profile_id`, `type` | `extended` | `verified` | `get_profiles_insights().data.insights[].sum (id from .insights_url)` |
 
 ## RF channel utilisation

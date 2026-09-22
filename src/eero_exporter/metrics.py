@@ -1557,6 +1557,24 @@ EERO_DATA_USAGE_BYTES = _gauge(
     evidence="verified",
 )
 
+PROFILE_DATA_USAGE_BYTES = _gauge(
+    f"{PREFIX}_profile_data_usage_bytes",
+    "Profile data usage in bytes from the data-usage breakdown for the current period.",
+    ("network_id", "profile_id", "period", "cadence", "direction"),
+    family="data_usage",
+    source="get_data_usage_breakdown().data.profiles[].{upload,download}",
+    evidence="verified",
+)
+
+UNPROFILED_DATA_USAGE_BYTES = _gauge(
+    f"{PREFIX}_unprofiled_data_usage_bytes",
+    "Data usage in bytes for devices that belong to no profile, for the current period.",
+    ("network_id", "period", "cadence", "direction"),
+    family="data_usage",
+    source="sum(get_data_usage_breakdown().data.unprofiled[].{upload,download})",
+    evidence="verified",
+)
+
 DATA_USAGE_DOWNLOAD_BYTES = _gauge(
     f"{PREFIX}_data_usage_download_bytes",
     "Network data usage download bytes for the trailing collection window.",
@@ -1788,6 +1806,15 @@ NETWORK_ROLE_INFO = _info(
     tier="extended",
 )
 
+NETWORK_PER_EERO_PERMISSION = _gauge(
+    "eero_network_per_eero_permission",
+    "Whether the account may perform a CRUD verb on an individual eero (1=yes, 0=no).",
+    ("network_id", "eero_id", "verb"),
+    family="permissions",
+    source='get_permissions().data.permissions["per_eero"][].eero.{create,read,update,delete}',
+    tier="extended",
+)
+
 NETWORK_PERMISSION = _gauge(
     f"{PREFIX}_network_permission",
     "Whether the current user can read a named capability (1=yes, 0=no). "
@@ -1927,6 +1954,15 @@ PROFILE_INSIGHTS_TOTAL = _gauge(
     ("network_id", "profile_id", "type"),
     family="profile_insights",
     source="get_profiles_insights().data.insights[].sum (id from .insights_url)",
+    tier="extended",
+)
+
+PROFILE_INSIGHTS_DEVICES = _gauge(
+    f"{PREFIX}_profile_insights_devices",
+    "Devices contributing to a profile's insight totals in the insights window.",
+    ("network_id", "profile_id", "type"),
+    family="profile_insights",
+    source="get_profiles_insights().data.insights[].num_devices",
     tier="extended",
 )
 

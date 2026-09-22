@@ -1613,6 +1613,34 @@ def data_usage(g: Grid) -> None:
     )
     g.add(
         bargauge(
+            "Usage per profile — $period",
+            [
+                (
+                    f"sum by (profile_id, direction) ({with_profile_name(f'eero_profile_data_usage_bytes{{{per}}}')})",
+                    "{{name}} {{direction}}",
+                )
+            ],
+            "bytes",
+        ),
+        8,
+        8,
+    )
+    g.add(
+        timeseries(
+            "Unprofiled device usage — $period",
+            [
+                (
+                    f"sum by (direction) (eero_unprofiled_data_usage_bytes{{{per}}})",
+                    "{{direction}}",
+                )
+            ],
+            "bytes",
+        ),
+        8,
+        8,
+    )
+    g.add(
+        bargauge(
             "Top 10 devices download — trailing window",
             [(f"topk(10, eero_device_data_usage_download_bytes{{{N}}})", "{{name}}")],
             "bytes",
@@ -1680,7 +1708,13 @@ def insights(g: Grid) -> None:
                     f"sum by (profile_id, name, type) ({with_profile_name(f'eero_profile_insights_total{{{N}}}')})",
                     "Events",
                     None,
-                )
+                ),
+                (
+                    "B",
+                    f"sum by (profile_id, name, type) ({with_profile_name(f'eero_profile_insights_devices{{{N}}}')})",
+                    "Devices",
+                    None,
+                ),
             ],
             {"name": "Profile", "type": "Type"},
             sort_by="Profile",
@@ -1757,6 +1791,23 @@ def account(g: Grid) -> None:
             ],
             {"capability": "Capability"},
             sort_by="Capability",
+        ),
+        8,
+        8,
+    )
+    g.add(
+        table(
+            "Per-eero permissions",
+            [
+                (
+                    "A",
+                    f"sum by (eero_id, verb) (eero_network_per_eero_permission{{{N}}})",
+                    "Allowed",
+                    col_bool("yes", "no"),
+                )
+            ],
+            {"eero_id": "Eero", "verb": "Verb"},
+            sort_by="Eero",
         ),
         8,
         8,

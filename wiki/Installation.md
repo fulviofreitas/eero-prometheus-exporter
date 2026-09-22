@@ -50,7 +50,7 @@ eero-exporter serve --port 10052 --interval 60 --log-level INFO
 ```
 
 Metrics are at **http://localhost:10052/metrics**. With the defaults the exporter exposes
-the `core`, `extended` and `rf` tiers -- about 174 of the 193 declared metrics -- using
+the `core`, `extended` and `rf` tiers -- about 178 of the 197 declared metrics -- using
 29 API requests per network per cycle. See [Configuration](Configuration) for the optional
 tiers and [Metrics](Metrics) for the full list.
 
@@ -139,7 +139,7 @@ migrate-first alternative.
 
 - [Docker](Docker) -- containers, compose, the full monitoring stack
 - [Configuration](Configuration) -- tiers, every flag, env var and YAML key
-- [Metrics](Metrics) -- the 193 metrics with their source paths
+- [Metrics](Metrics) -- the 197 metrics with their source paths
 - [Security](Security) -- what the exporter stores, sends and never exports
 
 ## Grafana dashboard

@@ -174,6 +174,7 @@ from .metrics import (
     NETWORK_MULTISTATICIP_ENABLED,
     NETWORK_NOTIFICATION_ENABLED,
     NETWORK_NOTIFICATIONS_UNREAD,
+    NETWORK_PER_EERO_PERMISSION,
     NETWORK_PERMISSION,
     NETWORK_PORT_FORWARDS_COUNT,
     NETWORK_POWER_SAVING_ENABLED,
@@ -201,8 +202,10 @@ from .metrics import (
     PROFILE_BLOCKED_APPLICATIONS_COUNT,
     PROFILE_CONNECTED_DEVICES_COUNT,
     PROFILE_CONTENT_FILTERS_SET,
+    PROFILE_DATA_USAGE_BYTES,
     PROFILE_DEVICES_COUNT,
     PROFILE_DNS_POLICY_APPLICATIONS_COUNT,
+    PROFILE_INSIGHTS_DEVICES,
     PROFILE_INSIGHTS_TOTAL,
     PROFILE_PAUSED,
     PROFILE_SCHEDULES_COUNT,
@@ -216,6 +219,7 @@ from .metrics import (
     SUBNET_NAT_PORT_RANDOMIZATION,
     SUBNET_OPEN_NETWORK,
     SUBNET_WAN_ACCESS,
+    UNPROFILED_DATA_USAGE_BYTES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -2225,6 +2229,20 @@ class EeroCollector:
         device_items = device_items if isinstance(device_items, list) else []
         self._set_device_data_usage(network_id, "current", "hourly", device_items)
         self._set_device_trailing_usage(network_id, device_items)
+        profile_items = breakdown.get("profiles", [])
+        self._set_profile_data_usage(
+            network_id,
+            "current",
+            "hourly",
+            profile_items if isinstance(profile_items, list) else [],
+        )
+        unprofiled_items = breakdown.get("unprofiled", [])
+        self._set_unprofiled_data_usage(
+            network_id,
+            "current",
+            "hourly",
+            unprofiled_items if isinstance(unprofiled_items, list) else [],
+        )
 
     def _set_network_data_usage(
         self,
@@ -2299,6 +2317,83 @@ class EeroCollector:
                     "Skipping device data usage item %d: %s: %s", idx, type(exc).__name__, exc
                 )
                 continue
+
+    def _set_profile_data_usage(
+        self,
+        network_id: str,
+        period: str,
+        cadence: str,
+        items: list[Any],
+    ) -> None:
+        """Set per-profile data usage from the breakdown's ``data.profiles[]`` (§11.5).
+
+        Free: the breakdown call is already made for the per-eero and
+        per-device figures. The profile name is never exported -- only the id.
+        """
+        for idx, profile in enumerate(items):
+            try:
+                if not isinstance(profile, dict):
+                    continue
+                profile_id = str(
+                    profile.get("profile_id")
+                    or profile.get("id")
+                    or _extract_profile_id_from_url(profile.get("url"))
+                )
+                if not profile_id:
+                    continue
+                self._set_usage_direction_metrics(
+                    PROFILE_DATA_USAGE_BYTES,
+                    {
+                        "network_id": network_id,
+                        "profile_id": profile_id,
+                        "period": period,
+                        "cadence": cadence,
+                    },
+                    profile,
+                )
+            except Exception as exc:
+                _LOGGER.warning(
+                    "Skipping profile data usage item %d: %s: %s", idx, type(exc).__name__, exc
+                )
+                continue
+
+    def _set_unprofiled_data_usage(
+        self,
+        network_id: str,
+        period: str,
+        cadence: str,
+        items: list[Any],
+    ) -> None:
+        """Set the summed data usage of devices belonging to no profile (§11.5).
+
+        The breakdown returns one entry per unprofiled device; only the
+        network-wide total is exported, so no per-device identity is exposed.
+        """
+        totals: dict[str, float] = {"upload": 0.0, "download": 0.0}
+        seen = False
+        for idx, item in enumerate(items):
+            try:
+                if not isinstance(item, dict):
+                    continue
+                for direction in totals:
+                    value = item.get(direction)
+                    if isinstance(value, (int, float)) and not isinstance(value, bool):
+                        totals[direction] += float(value)
+                        seen = True
+            except Exception as exc:
+                _LOGGER.warning(
+                    "Skipping unprofiled data usage item %d: %s: %s", idx, type(exc).__name__, exc
+                )
+                continue
+        if not seen:
+            return
+        for direction, total in totals.items():
+            UNPROFILED_DATA_USAGE_BYTES.labels(
+                network_id=network_id,
+                period=period,
+                cadence=cadence,
+                direction=direction,
+            ).set(total)
 
     def _set_eero_data_usage(
         self,
@@ -3140,6 +3235,7 @@ class EeroCollector:
             return
         for key, value in permissions.items():
             if key == "per_eero":
+                self._set_per_eero_permissions(network_id, value)
                 continue
             if key in _PERMISSION_SKIP_KEYS or key.endswith(_PERMISSION_SKIP_SUFFIXES):
                 continue
@@ -3151,6 +3247,40 @@ class EeroCollector:
             NETWORK_PERMISSION.labels(
                 network_id=network_id, capability=_sanitize_label_value(key)
             ).set(1 if read_perm else 0)
+
+    def _set_per_eero_permissions(self, network_id: str, items: Any) -> None:
+        """Set the per-eero CRUD permission gauges (§11.9).
+
+        The ``per_eero`` entry is a list of ``{url, eero: {create, read,
+        update, delete}}`` objects rather than the flat boolean shape the
+        other permission keys use, so it is parsed separately.
+        """
+        if not isinstance(items, list):
+            return
+        for idx, item in enumerate(items):
+            try:
+                if not isinstance(item, dict):
+                    continue
+                eero_id = _extract_id_from_url(item.get("url", ""))
+                verbs = item.get("eero")
+                if not eero_id or not isinstance(verbs, dict):
+                    continue
+                for verb, allowed in verbs.items():
+                    if not isinstance(allowed, bool):
+                        continue
+                    NETWORK_PER_EERO_PERMISSION.labels(
+                        network_id=network_id,
+                        eero_id=eero_id,
+                        verb=_sanitize_label_value(str(verb)),
+                    ).set(1 if allowed else 0)
+            except Exception as item_exc:
+                _LOGGER.warning(
+                    "Skipping per-eero permission item %d: %s: %s",
+                    idx,
+                    type(item_exc).__name__,
+                    item_exc,
+                )
+                continue
 
     async def _collect_member_metrics(self, client: EeroClient, network_id: str) -> None:
         """Collect the member count (§11.10). Never the member list itself."""
@@ -3291,11 +3421,15 @@ class EeroCollector:
                     if not profile_id:
                         continue
                     total = item.get("sum")
-                    if total is None:
-                        continue
-                    PROFILE_INSIGHTS_TOTAL.labels(
-                        network_id=network_id, profile_id=profile_id, type=insight_type
-                    ).set(float(total))
+                    if total is not None:
+                        PROFILE_INSIGHTS_TOTAL.labels(
+                            network_id=network_id, profile_id=profile_id, type=insight_type
+                        ).set(float(total))
+                    num_devices = item.get("num_devices")
+                    if num_devices is not None:
+                        PROFILE_INSIGHTS_DEVICES.labels(
+                            network_id=network_id, profile_id=profile_id, type=insight_type
+                        ).set(float(num_devices))
                 except Exception as item_exc:
                     _LOGGER.warning(
                         "Skipping profile insights item %d: %s: %s",

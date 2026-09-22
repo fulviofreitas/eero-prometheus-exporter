@@ -13,7 +13,7 @@
 ---
 
 _A modern, async, strictly read-only Prometheus exporter for your eero mesh WiFi network._  
-_Network health, every eero and radio, client devices, data usage, entitlements -- 193 metrics._
+_Network health, every eero and radio, client devices, data usage, entitlements -- 197 metrics._
 
 [Get Started](../../wiki/Installation) · [Metrics](../../wiki/Metrics) · [Docker](../../wiki/Docker) · [Documentation](../../wiki)
 
@@ -48,7 +48,7 @@ _Network health, every eero and radio, client devices, data usage, entitlements 
 
 | Feature | Description |
 |---------|-------------|
-| 📊 **193 metrics, tiered** | `core`, `extended` and `rf` on by default (29 API requests per cycle); `per-profile`, `per-device`, `per-eero` and `unverified` opt-in. Every metric documents its API source path and evidence level. |
+| 📊 **197 metrics, tiered** | `core`, `extended` and `rf` on by default (29 API requests per cycle); `per-profile`, `per-device`, `per-eero` and `unverified` opt-in. Every metric documents its API source path and evidence level. |
 | 🔒 **Strictly read-only** | Only GET requests; `login`/`verify` are the sole POSTs. Enforced by a surface test against the real SDK and a write guard in the test suite. |
 | 🌐 **Network & radios** | Health, ISP state, speed test, DNS/DHCP/WAN modes, 119 capability flags, per-band channel, width, TX power and utilisation on every eero. |
 | 📱 **Devices & profiles** | Connection quality, PHY rates, MCS/NSS, packet statistics, data usage per device, eero and profile. |
