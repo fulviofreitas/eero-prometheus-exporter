@@ -31,7 +31,19 @@
   "upnp": true,
   "thread": false,
   "ipv6_upstream": true,
-  "dns_caching": false,
+  "dns": {
+    "mode": "custom",
+    "caching": false,
+    "custom": {
+      "ips": ["203.0.113.10", "203.0.113.11"]
+    }
+  },
+  "premium_dns": {
+    "dns_policies": {
+      "ad_block": true,
+      "block_malware": false
+    }
+  },
   "power_saving": false,
   "guest_network_enabled": false,
   "guest_network": {
@@ -39,7 +51,6 @@
     "enabled": false
   },
   "backup_internet_enabled": true,
-  "custom_dns": [],
   "premium_status": "active",
   "premium_details": {
     "tier": "plus"

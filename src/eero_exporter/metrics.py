@@ -552,7 +552,7 @@ NETWORK_AD_BLOCK_ENABLED = _gauge(
     ("network_id", "name"),
     family="network_features",
     source="network.data.premium_dns.dns_policies.ad_block",
-    evidence="inferred",
+    evidence="verified",
 )
 
 NETWORK_CUSTOM_DNS_ENABLED = _gauge(
@@ -560,7 +560,7 @@ NETWORK_CUSTOM_DNS_ENABLED = _gauge(
     "Whether custom DNS is configured (1=yes, 0=no)",
     ("network_id", "name"),
     family="network_features",
-    source="derived: len(network.data.dns.custom.ips) > 0",
+    source="derived: network.data.dns.mode == 'custom'",
     evidence="verified",
 )
 
@@ -575,10 +575,10 @@ NETWORK_DNS_SERVER_COUNT = _gauge(
 
 DNS_CONFIG_INFO = _info(
     f"{PREFIX}_dns_config",
-    "DNS configuration information",
+    "DNS configuration information (mode only -- never the resolver IPs)",
     ("network_id",),
     family="network_features",
-    source="network.data.dns",
+    source="network.data.dns.mode",
     evidence="verified",
 )
 
@@ -961,7 +961,7 @@ DEVICE_CHANNEL = _gauge(
     "Device WiFi channel number",
     ("network_id", "device_id", "name", "band", "source_eero"),
     family="devices",
-    source="devices.data[].channel",
+    source="devices.data[].channel (top-level; falls back to connectivity.channel)",
     evidence="verified",
 )
 
@@ -971,7 +971,8 @@ DEVICE_RX_BITRATE = _gauge(
     "PHY layer rate, actual throughput may be lower.",
     ("network_id", "device_id", "name", "manufacturer", "band", "source_eero"),
     family="devices",
-    source="devices.data[].connectivity.rx_bitrate | connectivity.rx_rate_info.rate_bps",
+    source="devices.data[].connectivity.rx_rate_info.rate_bps / 1e6"
+    " (primary) | connectivity.rx_bitrate (string fallback)",
     evidence="verified",
 )
 
@@ -1206,20 +1207,23 @@ NETWORK_PORT_FORWARDS_COUNT = _gauge(
 
 PORT_FORWARD_INFO = _info(
     f"{PREFIX}_port_forward",
-    "Port forward rule information",
+    "Port forward rule information (never the forwarded IP address)",
     ("network_id", "forward_id"),
     family="port_forwards",
-    source="get_forwards()[] (port, internal_port, protocol, ip_address, nickname)",
-    evidence="verified",
+    source="get_forwards()[] (client_port, gateway_port, protocol, description;"
+    " falls back to legacy port/external_port/internal_port/nickname)."
+    " routing.data.forwards.data was empty (len 0) on the probed mesh --"
+    " the remapped keys are unverified.",
+    evidence="inferred",
 )
 
 PORT_FORWARD_ENABLED = _gauge(
     f"{PREFIX}_port_forward_enabled",
     "Whether the port forward is enabled (1=yes, 0=no)",
-    ("network_id", "forward_id", "port", "protocol"),
+    ("network_id", "forward_id", "gateway_port", "protocol"),
     family="port_forwards",
     source="get_forwards()[].enabled",
-    evidence="verified",
+    evidence="inferred",
 )
 
 # =============================================================================

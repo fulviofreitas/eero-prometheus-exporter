@@ -1,0 +1,90 @@
+[
+  {
+    "url": "/2.2/devices/1",
+    "mac": "AA:BB:CC:00:00:01",
+    "nickname": "phone-1",
+    "hostname": "phone-1",
+    "display_name": "Phone 1",
+    "device_type": "phone",
+    "connected": true,
+    "wireless": true,
+    "is_private": false,
+    "is_guest": false,
+    "connection_type": "wireless",
+    "channel": 149,
+    "manufacturer": "Example Corp",
+    "subnet_kind": "main",
+    "last_active": "2026-09-21T23:40:00.123Z",
+    "first_active": "2023-08-21T03:58:02.414659Z",
+    "first_seen": "2026-01-01T00:00:00+0000",
+    "source": {
+      "location": "Living Room",
+      "is_gateway": true
+    },
+    "connectivity": {
+      "frequency": 5745,
+      "signal": "-45 dBm",
+      "score": 0.9,
+      "score_bars": 5,
+      "snr": 40,
+      "inactive_time_ms": 10,
+      "rx_bitrate": "866.7 Mbit/s",
+      "rx_rate_info": {
+        "rate_bps": 866700000,
+        "mcs": 9,
+        "nss": 2,
+        "guard_interval": "short",
+        "channel_width": "80",
+        "phy_type": "he"
+      },
+      "tx_rate_info": {
+        "rate_bps": 433300000,
+        "mcs": 7,
+        "nss": 1,
+        "guard_interval": "short",
+        "channel_width": "80",
+        "phy_type": "he"
+      }
+    }
+  },
+  {
+    "url": "/2.2/devices/2",
+    "mac": "AA:BB:CC:00:00:02",
+    "nickname": "laptop-1",
+    "hostname": "laptop-1",
+    "display_name": "Laptop 1",
+    "device_type": "computer",
+    "connected": true,
+    "wireless": false,
+    "is_private": true,
+    "is_guest": false,
+    "connection_type": "wired",
+    "channel": null,
+    "manufacturer": "Example Corp",
+    "subnet_kind": "main",
+    "last_active": "2026-09-21T23:41:00.000Z",
+    "first_active": "2023-09-01T00:00:00.000Z",
+    "first_seen": "2023-09-01T00:00:00.000Z",
+    "source": {
+      "location": "Office",
+      "is_gateway": false
+    },
+    "connectivity": {
+      "frequency": null,
+      "signal": null,
+      "score": null,
+      "score_bars": null,
+      "snr": null,
+      "inactive_time_ms": null,
+      "rx_bitrate": null,
+      "ethernet_status": {
+        "has_carrier": true,
+        "interface_number": 2,
+        "speed": "P1000",
+        "is_wan_port": false,
+        "is_lte": false,
+        "port_name": "eth1"
+      }
+    }
+  }
+]

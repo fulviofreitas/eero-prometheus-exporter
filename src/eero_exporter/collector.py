@@ -1,6 +1,7 @@
 """Collector module for gathering eero metrics."""
 
 import logging
+import re
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -126,10 +127,16 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _extract_id_from_url(url: Any) -> str:
-    """Extract ID from an API URL."""
+    """Extract ID from an API URL.
+
+    Strips a trailing slash and any ``?query`` suffix before taking the last
+    path segment (v8 migration plan §1.2a) -- the eero API has never been
+    observed to return either, but a defensive parser should not silently
+    misparse if it ever does.
+    """
     if not url:
         return ""
-    url_str = str(url)
+    url_str = str(url).split("?", 1)[0]
     parts = url_str.rstrip("/").split("/")
     return parts[-1] if parts else ""
 
@@ -144,40 +151,128 @@ def _parse_signal_strength(signal_str: str | None) -> float | None:
         return None
 
 
+_BITRATE_UNIT_RE = re.compile(r"\s*mbit/s\s*$|\s*mbps\s*$", re.IGNORECASE)
+
+
 def _parse_bitrate(bitrate_str: str | None) -> float | None:
-    """Parse bitrate string to Mbps float."""
+    """Parse a legacy bitrate string (e.g. ``"866.7 Mbit/s"``) to a Mbps float.
+
+    Case-insensitive: the eero API and its SDK have both been observed to
+    use ``Mbit/s`` and ``Mbps`` with varying case.
+    """
     if not bitrate_str:
         return None
     try:
-        cleaned = bitrate_str.replace(" Mbit/s", "").replace(" Mbps", "").strip()
+        cleaned = _BITRATE_UNIT_RE.sub("", bitrate_str).strip()
         return float(cleaned)
     except (ValueError, AttributeError):
         return None
 
 
-def _parse_speed_mbps(speed_str: str | None) -> float | None:
-    """Parse ethernet speed string to Mbps."""
-    if not speed_str:
+def _rate_bps_to_mbps(rate_info: Any) -> float | None:
+    """Read ``rate_bps`` off a ``{rx,tx}_rate_info`` object and convert to Mbps.
+
+    Args:
+        rate_info: The ``connectivity.{rx,tx}_rate_info`` dict, or None.
+
+    Returns:
+        The rate in Mbps, or None if ``rate_info`` is missing or has no
+        numeric ``rate_bps``.
+    """
+    if not isinstance(rate_info, dict):
+        return None
+    rate_bps = rate_info.get("rate_bps")
+    if rate_bps is None:
         return None
     try:
-        speed_str = speed_str.strip().upper()
-        if "GBPS" in speed_str or speed_str.endswith("G"):
-            num = float(speed_str.replace("GBPS", "").replace("G", "").strip())
-            return num * 1000
-        if "MBPS" in speed_str or speed_str.endswith("M"):
-            num = float(speed_str.replace("MBPS", "").replace("M", "").strip())
-            return num
-        return float(speed_str)
-    except (ValueError, AttributeError):
+        return float(rate_bps) / 1e6
+    except (TypeError, ValueError):
         return None
+
+
+# Ethernet port speed enum -> Mbps, per §11.2/§7 of the v8 probe shape
+# summary (`eeros[].ethernet_status.statuses[].speed` and
+# `devices[].connectivity.ethernet_status.speed`). Unknown enum values are
+# left unset -- never guessed -- and DEBUG-logged (key only, never a payload
+# value).
+_ETHERNET_SPEED_MBPS: dict[str, float] = {
+    "P10": 10.0,
+    "P100": 100.0,
+    "P1000": 1000.0,
+    "P10000": 10000.0,
+}
+
+# Module-level set to deduplicate "unknown ethernet speed enum" DEBUG log
+# entries, keyed by the raw enum string.
+_UNKNOWN_ETHERNET_SPEEDS_SEEN: set[str] = set()
+
+
+def _parse_ethernet_speed_enum(speed: str | None) -> float | None:
+    """Map the eero ethernet port speed enum to a Mbps value.
+
+    Args:
+        speed: The raw ``speed`` enum value, e.g. ``"P1000"``.
+
+    Returns:
+        The speed in Mbps, or None if ``speed`` is missing or not one of the
+        observed enum values (``P10``, ``P100``, ``P1000``, ``P10000``).
+    """
+    if not speed:
+        return None
+    key = str(speed).strip().upper()
+    mapped = _ETHERNET_SPEED_MBPS.get(key)
+    if mapped is None and key not in _UNKNOWN_ETHERNET_SPEEDS_SEEN:
+        _UNKNOWN_ETHERNET_SPEEDS_SEEN.add(key)
+        _LOGGER.debug("Unknown ethernet port speed enum %r", key)
+    return mapped
+
+
+# Three timestamp shapes coexist across the eero API (§11.0 of the v8 probe
+# shape summary):
+#   1. `...T..:..:...mmmZ`        -- millisecond fraction, Zulu suffix
+#   2. `...T..:..:...nnnnnnnnnZ`  -- 9-digit (nanosecond) fraction, Zulu
+#      suffix; `datetime.fromisoformat` rejects anything but 3 or 6 fraction
+#      digits, so this is truncated to microsecond precision before parsing.
+#   3. `...T..:..:..+0000`        -- UTC offset with no colon (`eeros[].joined`,
+#      `speed_tests[].date`); `datetime.fromisoformat` on Python < 3.11 (and
+#      the colon-less form on any version prior to 3.11) rejects this too, so
+#      a colon is inserted defensively.
+_TIMESTAMP_FRACTION_RE = re.compile(r"\.(\d{7,9})Z$")
+_TIMESTAMP_OFFSET_RE = re.compile(r"([+-]\d{2})(\d{2})$")
 
 
 def _parse_timestamp(timestamp_str: str | None) -> float | None:
-    """Parse ISO timestamp string to Unix epoch."""
+    """Parse any of the eero API's three ISO-8601 timestamp shapes to Unix epoch.
+
+    Args:
+        timestamp_str: The raw timestamp string.
+
+    Returns:
+        The Unix epoch seconds, or None if ``timestamp_str`` is missing or
+        unparseable.
+    """
     if not timestamp_str:
         return None
+    candidate = timestamp_str.strip()
+
+    # Truncate an over-long fractional-seconds field (nanoseconds) to
+    # microseconds -- `datetime.fromisoformat` only accepts 3 or 6 digits.
+    fraction_match = _TIMESTAMP_FRACTION_RE.search(candidate)
+    if fraction_match:
+        fraction = fraction_match.group(1)[:6]
+        candidate = candidate[: fraction_match.start()] + f".{fraction}Z"
+
+    candidate = candidate.replace("Z", "+00:00")
+
+    # Insert a colon into a colon-less UTC offset (`+0000` -> `+00:00`).
+    offset_match = _TIMESTAMP_OFFSET_RE.search(candidate)
+    if offset_match:
+        candidate = (
+            candidate[: offset_match.start()] + f"{offset_match.group(1)}:{offset_match.group(2)}"
+        )
+
     try:
-        dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(candidate)
         return dt.timestamp()
     except (ValueError, TypeError):
         return None
@@ -434,6 +529,36 @@ def _coerce_numeric(value: Any, field_name: str = "") -> float | None:
                 sorted_keys,
             )
         return None
+    return None
+
+
+def _coerce_power_saving_enabled(value: Any) -> bool | None:
+    """Coerce a power-saving field to a bool, defensively across shapes.
+
+    The v8 probe observed a plain bool at the network level
+    (``network.data.power_saving``) and an object at the eero level
+    (``eeros[].power_saving.schedule.active``, §7 of the v8 probe shape
+    summary). Both shapes -- plus a flatter ``{"enabled": bool}`` some
+    firmwares have used -- are handled so a schema change on either path
+    degrades gracefully instead of aborting collection.
+
+    Args:
+        value: The raw ``power_saving`` field.
+
+    Returns:
+        The resolved boolean, or None if the shape is unrecognised.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, dict):
+        if "enabled" in value:
+            enabled = value.get("enabled")
+            return bool(enabled) if isinstance(enabled, bool) else None
+        schedule = value.get("schedule")
+        if isinstance(schedule, dict):
+            active = schedule.get("active")
+            if isinstance(active, bool):
+                return active
     return None
 
 
@@ -851,14 +976,10 @@ class EeroCollector:
                     SPEED_DOWNLOAD_MBPS.labels(network_id=network_id).set(download["value"])
                 except Exception:
                     _LOGGER.warning("Failed to set SPEED_DOWNLOAD_MBPS for network %s", network_id)
-            if "date" in speed:
+            speed_ts = _parse_timestamp(speed.get("date"))
+            if speed_ts is not None:
                 try:
-                    from datetime import datetime
-
-                    dt = datetime.fromisoformat(speed["date"].replace("Z", "+00:00"))
-                    SPEED_TEST_TIMESTAMP.labels(network_id=network_id).set(dt.timestamp())
-                except (ValueError, TypeError):
-                    pass
+                    SPEED_TEST_TIMESTAMP.labels(network_id=network_id).set(speed_ts)
                 except Exception:
                     _LOGGER.warning("Failed to set SPEED_TEST_TIMESTAMP for network %s", network_id)
 
@@ -1033,7 +1154,11 @@ class EeroCollector:
                     except Exception:
                         _LOGGER.warning("Failed to set EERO_MESH_QUALITY for eero %s", eero_id)
 
-                uptime = _coerce_numeric(eero.get("uptime"), field_name="uptime")
+                uptime_obj = eero.get("uptime")
+                uptime = _coerce_numeric(
+                    uptime_obj.get("since_last_reboot_s") if isinstance(uptime_obj, dict) else None,
+                    field_name="uptime.since_last_reboot_s",
+                )
                 if uptime is not None:
                     try:
                         EERO_UPTIME_SECONDS.labels(
@@ -1331,7 +1456,17 @@ class EeroCollector:
                                 "Failed to set DEVICE_FREQUENCY for device %s", device_id
                             )
 
-                    rx_bitrate = _parse_bitrate(connectivity.get("rx_bitrate"))
+                    rx_rate_info = connectivity.get("rx_rate_info", {})
+                    rx_rate_info = rx_rate_info if isinstance(rx_rate_info, dict) else {}
+                    tx_rate_info = connectivity.get("tx_rate_info", {})
+                    tx_rate_info = tx_rate_info if isinstance(tx_rate_info, dict) else {}
+
+                    # Primary source: rate_bps (verified for both rx and tx).
+                    # Fallback for rx only: the legacy `rx_bitrate` string --
+                    # there is no `tx_bitrate` string key anywhere in the API.
+                    rx_bitrate = _rate_bps_to_mbps(rx_rate_info)
+                    if rx_bitrate is None:
+                        rx_bitrate = _parse_bitrate(connectivity.get("rx_bitrate"))
                     if rx_bitrate is not None:
                         try:
                             DEVICE_RX_BITRATE.labels(
@@ -1347,8 +1482,23 @@ class EeroCollector:
                                 "Failed to set DEVICE_RX_BITRATE for device %s", device_id
                             )
 
-                    rx_rate_info = connectivity.get("rx_rate_info", {})
-                    if rx_rate_info and isinstance(rx_rate_info, dict):
+                    tx_bitrate = _rate_bps_to_mbps(tx_rate_info)
+                    if tx_bitrate is not None:
+                        try:
+                            DEVICE_TX_BITRATE.labels(
+                                network_id=network_id,
+                                device_id=device_id,
+                                name=name,
+                                manufacturer=manufacturer,
+                                band=band,
+                                source_eero=source_eero,
+                            ).set(tx_bitrate)
+                        except Exception:
+                            _LOGGER.warning(
+                                "Failed to set DEVICE_TX_BITRATE for device %s", device_id
+                            )
+
+                    if rx_rate_info:
                         rx_mcs = rx_rate_info.get("mcs")
                         if rx_mcs is not None:
                             DEVICE_RX_MCS.labels(
@@ -1367,20 +1517,7 @@ class EeroCollector:
                                 band=band,
                             ).set(rx_nss)
 
-                        if rx_bitrate is None:
-                            rx_rate_bitrate = rx_rate_info.get("bitrate")
-                            if rx_rate_bitrate is not None:
-                                DEVICE_RX_BITRATE.labels(
-                                    network_id=network_id,
-                                    device_id=device_id,
-                                    name=name,
-                                    manufacturer=manufacturer,
-                                    band=band,
-                                    source_eero=source_eero,
-                                ).set(rx_rate_bitrate)
-
-                    tx_rate_info = connectivity.get("tx_rate_info", {})
-                    if tx_rate_info and isinstance(tx_rate_info, dict):
+                    if tx_rate_info:
                         tx_mcs = tx_rate_info.get("mcs")
                         if tx_mcs is not None:
                             DEVICE_TX_MCS.labels(
@@ -1399,18 +1536,12 @@ class EeroCollector:
                                 band=band,
                             ).set(tx_nss)
 
-                        tx_bitrate = tx_rate_info.get("bitrate")
-                        if tx_bitrate is not None:
-                            DEVICE_TX_BITRATE.labels(
-                                network_id=network_id,
-                                device_id=device_id,
-                                name=name,
-                                manufacturer=manufacturer,
-                                band=band,
-                                source_eero=source_eero,
-                            ).set(tx_bitrate)
-
+                # `devices[].channel` is the verified top-level source; the
+                # summary explicitly refutes `connectivity.channel` (§7), but
+                # a fallback is kept since checking it is free.
                 channel = device.get("channel")
+                if channel is None and connectivity:
+                    channel = connectivity.get("channel")
                 if channel is not None:
                     DEVICE_CHANNEL.labels(
                         network_id=network_id,
@@ -1745,19 +1876,17 @@ class EeroCollector:
                 1 if ipv6_upstream else 0
             )
 
-        dns_caching = network_details.get("dns_caching")
-        settings = network_details.get("settings", {})
-        if dns_caching is None and isinstance(settings, dict):
-            dns_caching = settings.get("dns_caching")
+        dns_obj = network_details.get("dns", {})
+        dns_caching = dns_obj.get("caching") if isinstance(dns_obj, dict) else None
         if dns_caching is not None:
             NETWORK_DNS_CACHING_ENABLED.labels(network_id=network_id, name=network_name).set(
                 1 if dns_caching else 0
             )
 
-        power_saving = network_details.get("power_saving")
-        if power_saving is not None:
+        power_saving_enabled = _coerce_power_saving_enabled(network_details.get("power_saving"))
+        if power_saving_enabled is not None:
             NETWORK_POWER_SAVING_ENABLED.labels(network_id=network_id, name=network_name).set(
-                1 if power_saving else 0
+                1 if power_saving_enabled else 0
             )
 
         # Try multiple field names for guest network enabled
@@ -1794,37 +1923,31 @@ class EeroCollector:
             # `access_duration_enabled` was removed in 4.0.0 -- the guest
             # network object has no duration key of any kind (§11.11).
 
-        # DNS configuration metrics
-        custom_dns = network_details.get("custom_dns", [])
-        dns_caching = network_details.get("dns_caching", False)
+        # DNS configuration metrics -- `network.data.dns.{mode,caching,custom.ips}`
+        # (§11.1 of the v8 probe shape summary). `dns.custom.ips` is never
+        # read for its values, only its length -- the actual server
+        # addresses are never exported as label/info values.
+        dns_mode = dns_obj.get("mode") if isinstance(dns_obj, dict) else None
+        custom_dns_ips = dns_obj.get("custom", {}).get("ips") if isinstance(dns_obj, dict) else None
+        is_custom_dns = dns_mode == "custom"
 
-        if custom_dns and isinstance(custom_dns, list):
-            NETWORK_CUSTOM_DNS_ENABLED.labels(network_id=network_id, name=network_name).set(1)
-            NETWORK_DNS_SERVER_COUNT.labels(network_id=network_id, name=network_name).set(
-                len(custom_dns)
-            )
-            DNS_CONFIG_INFO.labels(network_id=network_id).info(
-                {
-                    "mode": "custom",
-                    "primary_dns": custom_dns[0] if custom_dns else "auto",
-                    "secondary_dns": custom_dns[1] if len(custom_dns) > 1 else "",
-                    "caching_enabled": str(dns_caching).lower(),
-                }
-            )
-        else:
-            NETWORK_CUSTOM_DNS_ENABLED.labels(network_id=network_id, name=network_name).set(0)
-            NETWORK_DNS_SERVER_COUNT.labels(network_id=network_id, name=network_name).set(0)
-            DNS_CONFIG_INFO.labels(network_id=network_id).info(
-                {
-                    "mode": "auto",
-                    "primary_dns": "auto",
-                    "secondary_dns": "",
-                    "caching_enabled": str(dns_caching).lower(),
-                }
-            )
+        NETWORK_CUSTOM_DNS_ENABLED.labels(network_id=network_id, name=network_name).set(
+            1 if is_custom_dns else 0
+        )
+        NETWORK_DNS_SERVER_COUNT.labels(network_id=network_id, name=network_name).set(
+            len(custom_dns_ips) if isinstance(custom_dns_ips, list) else 0
+        )
+        # Non-identifying only: mode. Never the resolver IPs themselves.
+        DNS_CONFIG_INFO.labels(network_id=network_id).info(
+            {
+                "mode": dns_mode or "unknown",
+            }
+        )
 
-        # Ad blocking metrics (network-wide)
-        ad_block = network_details.get("ad_block") or network_details.get("ad_blocking")
+        # Ad blocking / malware blocking (network-wide, premium DNS policies).
+        premium_dns = network_details.get("premium_dns", {})
+        dns_policies = premium_dns.get("dns_policies", {}) if isinstance(premium_dns, dict) else {}
+        ad_block = dns_policies.get("ad_block") if isinstance(dns_policies, dict) else None
         if ad_block is not None:
             NETWORK_AD_BLOCK_ENABLED.labels(network_id=network_id, name=network_name).set(
                 1 if ad_block else 0
@@ -1886,7 +2009,7 @@ class EeroCollector:
                     port_name=port_name,
                 ).set(1 if has_carrier else 0)
 
-            speed = _parse_speed_mbps(port_status.get("speed"))
+            speed = _parse_ethernet_speed_enum(port_status.get("speed"))
             if speed is not None:
                 ETHERNET_PORT_SPEED.labels(
                     network_id=network_id,
@@ -2068,24 +2191,33 @@ class EeroCollector:
                 forward_url = forward.get("url", "")
                 forward_id = _extract_id_from_url(forward_url) or str(hash(str(forward)))[:8]
 
-                port = str(forward.get("port", forward.get("external_port", "")))
-                protocol = forward.get("protocol", "tcp").lower()
+                # `client_port`/`gateway_port` are the v8-remapped keys
+                # (unverified -- the probed mesh had zero forwards); fall
+                # back to the legacy `port`/`external_port`/`internal_port`
+                # names. The forwarded IP is never read into a label/info
+                # value.
+                legacy_gateway_port = forward.get("port", forward.get("external_port", ""))
+                gateway_port = str(forward.get("gateway_port", legacy_gateway_port))
+                client_port = str(
+                    forward.get("client_port", forward.get("internal_port", gateway_port))
+                )
+                protocol = str(forward.get("protocol", "tcp")).lower()
                 enabled = forward.get("enabled", True)
+                description = forward.get("description", forward.get("nickname", ""))
 
                 PORT_FORWARD_INFO.labels(network_id=network_id, forward_id=forward_id).info(
                     {
-                        "port": port,
-                        "internal_port": str(forward.get("internal_port", port)),
+                        "client_port": client_port,
+                        "gateway_port": gateway_port,
                         "protocol": protocol,
-                        "ip_address": forward.get("ip_address", ""),
-                        "nickname": forward.get("nickname", ""),
+                        "description": str(description),
                     }
                 )
 
                 PORT_FORWARD_ENABLED.labels(
                     network_id=network_id,
                     forward_id=forward_id,
-                    port=port,
+                    gateway_port=gateway_port,
                     protocol=protocol,
                 ).set(1 if enabled else 0)
             except Exception as item_exc:

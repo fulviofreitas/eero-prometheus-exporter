@@ -1,0 +1,19 @@
+[
+  {
+    "url": "/2.2/networks/999001/forwards/1",
+    "client_port": "8080",
+    "gateway_port": "80",
+    "protocol": "TCP",
+    "enabled": true,
+    "description": "web server"
+  },
+  {
+    "url": "/2.2/networks/999001/forwards/2",
+    "port": "2222",
+    "external_port": "2222",
+    "internal_port": "22",
+    "protocol": "tcp",
+    "enabled": false,
+    "nickname": "ssh"
+  }
+]
