@@ -57,7 +57,7 @@ If a whole group of metrics is missing from `/metrics`, in this order:
 | Response | Meaning |
 |---|---|
 | `404` | `--auth-ui` is not enabled |
-| `403` | Wrong access token, wrong CSRF token **or** wrong verification code -- deliberately indistinguishable. Reload the page for a fresh form and try again. |
+| `403` | Wrong access token, wrong CSRF token, wrong verification code, an empty field, or a verification submitted after the pending login expired -- all deliberately indistinguishable. Reload the page for a fresh form and start again. |
 | `429` with `Retry-After` | 5 failed attempts within 15 minutes; wait it out |
 | `serve` exits 1 mentioning `--auth-ui-token` | Token missing or shorter than 16 characters |
 

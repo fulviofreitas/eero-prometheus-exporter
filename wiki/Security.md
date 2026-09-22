@@ -77,8 +77,9 @@ file the collector reads. Threat model and controls:
 | Access token | Required on every POST, at least 16 characters, compared in constant time (`hmac.compare_digest`); `serve` refuses to start otherwise |
 | Token handling | Provide it through `EERO_EXPORTER_AUTH_UI_TOKEN` or the YAML key `auth_ui_token`, not on the command line (argv is visible to local users); it is masked in config dumps and never logged |
 | CSRF | A per-process CSRF token is embedded in the form and checked on every POST |
-| No oracle | A wrong access token, a wrong CSRF token and a wrong verification code all return the identical 403, so none can be used to probe the others |
-| Rate limit | 5 failed attempts (token, CSRF or code) per 15 minutes trip a 429 with `Retry-After`; a successful step resets the window |
+| No oracle | A wrong access token, a wrong CSRF token, a wrong verification code, a missing identifier or code, and a verify with no pending flow all return the identical 403 and all count as a failed attempt, so none can be used to probe the others |
+| Rate limit | 5 failed attempts (token, CSRF, code or a malformed submission) per 15 minutes trip a 429 with `Retry-After`; a successful step resets the window |
+| Malformed input | The token and CSRF fields are compared as bytes, so a non-ASCII or invalid byte is denied like any wrong value instead of raising inside the handler |
 | Single pending flow | One login at a time, discarded after `--auth-ui-pending-ttl` seconds (default 600) or via the reset button |
 | Response headers | `Content-Security-Policy: default-src 'none'`, `X-Frame-Options: DENY`, `Cache-Control: no-store`, `Referrer-Policy: no-referrer` |
 | Logging | Only "login started", "verify ok" and "verify failed (<class>)" -- never the identifier, code or tokens |

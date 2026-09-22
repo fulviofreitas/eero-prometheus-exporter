@@ -64,6 +64,10 @@ tiers and [Metrics](Metrics) for the full list.
 | `/` | Index page |
 | `/auth` | Browser login page, only when `--auth-ui` is enabled (404 otherwise) |
 
+Only these paths exist, and only for `GET` (plus `POST` on the `/auth/*` routes).
+Any other path is a 404 and any other method a 501; in particular the server does
+not answer `HEAD`, so a probe that uses it must be pointed at `GET /ready`.
+
 `/health` response:
 
 ```json
