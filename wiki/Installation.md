@@ -2,66 +2,69 @@
 
 ## Prerequisites
 
-- Python 3.12 or higher
+- Python 3.12 or newer
 - An eero account with at least one network
+- The `eero-api` SDK, **8.0.1 or newer, below 9** (installed automatically; 4.0.0 of the
+  exporter does not work with eero-api 6.x/7.x and 3.x does not work with 8.x)
 
-## Install from PyPI (Recommended)
+## Install from PyPI
 
 ```bash
 pip install eero-prometheus-exporter
 ```
 
-## Install from Source
+## Install from source
 
 ```bash
-# Clone the repository
 git clone https://github.com/fulviofreitas/eero-prometheus-exporter.git
 cd eero-prometheus-exporter
-
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install the package
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -e .
 ```
 
-## Authentication
+## Authenticate
 
-Before collecting metrics, link your eero account using email or phone number:
+The exporter uses eero's identifier-then-code login (no password):
 
 ```bash
-# Using email
-eero-exporter login your-email@example.com
-
-# Using phone number
-eero-exporter login +15551234567
+eero-exporter login your-email@example.com     # or a phone number in E.164 form
 ```
 
-Check your email or SMS for the verification code and enter it when prompted. That's it—you're in! 🎉
-
-## Start Collecting Metrics
+Enter the code you receive by email or SMS. The session is stored in
+`~/.config/eero-exporter/session.json` with mode `0600` (choose another path with
+`--session-file` or `EERO_EXPORTER_SESSION_FILE`; every command honours it). Check it with:
 
 ```bash
-# Fire up the metrics server
+eero-exporter session-info     # path, mode, schema version, token present -- never the token
+eero-exporter validate         # makes one API call; exit 0 = valid
+```
+
+If you cannot type a code on the machine that runs the exporter (a container, for example),
+use the opt-in browser login page instead -- see [Docker](Docker#alternative-sign-in-from-the-browser).
+
+## Start collecting
+
+```bash
 eero-exporter serve
-
-# Or customize it
-eero-exporter serve --port 10052 --interval 60
+eero-exporter serve --port 10052 --interval 60 --log-level INFO
 ```
 
-Your metrics are now live at **http://localhost:10052/metrics** 🚀
+Metrics are at **http://localhost:10052/metrics**. With the defaults the exporter exposes
+the `core`, `extended` and `rf` tiers -- about 174 of the 193 declared metrics -- using
+29 API requests per network per cycle. See [Configuration](Configuration) for the optional
+tiers and [Metrics](Metrics) for the full list.
 
-## Available Endpoints
+## Endpoints
 
 | Endpoint | Purpose |
-|----------|---------|
-| `/metrics` | Prometheus metrics endpoint |
-| `/health` | Detailed health status (returns 503 when unhealthy) |
-| `/ready` | Readiness probe (always 200 if server is running) |
-| `/` | Index page with links |
+|---|---|
+| `/metrics` | Prometheus exposition (cached from the background collection loop) |
+| `/health` | JSON status; **503** while the session is invalid or the last collection failed |
+| `/ready` | Liveness: 200 whenever the HTTP server is up |
+| `/` | Index page |
+| `/auth` | Browser login page, only when `--auth-ui` is enabled (404 otherwise) |
 
-### Health Endpoint Response
+`/health` response:
 
 ```json
 {
@@ -73,18 +76,73 @@ Your metrics are now live at **http://localhost:10052/metrics** 🚀
 }
 ```
 
-## Next Steps
+When unhealthy it adds `last_error`, and with `--auth-ui` on, `"auth": "required"` and a
+hint to visit `/auth`.
 
-- [🐳 Docker Setup](Docker) — Run with Docker Compose (includes Grafana dashboard)
-- [⚙️ Configuration](Configuration) — Configure Prometheus scraping
-- [📊 Metrics Reference](Metrics) — Explore all 115+ metrics
+## Upgrading from 3.x
 
-## Grafana Dashboard
+4.0.0 is a breaking release. Read the release notes for the list of removed metrics and the
+new `status` label values, then follow these steps for every deployment type.
 
-Import the pre-built dashboard for instant visualization:
+### 1. Back up the session file
+
+```bash
+cp ~/.config/eero-exporter/session.json ~/session.json.schema1.bak
+chmod 600 ~/session.json.schema1.bak
+```
+
+(`docker cp <container>:/home/eero/.config/eero-exporter/session.json ...` or `kubectl cp`
+for containers.) 4.0.0 rewrites the file to credential schema 2 on first use and **3.x
+cannot read a schema-2 file** -- it overwrites the token with null. Without this backup a
+rollback needs a fresh login.
+
+### 2. Make the session directory writable
+
+The client saves the migrated record next to the original (temporary file plus rename), so
+the **directory** must be writable by the user running the exporter. Read-only bind mounts
+log an error every cycle; see [Docker](Docker#keeping-the-session-file-read-only) for the
+migrate-first alternative.
+
+### 3. Upgrade
+
+| Setup | Steps |
+|---|---|
+| pip / venv | `pip install -U 'eero-prometheus-exporter>=4,<5'`, restart `serve` |
+| Docker | pull the 4.x tag, switch the mount from the file to the directory (read-write) -- [Docker](Docker) |
+| Compose | update `docker-compose.yml` as in the repository, `docker compose pull && docker compose up -d` |
+| Kubernetes | new image tag; back the config directory with a writable volume (PVC or an `emptyDir` seeded by an init container from your Secret), set `fsGroup`/`runAsUser` to the image user; readiness on `/health`, liveness on `/ready` |
+| systemd | `pip install -U`, make sure the service user owns `~/.config/eero-exporter`, `systemctl restart`; if you enable `--auth-failure-exit`, add `RestartPreventExitStatus=2` so a dead session does not restart-loop |
+
+### 4. Verify
+
+- `eero-exporter session-info` reports `Schema version: 2`
+- `/health` returns 200 and `eero_up` is 1
+- `eero_exporter_api_requests_total{status!="success"}` shows only `premium_required`,
+  `feature_unavailable` or `not_found` for features your mesh lacks
+- Update dashboards and alerts that reference removed metrics or `status="error"`
+
+### Rollback
+
+1. Stop the 4.x process or container.
+2. Restore `session.json.schema1.bak` over the session file (mode 0600, owned by the
+   service user) **before** starting the old version. No backup: plan an
+   `eero-exporter login` right after.
+3. Install the previous release: `pip install 'eero-prometheus-exporter==3.19.2'` (its own
+   metadata caps eero-api below 7) or the `3.19.2` image tag.
+4. Check `eero_up 1` and re-apply any dashboard changes.
+
+## Next steps
+
+- [Docker](Docker) -- containers, compose, the full monitoring stack
+- [Configuration](Configuration) -- tiers, every flag, env var and YAML key
+- [Metrics](Metrics) -- the 193 metrics with their source paths
+- [Security](Security) -- what the exporter stores, sends and never exports
+
+## Grafana dashboard
+
+Import `grafana/eero-dashboard.json` from the repository, or use the compose `monitoring`
+profile for automatic provisioning:
 
 ```bash
 curl -O https://raw.githubusercontent.com/fulviofreitas/eero-prometheus-exporter/master/grafana/eero-dashboard.json
 ```
-
-Or use Docker Compose with the `monitoring` profile for automatic setup—see [Docker Setup](Docker).
