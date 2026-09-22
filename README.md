@@ -23,7 +23,7 @@ _Network health, every eero and radio, client devices, data usage, entitlements 
 
 > ### ⚠️ Upgrading from 3.x? 4.0.0 is a breaking release
 >
-> - Requires **eero-api 8.x**. 3.x installs stopped working when eero-api 8.0.0 was published; 4.0.0 pins `>=8.0.1,<9` and builds images from the lock file.
+> - Requires **eero-api 8.x**. 3.x installs stopped working when eero-api 8.0.0 was published; 4.0.0 pins `>=8.0.2,<9` and builds images from the lock file.
 > - **36 metrics were removed** (they never had an API source) and `eero_exporter_api_requests_total{status}` is now a closed enum -- see [Removed in 4.0.0](../../wiki/Metrics#removed-in-400).
 > - The **session file is rewritten** to a new format on first use and 3.x cannot read it back. **Back it up first**; the config directory must be writable (containers: mount the directory read-write).
 > - `--data-usage` became `--include-data-usage`; `--config` is kept as an alias of `--config-file`; `--include-diagnostics` is gone.

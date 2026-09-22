@@ -4,7 +4,7 @@
 
 - Python 3.12 or newer
 - An eero account with at least one network
-- The `eero-api` SDK, **8.0.1 or newer, below 9** (installed automatically; 4.0.0 of the
+- The `eero-api` SDK, **8.0.2 or newer, below 9** (installed automatically; 4.0.0 of the
   exporter does not work with eero-api 6.x/7.x and 3.x does not work with 8.x)
 
 ## Install from PyPI

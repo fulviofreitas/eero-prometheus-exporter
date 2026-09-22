@@ -1,6 +1,6 @@
 """Refresh-and-replay integration test (plan Sec7.1 / Q8).
 
-Exercises the REAL eero-api 8.0.1 ``EeroClient`` (not a mock of the
+Exercises the REAL eero-api 8.x ``EeroClient`` (not a mock of the
 adapter's ``self._client``) through the adapter, mocking only the outermost
 transport boundary -- ``aiohttp.ClientSession.request`` -- so the SDK's own
 401-``error.session.refresh``-detection, single-flight refresh, and replay

@@ -16,7 +16,7 @@ permitted to issue. Nothing here calls a ``set_*``/``create_*``/``delete_*``/
 ``update_*``/``run_*``/``pause_*``/``block_*``/``reboot_*``/``apply_*``/
 ``request_support``/``discover_*`` method on the underlying SDK client.
 
-Upstream (eero-api 8.0.1) exception -> local exception mapping
+Upstream (eero-api 8.x) exception -> local exception mapping
 ================================================================
 
 ======================================  ==============================

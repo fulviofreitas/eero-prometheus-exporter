@@ -1,6 +1,6 @@
 """Tests for the adapter's error-mapping layer (v8 typed exception classes).
 
-Constructs real eero-api 8.0.1 exception instances (never message-text
+Constructs real eero-api 8.x exception instances (never message-text
 doubles) as ``AsyncMock`` side effects on the underlying SDK client, and
 asserts the adapter maps each to the documented local class with
 ``status_code``/``error_code``/``group`` populated, and that the upstream

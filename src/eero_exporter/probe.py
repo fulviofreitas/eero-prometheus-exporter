@@ -1,4 +1,4 @@
-"""Strictly read-only live API probe for eero-api 8.0.1.
+"""Strictly read-only live API probe for eero-api 8.x.
 
 This module answers the shape questions in the 4.0.0 migration plan (§7.0) by
 walking a fixed allowlist of documented **read** endpoints against a real mesh
@@ -86,7 +86,7 @@ _LOGGER = logging.getLogger(__name__)
 try:
     TARGET_SDK_VERSION = importlib.metadata.version("eero-api")
 except importlib.metadata.PackageNotFoundError:  # pragma: no cover - dev checkouts
-    TARGET_SDK_VERSION = "8.0.1"
+    TARGET_SDK_VERSION = "8.0.2"
 
 #: Default number of GET requests the probe is allowed to issue.
 DEFAULT_BUDGET = 80

@@ -41,7 +41,7 @@ tests/fixtures/v8/       redacted API payloads (one per endpoint) used by the pa
 
 ## The SDK: eero-api 8.x
 
-- `eero-api` is pinned to `>=8.0.1,<9`. Docker images install from `uv.lock`, so an image
+- `eero-api` is pinned to `>=8.0.2,<9`. Docker images install from `uv.lock`, so an image
   never resolves a newer SDK than the lock.
 - **The SDK hands back raw envelopes, not Pydantic models.** (It does depend on Pydantic
   internally -- see `uv.lock` -- but no model instance reaches a caller.) Every call returns

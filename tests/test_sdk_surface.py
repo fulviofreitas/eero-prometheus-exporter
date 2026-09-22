@@ -1,4 +1,4 @@
-"""Test SDK surface compatibility with eero-api 8.0.1.
+"""Test SDK surface compatibility with eero-api 8.x.
 
 This test ensures:
 1. Every method the adapter calls exists on the real EeroClient
