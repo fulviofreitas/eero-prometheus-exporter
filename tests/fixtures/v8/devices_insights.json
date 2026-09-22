@@ -1,0 +1,25 @@
+{
+  "insight_type": "blocked",
+  "insights": [
+    {
+      "nickname": "Laptop",
+      "hostname": "laptop-1",
+      "manufacturer": "Acme",
+      "device_type": "laptop",
+      "is_private": false,
+      "connection_type": "wireless",
+      "sum": 4,
+      "insights_url": "/2.2/networks/999001/devices/aa:bb:cc:dd:ee:01/insights"
+    },
+    {
+      "nickname": "Phone",
+      "hostname": "phone-1",
+      "manufacturer": "Acme",
+      "device_type": "phone",
+      "is_private": false,
+      "connection_type": "wireless",
+      "sum": 0,
+      "insights_url": "/2.2/networks/999001/devices/aa:bb:cc:dd:ee:02/insights"
+    }
+  ]
+}

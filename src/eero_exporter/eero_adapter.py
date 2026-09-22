@@ -1231,3 +1231,191 @@ class EeroClient:
             insight_type=insight_type,
         )
         return dict(_extract_data(raw_response))
+
+    # =========================================================================
+    # rf tier -- channel utilisation (§9 #20/#21, §11.7). One unparameterised
+    # call returns every eero and every band; no `band=` fan-out.
+    # =========================================================================
+
+    @_wrap_api_call()
+    async def get_channel_utilization(
+        self, network_id: str, *, start: str, end: str
+    ) -> dict[str, Any]:
+        """Get Wi-Fi channel utilisation for every eero and band.
+
+        No ``band=`` is passed -- a single unparameterised call already
+        returns every band for every eero (v8 probe shape summary §5/§11.7).
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_channel_utilization(network_id, start=start, end=end)
+        return dict(_extract_data(raw_response))
+
+    # =========================================================================
+    # per_device tier -- device-level insights (§9 #11, §11.6)
+    # =========================================================================
+
+    @_wrap_api_call()
+    async def get_devices_insights(
+        self,
+        network_id: str,
+        *,
+        start: str,
+        end: str,
+        cadence: str,
+        insight_type: str,
+    ) -> dict[str, Any]:
+        """Get insights series for every device on a network, for one insight type."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_devices_insights(
+            network_id, start=start, end=end, cadence=cadence, insight_type=insight_type
+        )
+        return dict(_extract_data(raw_response))
+
+    # =========================================================================
+    # per_eero tier -- nightlight, connections, ouicheck (§9 #44)
+    # =========================================================================
+
+    @_wrap_api_call()
+    async def get_nightlight(self, eero_id: str, network_id: str) -> dict[str, Any]:
+        """Get an eero's nightlight settings.
+
+        Raises :class:`EeroFeatureUnavailableError` on hardware without a
+        Beacon light -- an expected state, not a scrape error.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_nightlight(eero_id, network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_connections(self, eero_id: str, network_id: str) -> dict[str, Any]:
+        """Get an eero's client connections (ports and wireless devices)."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_connections(eero_id, network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_ouicheck(self, network_id: str, *, serial: str, version: str) -> dict[str, Any]:
+        """Get an eero's OUI/compatibility check result."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_ouicheck(network_id, serial=serial, version=version)
+        return dict(_extract_data(raw_response))
+
+    # =========================================================================
+    # per_profile tier -- DNS policy applications (§9 #42)
+    # =========================================================================
+
+    @_wrap_api_call()
+    async def get_dns_policy_applications(self, profile_id: str, network_id: str) -> dict[str, Any]:
+        """Get a profile's DNS-policy application list.
+
+        Premium-only in practice: raises :class:`EeroPremiumRequiredError` or
+        :class:`EeroNotFoundError` on non-subscribed/absent profiles -- both
+        expected states, not scrape errors.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_dns_policy_applications(profile_id, network_id)
+        return dict(_extract_data(raw_response))
+
+    # =========================================================================
+    # unverified tier -- routing, backup access points, cellular backup,
+    # network scan, speed-test history, multistaticip, ac-compat,
+    # power-saving schedules (§9 #29-41). `get_thread` and `get_transfer_stats`
+    # already exist above and are reused as-is by this tier.
+    # =========================================================================
+
+    @_wrap_api_call()
+    async def get_routing(self, network_id: str) -> dict[str, Any]:
+        """Get the network's routing resource (devices/reservations/forwards/pinholes)."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_routing(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def list_backup_access_points(self, network_id: str) -> list[dict[str, Any]]:
+        """Get the list of configured Wi-Fi backup access points. Never returns ssid/password."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.list_backup_access_points(network_id)
+        return _extract_list(raw_response)
+
+    @_wrap_api_call()
+    async def get_cellular_backup_usage(self, network_id: str) -> dict[str, Any]:
+        """Get cellular backup data usage."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_cellular_backup_usage(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_cellular_backup_events(self, network_id: str) -> dict[str, Any]:
+        """Get cellular backup outage events."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_cellular_backup_events(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_network_scan(self, network_id: str) -> dict[str, Any]:
+        """Get the network scan result (conflicting-SSID flag only)."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_network_scan(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_speed_tests(self, network_id: str, *, limit: int) -> list[dict[str, Any]]:
+        """Get past speed test results, most recent first, bounded by ``limit``."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_speed_tests(network_id, limit=limit)
+        return _extract_list(raw_response)
+
+    @_wrap_api_call()
+    async def get_multistaticip(self, network_id: str) -> dict[str, Any]:
+        """Get the multi-static-IP configuration.
+
+        Raises :class:`EeroNotFoundError` (404 ``error.network.multistaticip_not_found``)
+        when the feature is not provisioned -- an expected state.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_multistaticip(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_ac_compat(self, network_id: str) -> dict[str, Any]:
+        """Get the AC-compatibility flag."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_ac_compat(network_id)
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
+    async def get_power_saving_schedules(self, network_id: str) -> dict[str, Any]:
+        """Get configured power-saving schedules."""
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_power_saving_schedules(network_id)
+        return dict(_extract_data(raw_response))

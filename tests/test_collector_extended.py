@@ -79,6 +79,7 @@ def _mock_client(**overrides: object) -> MagicMock:
     client.get_advanced_content_filter = AsyncMock(return_value=_load("dns_filter.json"))
     client.get_subnets_config = AsyncMock(return_value=_load("subnets.json"))
     client.get_profiles_insights = AsyncMock(return_value=_load("profiles_insights.json"))
+    client.get_channel_utilization = AsyncMock(return_value={})
 
     for name, value in overrides.items():
         setattr(client, name, value)

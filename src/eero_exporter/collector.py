@@ -4,7 +4,7 @@ import logging
 import re
 import time
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .config import ExporterConfig
@@ -28,6 +28,11 @@ from .metrics import (
     ACCOUNT_NETWORKS_COUNT,
     ACCOUNT_PREMIUM_NEXT_RENEWAL,
     API_STATUS_VALUES,
+    BACKUP_ACCESS_POINT_CONNECTIVITY_INFO,
+    BACKUP_ACCESS_POINT_ENABLED,
+    BACKUP_ACCESS_POINTS_COUNT,
+    CELLULAR_BACKUP_OUTAGES_COUNT,
+    CELLULAR_BACKUP_USAGE_ITEMS_COUNT,
     DATA_USAGE_ACTIVE_CLIENTS,
     DATA_USAGE_DOWNLOAD_BYTES,
     DATA_USAGE_UPLOAD_BYTES,
@@ -43,6 +48,7 @@ from .metrics import (
     DEVICE_FIRST_SEEN_TIMESTAMP,
     DEVICE_FREQUENCY,
     DEVICE_INFO,
+    DEVICE_INSIGHTS_TOTAL,
     DEVICE_IS_GUEST,
     DEVICE_LAST_ACTIVE_TIMESTAMP,
     DEVICE_PACKET_STATS_RX_DROP_PPM,
@@ -69,11 +75,23 @@ from .metrics import (
     DNS_POLICY_ALLOWED_DOMAINS_COUNT,
     DNS_POLICY_BLOCKED_DOMAINS_COUNT,
     EERO_BAND_SUPPORTED,
+    EERO_CHANNEL_ACS_EVENTS_TOTAL,
+    EERO_CHANNEL_BUSY_LAST,
+    EERO_CHANNEL_BUSY_MINUTES,
+    EERO_CHANNEL_INFO,
+    EERO_CHANNEL_NOISE_LAST,
+    EERO_CHANNEL_RX_OTHER_LAST,
+    EERO_CHANNEL_RX_TX_LAST,
+    EERO_CHANNEL_UTILIZATION_AVG_PERCENT,
+    EERO_CHANNEL_UTILIZATION_MAX_PERCENT,
+    EERO_CHANNEL_UTILIZATION_P99_PERCENT,
     EERO_CONNECTED_CLIENTS,
     EERO_CONNECTED_WIRED_CLIENTS,
     EERO_CONNECTED_WIRELESS_CLIENTS,
     EERO_CONNECTION_TYPE_INFO,
     EERO_DATA_USAGE_BYTES,
+    EERO_EERO_CONNECTIONS_COUNT,
+    EERO_EERO_ROLE_INFO,
     EERO_HEARTBEAT_OK,
     EERO_INFO,
     EERO_IS_GATEWAY,
@@ -89,6 +107,8 @@ from .metrics import (
     EERO_NIGHTLIGHT_ENABLED,
     EERO_NIGHTLIGHT_SCHEDULE_ENABLED,
     EERO_OS_VERSION_INFO,
+    EERO_OUICHECK_CAN_ADD,
+    EERO_OUICHECK_MUST_UPDATE,
     EERO_POWER_SAVING_ACTIVE,
     EERO_POWER_SOURCE_INFO,
     EERO_PROVIDES_WIFI,
@@ -123,6 +143,7 @@ from .metrics import (
     INSIGHTS_ADBLOCK_TOTAL,
     INSIGHTS_BLOCKED_TOTAL,
     INSIGHTS_INSPECTED_TOTAL,
+    NETWORK_AC_COMPAT,
     NETWORK_AD_BLOCK_ENABLED,
     NETWORK_BACKUP_INTERNET_ENABLED,
     NETWORK_BAND_STEERING_ENABLED,
@@ -151,13 +172,20 @@ from .metrics import (
     NETWORK_MALWARE_BLOCK_ENABLED,
     NETWORK_MEMBERS_COUNT,
     NETWORK_MLO_MODE_INFO,
+    NETWORK_MULTISTATICIP_ENABLED,
     NETWORK_NOTIFICATION_ENABLED,
     NETWORK_NOTIFICATIONS_UNREAD,
     NETWORK_PERMISSION,
     NETWORK_PORT_FORWARDS_COUNT,
     NETWORK_POWER_SAVING_ENABLED,
+    NETWORK_POWER_SAVING_SCHEDULES_COUNT,
     NETWORK_PREMIUM_ENABLED,
     NETWORK_ROLE_INFO,
+    NETWORK_ROUTING_DEVICES_COUNT,
+    NETWORK_ROUTING_FORWARDS_COUNT,
+    NETWORK_ROUTING_PINHOLES_COUNT,
+    NETWORK_ROUTING_RESERVATIONS_COUNT,
+    NETWORK_SCAN_CONFLICTING_SSID,
     NETWORK_SQM_ENABLED,
     NETWORK_STATUS,
     NETWORK_THREAD_ENABLED,
@@ -175,11 +203,13 @@ from .metrics import (
     PROFILE_CONNECTED_DEVICES_COUNT,
     PROFILE_CONTENT_FILTERS_SET,
     PROFILE_DEVICES_COUNT,
+    PROFILE_DNS_POLICY_APPLICATIONS_COUNT,
     PROFILE_INSIGHTS_TOTAL,
     PROFILE_PAUSED,
     PROFILE_SCHEDULES_COUNT,
     SPEED_DOWNLOAD_MBPS,
     SPEED_TEST_TIMESTAMP,
+    SPEED_TESTS_TOTAL,
     SPEED_UPLOAD_MBPS,
     SUBNET_ENABLED,
     SUBNET_IGMP_SNOOPING_ENABLED,
@@ -220,6 +250,24 @@ def _extract_profile_id_from_url(url: Any) -> str:
     if not url:
         return ""
     match = _PROFILE_ID_RE.search(str(url))
+    if match:
+        return match.group(1)
+    return _extract_id_from_url(url)
+
+
+_DEVICE_ID_RE = re.compile(r"/devices/([^/?]+)")
+
+
+def _extract_device_id_from_url(url: Any) -> str:
+    """Extract a device ID from a ``.../devices/<id>/...`` URL path.
+
+    Falls back to :func:`_extract_id_from_url` (last path segment) if the
+    ``devices/<id>`` pattern is not present, since the exact URL shape of
+    device-level ``insights_url`` was redacted in the v8 probe (§11.6).
+    """
+    if not url:
+        return ""
+    match = _DEVICE_ID_RE.search(str(url))
     if match:
         return match.group(1)
     return _extract_id_from_url(url)
@@ -369,9 +417,45 @@ _SUBNET_BOOL_FIELDS: dict[str, Any] = {
     "igmp_snooping_enable": SUBNET_IGMP_SNOOPING_ENABLED,
 }
 
-# The three insight types the API supports, shared with profile-level
-# insights (§11.6).
-_PROFILE_INSIGHT_TYPES: tuple[str, ...] = ("adblock", "blocked", "inspected")
+# The three insight types the API supports, shared by network-, profile-, and
+# device-level insights (§11.6).
+_INSIGHT_TYPES: tuple[str, ...] = ("adblock", "blocked", "inspected")
+
+# Bound on `get_speed_tests(limit=...)` for the unverified tier's speed-test
+# history read (§9 #27) -- a small fixed window, not the full history.
+_SPEED_TESTS_LIMIT = 5
+
+# Module-level set to deduplicate "unverified-tier payload keys" DEBUG log
+# entries within a single collection cycle, keyed by (endpoint, network_id).
+# Cleared at the start of every collect() cycle so a key set that reappears
+# in a later cycle is logged again (schema drift should stay visible).
+_UNVERIFIED_KEYS_LOGGED_THIS_CYCLE: set[tuple[str, str]] = set()
+
+
+def _log_observed_keys_once(endpoint: str, network_id: str, payload: Any) -> None:
+    """DEBUG-log the top-level key set of an unverified-tier payload, once per cycle.
+
+    Never logs a value -- only the key names -- so a schema change is
+    discoverable without risking a leak of account data (§ hard rules).
+
+    Args:
+        endpoint: The endpoint label the payload came from.
+        network_id: The network the payload was collected for.
+        payload: The raw (post-envelope-extraction) payload. Only ``dict``
+            payloads produce a key set; anything else is a no-op.
+    """
+    if not isinstance(payload, dict):
+        return
+    dedup_key = (endpoint, network_id)
+    if dedup_key in _UNVERIFIED_KEYS_LOGGED_THIS_CYCLE:
+        return
+    _UNVERIFIED_KEYS_LOGGED_THIS_CYCLE.add(dedup_key)
+    _LOGGER.debug(
+        "%s: observed top-level keys for network %s: %s",
+        endpoint,
+        network_id,
+        sorted(payload.keys()),
+    )
 
 
 # Three timestamp shapes coexist across the eero API (§11.0 of the v8 probe
@@ -965,11 +1049,41 @@ class EeroCollector:
         notifications x2, dns_filter, subnets) plus the 3 profile-insights
         calls, all gated by `include_extended` (and `dns_filter` additionally
         by `include_premium`).
+
+        Commit 8 adds the remaining tiers, each independently gated:
+
+        - `rf` (default ON): +1 GET/network -- one unparameterised
+          `get_channel_utilization` call covers every eero and every band.
+        - `per_device` (default OFF): +3 GETs/network -- one list-level
+          `get_devices_insights` call per insight type (adblock/blocked/
+          inspected); covers every device on the network in those 3 calls,
+          not 3·D.
+        - `per_eero` (default OFF): +3 GETs/eero -- `get_nightlight`,
+          `get_connections`, `get_ouicheck`, each independently guarded.
+        - `per_profile` (default OFF): +1 GET/profile --
+          `get_dns_policy_applications`, premium-gated.
+        - `unverified` (default OFF): +12 GETs/network -- thread (key-log
+          only), routing, backup access points, cellular usage + events,
+          network scan, speed-test history, multistaticip, ac-compat,
+          power-saving schedules, and a transfer-stats stub (network + first
+          device, if any) that exports nothing.
+
+        GET counts here never scale with D or P except through the
+        per_device/per_eero/per_profile tiers (fixed-cost 3 GETs, 3·E GETs,
+        and P GETs respectively) -- every core/extended read is list-level.
+        For the unit-test fixture mesh (E=4, D=3, P=2, see
+        `tests/test_collector_readonly.py`) this measures as **29** adapter
+        calls with only defaults on, and **58** with every tier on (29 + 3
+        `per_device` + 3·E=12 `per_eero` + P=2 `per_profile` + 12
+        `unverified`). For the probed mesh (E=4, D=137, P=10) defaults are
+        the same **29** (mesh-size-independent), and all-tiers-on is
+        **29 + 3 + 12 + 10 + 12 = 66**.
         """
         start_time = time.monotonic()
         success = False
         self.last_error_kind = None
         self._api_requests_this_cycle = 0
+        _UNVERIFIED_KEYS_LOGGED_THIS_CYCLE.clear()
 
         try:
             async with EeroClient(
@@ -1149,16 +1263,18 @@ class EeroCollector:
         await self._collect_network_feature_flags(client, network_id, network_name, network_details)
         self._collect_network_envelope_extras(network_id, network_name, network_details)
         self._collect_network_capabilities(network_id, network_details)
-        await self._collect_eero_metrics(client, network_id, network_name, network_details)
+        eeros = await self._collect_eero_metrics(client, network_id, network_name, network_details)
 
+        devices: list[dict[str, Any]] | None = None
         if self._include_devices:
-            await self._collect_device_metrics(client, network_id, network_name)
+            devices = await self._collect_device_metrics(client, network_id, network_name)
 
         if self._include_data_usage:
             await self._collect_data_usage_metrics(client, network_id, network_details)
 
+        profiles: list[dict[str, Any]] | None = None
         if self._include_profiles:
-            await self._collect_profile_metrics(client, network_id)
+            profiles = await self._collect_profile_metrics(client, network_id)
 
         if self._include_premium:
             await self._collect_premium_metrics(client, network_id, network_name, network_details)
@@ -1187,14 +1303,40 @@ class EeroCollector:
         if self._include_extended:
             await self._collect_extended_metrics(client, network_id)
 
+        if self._include_rf:
+            await self._collect_rf_metrics(client, network_id)
+
+        if self._include_per_device:
+            await self._collect_per_device_metrics(client, network_id)
+
+        if self._include_per_eero:
+            await self._collect_per_eero_metrics(client, network_id, eeros)
+
+        if self._include_per_profile:
+            profiles_for_tier = profiles
+            if profiles_for_tier is None:
+                profiles_for_tier, _exc = await self._api_get(
+                    "profiles", client.get_profiles(network_id)
+                )
+                profiles_for_tier = profiles_for_tier or []
+            await self._collect_per_profile_metrics(client, network_id, profiles_for_tier)
+
+        if self._include_unverified:
+            await self._collect_unverified_metrics(client, network_id, devices)
+
     async def _collect_eero_metrics(
         self,
         client: EeroClient,
         network_id: str,
         network_name: str,
         network_details: dict[str, Any],
-    ) -> None:
-        """Collect metrics for eero devices."""
+    ) -> list[dict[str, Any]]:
+        """Collect metrics for eero devices.
+
+        Returns:
+            The raw eero list (possibly empty), so callers (the `per_eero`
+            tier) can reuse it without an extra GET.
+        """
         if self._eeros_from_envelope:
             # The network envelope already embeds every eero inline
             # (`network.data.eeros.data`) -- skip the extra GET entirely.
@@ -1206,7 +1348,7 @@ class EeroCollector:
             eeros, exc = await self._api_get("eeros", client.get_eeros(network_id))
             if exc is not None:
                 _LOGGER.warning(f"Failed to get eeros: {exc}")
-                return
+                return []
 
         NETWORK_EEROS_COUNT.labels(network_id=network_id, name=network_name).set(len(eeros))
 
@@ -1440,6 +1582,8 @@ class EeroCollector:
                 _LOGGER.warning("Skipping eero item %d: %s: %s", idx, type(exc).__name__, exc)
                 continue
 
+        return eeros
+
     def _collect_eero_envelope_extras(
         self, network_id: str, eero_id: str, location: str, eero: dict[str, Any]
     ) -> None:
@@ -1542,12 +1686,18 @@ class EeroCollector:
 
     async def _collect_device_metrics(
         self, client: EeroClient, network_id: str, network_name: str
-    ) -> None:
-        """Collect metrics for client devices."""
+    ) -> list[dict[str, Any]] | None:
+        """Collect metrics for client devices.
+
+        Returns:
+            The raw device list, so callers (the unverified tier's
+            transfer-stub) can reuse it without an extra GET, or ``None`` if
+            the read failed.
+        """
         devices, exc = await self._api_get("devices", client.get_devices(network_id))
         if exc is not None:
             _LOGGER.warning(f"Failed to get devices: {exc}")
-            return
+            return None
 
         connected_count = sum(1 for d in devices if d.get("connected", False))
         NETWORK_CLIENTS_COUNT.labels(network_id=network_id, name=network_name).set(connected_count)
@@ -1892,6 +2042,8 @@ class EeroCollector:
                 _LOGGER.warning("Skipping device item %d: %s: %s", idx, type(exc).__name__, exc)
                 continue
 
+        return cast(list[dict[str, Any]], devices)
+
     def _set_device_packet_stats(
         self, network_id: str, device_id: str, connectivity: dict[str, Any]
     ) -> None:
@@ -1921,12 +2073,19 @@ class EeroCollector:
             if value is not None:
                 metric.labels(**labels).set(value)
 
-    async def _collect_profile_metrics(self, client: EeroClient, network_id: str) -> None:
-        """Collect metrics for profiles."""
+    async def _collect_profile_metrics(
+        self, client: EeroClient, network_id: str
+    ) -> list[dict[str, Any]] | None:
+        """Collect metrics for profiles.
+
+        Returns:
+            The raw profile list, so callers (the `per_profile` tier) can
+            reuse it without an extra GET, or ``None`` if the read failed.
+        """
         profiles, exc = await self._api_get("profiles", client.get_profiles(network_id))
         if exc is not None:
             _LOGGER.warning(f"Failed to get profiles: {exc}")
-            return
+            return None
 
         for idx, profile in enumerate(profiles):
             try:
@@ -1998,6 +2157,8 @@ class EeroCollector:
             except Exception as exc:
                 _LOGGER.warning("Skipping profile item %d: %s: %s", idx, type(exc).__name__, exc)
                 continue
+
+        return cast(list[dict[str, Any]], profiles)
 
     async def _collect_data_usage_metrics(
         self,
@@ -3097,7 +3258,7 @@ class EeroCollector:
         end_str = _format_utc_z(now)
         start_str = _format_utc_z(now - timedelta(hours=24))
 
-        for insight_type in _PROFILE_INSIGHT_TYPES:
+        for insight_type in _INSIGHT_TYPES:
             data, exc = await self._api_get(
                 "profiles_insights",
                 client.get_profiles_insights(
@@ -3137,3 +3298,457 @@ class EeroCollector:
                         item_exc,
                     )
                     continue
+
+    async def _collect_rf_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect the `rf` tier: one unparameterised channel-utilization call.
+
+        No `band=` is passed -- the single call returns every eero and every
+        band (§9 #20/#21, §11.7 of the v8 probe shape summary).
+        """
+        now = datetime.now(UTC)
+        end_str = _format_utc_z(now)
+        start_str = _format_utc_z(now - timedelta(hours=24))
+
+        data, exc = await self._api_get(
+            "channel_utilization",
+            client.get_channel_utilization(network_id, start=start_str, end=end_str),
+        )
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get channel utilization: {exc}")
+            return
+
+        eeros_meta = data.get("eeros")
+        if isinstance(eeros_meta, list):
+            for meta_item in eeros_meta:
+                if not isinstance(meta_item, dict):
+                    continue
+                role_eero_id = meta_item.get("eero_id")
+                role = meta_item.get("role")
+                if role_eero_id is not None and role:
+                    EERO_EERO_ROLE_INFO.labels(
+                        network_id=network_id, eero_id=str(role_eero_id)
+                    ).info({"role": str(role)})
+
+        utilization = data.get("utilization")
+        if not isinstance(utilization, list):
+            return
+
+        for idx, item in enumerate(utilization):
+            try:
+                if not isinstance(item, dict):
+                    continue
+                eero_id = item.get("eero_id")
+                band = item.get("band")
+                if eero_id is None or band not in _CHANNEL_UTILIZATION_BANDS:
+                    continue
+                labels = {"network_id": network_id, "eero_id": str(eero_id), "band": band}
+
+                avg = _coerce_numeric(
+                    item.get("average_utilization"), field_name="average_utilization"
+                )
+                if avg is not None:
+                    EERO_CHANNEL_UTILIZATION_AVG_PERCENT.labels(**labels).set(avg)
+
+                max_utilization = _coerce_numeric(
+                    item.get("max_utilization"), field_name="max_utilization"
+                )
+                if max_utilization is not None:
+                    EERO_CHANNEL_UTILIZATION_MAX_PERCENT.labels(**labels).set(max_utilization)
+
+                p99 = _coerce_numeric(item.get("p99_utilization"), field_name="p99_utilization")
+                if p99 is not None:
+                    EERO_CHANNEL_UTILIZATION_P99_PERCENT.labels(**labels).set(p99)
+
+                busy_minutes = _coerce_numeric(
+                    item.get("minutes_over_busy_threshold"),
+                    field_name="minutes_over_busy_threshold",
+                )
+                if busy_minutes is not None:
+                    EERO_CHANNEL_BUSY_MINUTES.labels(**labels).set(busy_minutes)
+
+                channel = item.get("channel")
+                center_channel = item.get("center_channel")
+                channel_bandwidth = item.get("channel_bandwidth")
+                frequency = item.get("frequency")
+                EERO_CHANNEL_INFO.labels(**labels).info(
+                    {
+                        "channel": str(channel) if channel is not None else "unknown",
+                        "center_channel": (
+                            str(center_channel) if center_channel is not None else "unknown"
+                        ),
+                        "channel_bandwidth": str(channel_bandwidth or "unknown"),
+                        "frequency": str(frequency) if frequency is not None else "unknown",
+                    }
+                )
+
+                acs_events = item.get("acs_events")
+                if isinstance(acs_events, list):
+                    EERO_CHANNEL_ACS_EVENTS_TOTAL.labels(**labels).set(len(acs_events))
+
+                time_series = item.get("time_series_data")
+                if isinstance(time_series, list) and time_series:
+                    last_sample = time_series[-1]
+                    if isinstance(last_sample, dict):
+                        busy = _coerce_numeric(last_sample.get("busy"), field_name="channel_busy")
+                        if busy is not None:
+                            EERO_CHANNEL_BUSY_LAST.labels(**labels).set(busy)
+                        noise = _coerce_numeric(
+                            last_sample.get("noise"), field_name="channel_noise"
+                        )
+                        if noise is not None:
+                            EERO_CHANNEL_NOISE_LAST.labels(**labels).set(noise)
+                        rx_tx = _coerce_numeric(
+                            last_sample.get("rx_tx"), field_name="channel_rx_tx"
+                        )
+                        if rx_tx is not None:
+                            EERO_CHANNEL_RX_TX_LAST.labels(**labels).set(rx_tx)
+                        rx_other = _coerce_numeric(
+                            last_sample.get("rx_other"), field_name="channel_rx_other"
+                        )
+                        if rx_other is not None:
+                            EERO_CHANNEL_RX_OTHER_LAST.labels(**labels).set(rx_other)
+            except Exception as item_exc:
+                _LOGGER.warning(
+                    "Skipping channel utilization item %d: %s: %s",
+                    idx,
+                    type(item_exc).__name__,
+                    item_exc,
+                )
+                continue
+
+    async def _collect_per_device_metrics(self, client: EeroClient, network_id: str) -> None:
+        """Collect the `per_device` tier: device-level insights, list-level (§9 #11, §11.6).
+
+        Three GETs total (one per insight type), each covering every device
+        on the network -- not 3·D. Cardinality (D series per type), not
+        request count, is why this tier defaults off.
+        """
+        now = datetime.now(UTC)
+        end_str = _format_utc_z(now)
+        start_str = _format_utc_z(now - timedelta(hours=24))
+
+        for insight_type in _INSIGHT_TYPES:
+            data, exc = await self._api_get(
+                "devices_insights",
+                client.get_devices_insights(
+                    network_id,
+                    start=start_str,
+                    end=end_str,
+                    cadence="daily",
+                    insight_type=insight_type,
+                ),
+            )
+            if exc is not None:
+                _LOGGER.debug(f"Failed to get {insight_type} device insights: {exc}")
+                continue
+
+            insights = data.get("insights")
+            if not isinstance(insights, list):
+                continue
+
+            for idx, item in enumerate(insights):
+                try:
+                    if not isinstance(item, dict):
+                        continue
+                    device_id = _extract_device_id_from_url(item.get("insights_url"))
+                    if not device_id:
+                        continue
+                    total = item.get("sum")
+                    if total is None:
+                        continue
+                    DEVICE_INSIGHTS_TOTAL.labels(
+                        network_id=network_id, device_id=device_id, type=insight_type
+                    ).set(float(total))
+                except Exception as item_exc:
+                    _LOGGER.warning(
+                        "Skipping device insights item %d: %s: %s",
+                        idx,
+                        type(item_exc).__name__,
+                        item_exc,
+                    )
+                    continue
+
+    async def _collect_per_eero_metrics(
+        self,
+        client: EeroClient,
+        network_id: str,
+        eeros: list[dict[str, Any]] | None,
+    ) -> None:
+        """Collect the `per_eero` tier: nightlight, connections, ouicheck (§9 #44).
+
+        Three independently-guarded GETs per eero. `get_nightlight` raises
+        `EeroFeatureUnavailableError` on hardware without a Beacon light (an
+        expected state, not a scrape error) -- no shape was ever observed
+        live for this endpoint, so nothing is exported from a success
+        response either; brightness/enabled/schedule are already sourced
+        from the envelope (`eeros[].nightlight`).
+        """
+        if not eeros:
+            return
+
+        for eero in eeros:
+            if not isinstance(eero, dict):
+                continue
+            eero_id = _extract_id_from_url(eero.get("url", ""))
+            if not eero_id:
+                continue
+
+            _, exc = await self._api_get("nightlight", client.get_nightlight(eero_id, network_id))
+            if exc is not None:
+                _LOGGER.debug(f"Failed to get nightlight for eero {eero_id}: {exc}")
+
+            connections, exc = await self._api_get(
+                "eero_connections", client.get_connections(eero_id, network_id)
+            )
+            if exc is not None:
+                _LOGGER.debug(f"Failed to get connections for eero {eero_id}: {exc}")
+            else:
+                wireless_devices = connections.get("wireless_devices")
+                if isinstance(wireless_devices, list):
+                    EERO_EERO_CONNECTIONS_COUNT.labels(network_id=network_id, eero_id=eero_id).set(
+                        len(wireless_devices)
+                    )
+
+            serial = eero.get("serial")
+            os_version = eero.get("os_version") or eero.get("os")
+            if not serial or not os_version:
+                continue
+
+            ouicheck, exc = await self._api_get(
+                "ouicheck",
+                client.get_ouicheck(network_id, serial=str(serial), version=str(os_version)),
+            )
+            if exc is not None:
+                _LOGGER.debug(f"Failed to get ouicheck for eero {eero_id}: {exc}")
+                continue
+
+            can_add = ouicheck.get("can_add")
+            if isinstance(can_add, bool):
+                EERO_OUICHECK_CAN_ADD.labels(network_id=network_id, eero_id=eero_id).set(
+                    1 if can_add else 0
+                )
+            must_update = ouicheck.get("must_update")
+            if isinstance(must_update, bool):
+                EERO_OUICHECK_MUST_UPDATE.labels(network_id=network_id, eero_id=eero_id).set(
+                    1 if must_update else 0
+                )
+
+    async def _collect_per_profile_metrics(
+        self,
+        client: EeroClient,
+        network_id: str,
+        profiles: list[dict[str, Any]] | None,
+    ) -> None:
+        """Collect the `per_profile` tier: DNS-policy applications (§9 #42).
+
+        One GET per profile. Premium-gated in practice --
+        `EeroPremiumRequiredError`/`EeroNotFoundError` are expected states on
+        non-subscribed accounts or profiles with no policy configured.
+        """
+        if not profiles:
+            return
+
+        for profile in profiles:
+            if not isinstance(profile, dict):
+                continue
+            profile_id = _extract_id_from_url(profile.get("url", ""))
+            if not profile_id:
+                continue
+
+            data, exc = await self._api_get(
+                "profile_dns_apps",
+                client.get_dns_policy_applications(profile_id, network_id),
+            )
+            if exc is not None:
+                _LOGGER.debug(
+                    f"Failed to get DNS policy applications for profile {profile_id}: {exc}"
+                )
+                continue
+
+            applications = data.get("applications")
+            if isinstance(applications, list):
+                PROFILE_DNS_POLICY_APPLICATIONS_COUNT.labels(
+                    network_id=network_id, profile_id=profile_id
+                ).set(len(applications))
+
+    async def _collect_unverified_metrics(
+        self,
+        client: EeroClient,
+        network_id: str,
+        devices: list[dict[str, Any]] | None,
+    ) -> None:
+        """Collect the `unverified` tier (§9 #22, #28-41 of the v8 probe shape summary).
+
+        Every read here is a documented eero-api method whose element shape
+        was never observed with real data, was empty, or was an expected
+        error on the probed account. Values are exported only for keys the
+        shape summary actually observed; everything else is key-logged at
+        DEBUG (never a value) so schema drift is discoverable without
+        guessing.
+        """
+        # --- thread: mostly key material, no counts on this payload
+        # (§3 "thread"); key-log only. `eero_thread_enabled` is already
+        # sourced from the network envelope in the core tier -- this is the
+        # only place `get_thread` is called.
+        thread_data, exc = await self._api_get("thread", client.get_thread(network_id))
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get thread: {exc}")
+        else:
+            _log_observed_keys_once("thread", network_id, thread_data)
+
+        # --- routing: counts only; all four collections were empty on
+        # probed data, so the port-forward remap remains unverified.
+        routing, exc = await self._api_get("routing", client.get_routing(network_id))
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get routing: {exc}")
+        else:
+            for key, metric in (
+                ("devices", NETWORK_ROUTING_DEVICES_COUNT),
+                ("reservations", NETWORK_ROUTING_RESERVATIONS_COUNT),
+                ("forwards", NETWORK_ROUTING_FORWARDS_COUNT),
+                ("pinholes", NETWORK_ROUTING_PINHOLES_COUNT),
+            ):
+                collection = routing.get(key)
+                items = collection.get("data") if isinstance(collection, dict) else None
+                if isinstance(items, list):
+                    metric.labels(network_id=network_id).set(len(items))
+
+        # --- backup access points: status vocabulary known
+        # (failure|unknown), no success value ever observed. Never exports
+        # ssid/password/failure_reason (free text).
+        aps, exc = await self._api_get(
+            "backup_access_points", client.list_backup_access_points(network_id)
+        )
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get backup access points: {exc}")
+        elif isinstance(aps, list):
+            BACKUP_ACCESS_POINTS_COUNT.labels(network_id=network_id).set(len(aps))
+            for idx, ap in enumerate(aps):
+                if not isinstance(ap, dict):
+                    continue
+                index = str(idx)
+                enabled = ap.get("enabled")
+                if isinstance(enabled, bool):
+                    BACKUP_ACCESS_POINT_ENABLED.labels(network_id=network_id, index=index).set(
+                        1 if enabled else 0
+                    )
+                connectivity = ap.get("connectivity")
+                status = connectivity.get("status") if isinstance(connectivity, dict) else None
+                if isinstance(status, str):
+                    BACKUP_ACCESS_POINT_CONNECTIVITY_INFO.labels(
+                        network_id=network_id,
+                        index=index,
+                        status=_sanitize_label_value(status),
+                    ).info({})
+
+        # --- cellular backup usage/events: both verified-empty; element
+        # shapes were never observed (no cellular hardware on the probed mesh).
+        usage, exc = await self._api_get(
+            "cellular_backup_usage", client.get_cellular_backup_usage(network_id)
+        )
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get cellular backup usage: {exc}")
+        else:
+            usage_items = usage.get("backup_usage_items")
+            if isinstance(usage_items, list):
+                CELLULAR_BACKUP_USAGE_ITEMS_COUNT.labels(network_id=network_id).set(
+                    len(usage_items)
+                )
+
+        events, exc = await self._api_get(
+            "cellular_backup_events", client.get_cellular_backup_events(network_id)
+        )
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get cellular backup events: {exc}")
+        else:
+            outages = events.get("outages")
+            if isinstance(outages, list):
+                CELLULAR_BACKUP_OUTAGES_COUNT.labels(network_id=network_id).set(len(outages))
+
+        # --- network scan: one boolean.
+        scan, exc = await self._api_get("network_scan", client.get_network_scan(network_id))
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get network scan: {exc}")
+        else:
+            conflicting_ssid = scan.get("conflicting_ssid")
+            if isinstance(conflicting_ssid, bool):
+                NETWORK_SCAN_CONFLICTING_SSID.labels(network_id=network_id).set(
+                    1 if conflicting_ssid else 0
+                )
+
+        # --- speed test history: list length in the requested window.
+        speed_tests, exc = await self._api_get(
+            "speed_tests", client.get_speed_tests(network_id, limit=_SPEED_TESTS_LIMIT)
+        )
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get speed test history: {exc}")
+        else:
+            SPEED_TESTS_TOTAL.labels(network_id=network_id).set(len(speed_tests))
+
+        # --- multistaticip: EeroNotFoundError -> 0, an expected state
+        # (feature capable and permitted, just not configured).
+        multistaticip, exc = await self._api_get(
+            "multistaticip", client.get_multistaticip(network_id)
+        )
+        if isinstance(exc, EeroNotFoundError):
+            NETWORK_MULTISTATICIP_ENABLED.labels(network_id=network_id).set(0)
+        elif exc is not None:
+            _LOGGER.debug(f"Failed to get multistaticip: {exc}")
+        else:
+            enabled = multistaticip.get("enabled")
+            NETWORK_MULTISTATICIP_ENABLED.labels(network_id=network_id).set(1 if enabled else 0)
+
+        # --- ac-compat: one boolean.
+        ac_compat, exc = await self._api_get("ac_compat", client.get_ac_compat(network_id))
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get ac-compat: {exc}")
+        else:
+            ac_enabled = ac_compat.get("enabled")
+            if isinstance(ac_enabled, bool):
+                NETWORK_AC_COMPAT.labels(network_id=network_id).set(1 if ac_enabled else 0)
+
+        # --- power-saving schedules: verified-empty, element shape unobserved.
+        schedules, exc = await self._api_get(
+            "power_saving_schedules", client.get_power_saving_schedules(network_id)
+        )
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get power-saving schedules: {exc}")
+        else:
+            schedule_items = schedules.get("schedules")
+            if isinstance(schedule_items, list):
+                NETWORK_POWER_SAVING_SCHEDULES_COUNT.labels(network_id=network_id).set(
+                    len(schedule_items)
+                )
+
+        # --- transfer stats: never returned a payload in either probe run
+        # (403 network-level / 404 device-level, both runs). Stub only --
+        # record the API status, key-log if a payload ever arrives, export
+        # nothing.
+        transfer_network, exc = await self._api_get(
+            "transfer_network", client.get_transfer_stats(network_id)
+        )
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get network transfer stats: {exc}")
+        else:
+            _log_observed_keys_once("transfer_network", network_id, transfer_network)
+
+        first_device_mac: str | None = None
+        if devices:
+            for device in devices:
+                if not isinstance(device, dict):
+                    continue
+                mac = device.get("mac") or device.get("eui64")
+                if mac:
+                    first_device_mac = str(mac)
+                    break
+
+        if not first_device_mac:
+            return
+
+        transfer_device, exc = await self._api_get(
+            "transfer_device", client.get_transfer_stats(network_id, first_device_mac)
+        )
+        if exc is not None:
+            _LOGGER.debug(f"Failed to get device transfer stats: {exc}")
+        else:
+            _log_observed_keys_once("transfer_device", network_id, transfer_device)

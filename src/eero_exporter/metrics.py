@@ -1937,6 +1937,316 @@ PROFILE_INSIGHTS_TOTAL = _gauge(
     tier="extended",
 )
 
+# =============================================================================
+# RF TIER (commit 8) -- channel utilisation, one unparameterised call per
+# network (§9 #20/#21, §11.7 of the v8 probe shape summary). Default ON.
+# =============================================================================
+
+EERO_CHANNEL_UTILIZATION_AVG_PERCENT = _gauge(
+    f"{PREFIX}_channel_utilization_avg_percent",
+    "Average channel utilization percentage for an eero's radio band in the reporting window.",
+    ("network_id", "eero_id", "band"),
+    family="rf",
+    source="get_channel_utilization().data.utilization[].average_utilization",
+    tier="rf",
+)
+
+EERO_CHANNEL_UTILIZATION_MAX_PERCENT = _gauge(
+    f"{PREFIX}_channel_utilization_max_percent",
+    "Maximum channel utilization percentage for an eero's radio band in the reporting window.",
+    ("network_id", "eero_id", "band"),
+    family="rf",
+    source="get_channel_utilization().data.utilization[].max_utilization",
+    tier="rf",
+)
+
+EERO_CHANNEL_UTILIZATION_P99_PERCENT = _gauge(
+    f"{PREFIX}_channel_utilization_p99_percent",
+    "99th percentile channel utilization percentage for an eero's radio band.",
+    ("network_id", "eero_id", "band"),
+    family="rf",
+    source="get_channel_utilization().data.utilization[].p99_utilization",
+    tier="rf",
+)
+
+EERO_CHANNEL_BUSY_MINUTES = _gauge(
+    f"{PREFIX}_channel_busy_minutes",
+    "Minutes an eero's radio band spent over the busy-channel threshold in the window.",
+    ("network_id", "eero_id", "band"),
+    family="rf",
+    source="get_channel_utilization().data.utilization[].minutes_over_busy_threshold",
+    tier="rf",
+)
+
+EERO_CHANNEL_INFO = _info(
+    f"{PREFIX}_channel_info",
+    "Static channel configuration for an eero's radio band.",
+    ("network_id", "eero_id", "band"),
+    family="rf",
+    source="get_channel_utilization().data.utilization[].{channel,center_channel,"
+    "channel_bandwidth,frequency}",
+    tier="rf",
+)
+
+EERO_CHANNEL_ACS_EVENTS_TOTAL = _gauge(
+    f"{PREFIX}_channel_acs_events_total",
+    "Number of automatic channel selection events recorded for the band in the window.",
+    ("network_id", "eero_id", "band"),
+    family="rf",
+    source="get_channel_utilization().data.utilization[].len(acs_events)",
+    tier="rf",
+)
+
+EERO_CHANNEL_BUSY_LAST = _gauge(
+    f"{PREFIX}_channel_busy_last",
+    "Most recent 'busy' sample from the channel time-series for the band.",
+    ("network_id", "eero_id", "band"),
+    family="rf",
+    source="get_channel_utilization().data.utilization[].time_series_data[-1].busy",
+    tier="rf",
+)
+
+EERO_CHANNEL_NOISE_LAST = _gauge(
+    f"{PREFIX}_channel_noise_last",
+    "Most recent 'noise' sample from the channel time-series for the band.",
+    ("network_id", "eero_id", "band"),
+    family="rf",
+    source="get_channel_utilization().data.utilization[].time_series_data[-1].noise",
+    tier="rf",
+)
+
+EERO_CHANNEL_RX_TX_LAST = _gauge(
+    f"{PREFIX}_channel_rx_tx_last",
+    "Most recent 'rx_tx' sample from the channel time-series for the band.",
+    ("network_id", "eero_id", "band"),
+    family="rf",
+    source="get_channel_utilization().data.utilization[].time_series_data[-1].rx_tx",
+    tier="rf",
+)
+
+EERO_CHANNEL_RX_OTHER_LAST = _gauge(
+    f"{PREFIX}_channel_rx_other_last",
+    "Most recent 'rx_other' sample from the channel time-series for the band.",
+    ("network_id", "eero_id", "band"),
+    family="rf",
+    source="get_channel_utilization().data.utilization[].time_series_data[-1].rx_other",
+    tier="rf",
+)
+
+EERO_EERO_ROLE_INFO = _info(
+    f"{PREFIX}_eero_role_info",
+    "The eero's mesh role as reported by the channel-utilization endpoint.",
+    ("network_id", "eero_id"),
+    family="rf",
+    source="get_channel_utilization().data.eeros[].role",
+    tier="rf",
+)
+
+# =============================================================================
+# PER_DEVICE TIER (commit 8) -- device-level insights, list-level (one GET per
+# insight type covers every device; §9 #11, §11.6). Default OFF (cardinality).
+# =============================================================================
+
+DEVICE_INSIGHTS_TOTAL = _gauge(
+    f"{PREFIX}_device_insights_total",
+    "Total insight events observed for a device in the insights window, by type.",
+    ("network_id", "device_id", "type"),
+    family="device_insights",
+    source="get_devices_insights().data.insights[].sum (id from .insights_url)",
+    tier="per_device",
+)
+
+# =============================================================================
+# PER_EERO TIER (commit 8) -- nightlight, connections, ouicheck, one GET each
+# per eero (§9 #44). Default OFF.
+# =============================================================================
+
+EERO_EERO_CONNECTIONS_COUNT = _gauge(
+    f"{PREFIX}_eero_connections_count",
+    "Number of wireless client connections reported by an eero's connections endpoint.",
+    ("network_id", "eero_id"),
+    family="per_eero",
+    source="get_connections().data.len(wireless_devices)",
+    tier="per_eero",
+)
+
+EERO_OUICHECK_CAN_ADD = _gauge(
+    f"{PREFIX}_eero_ouicheck_can_add",
+    "Whether the OUI check reports this eero can be added to the network (1=yes, 0=no).",
+    ("network_id", "eero_id"),
+    family="per_eero",
+    source="get_ouicheck().data.can_add",
+    tier="per_eero",
+)
+
+EERO_OUICHECK_MUST_UPDATE = _gauge(
+    f"{PREFIX}_eero_ouicheck_must_update",
+    "Whether the OUI check reports this eero must update before being added (1=yes, 0=no).",
+    ("network_id", "eero_id"),
+    family="per_eero",
+    source="get_ouicheck().data.must_update",
+    tier="per_eero",
+    evidence="documented",
+)
+
+# =============================================================================
+# PER_PROFILE TIER (commit 8) -- DNS-policy applications, one GET per profile
+# (§9 #42). Default OFF. Premium-gated in practice.
+# =============================================================================
+
+PROFILE_DNS_POLICY_APPLICATIONS_COUNT = _gauge(
+    f"{PREFIX}_profile_dns_policy_applications_count",
+    "Number of DNS-policy application entries configured for a profile.",
+    ("network_id", "profile_id"),
+    family="per_profile",
+    source="get_dns_policy_applications().data (list length)",
+    tier="per_profile",
+)
+
+# =============================================================================
+# UNVERIFIED TIER (commit 8) -- families whose element shapes were never
+# observed with real data (§9 #22, #28-41). Every read here is a documented
+# eero-api method; several are expected-empty or expected-error states.
+# Default OFF.
+# =============================================================================
+
+NETWORK_ROUTING_DEVICES_COUNT = _gauge(
+    f"{PREFIX}_network_routing_devices_count",
+    "Number of devices listed on the network's routing resource.",
+    ("network_id",),
+    family="unverified",
+    source="get_routing().data.devices.data (list length)",
+    tier="unverified",
+    evidence="documented",
+)
+
+NETWORK_ROUTING_RESERVATIONS_COUNT = _gauge(
+    f"{PREFIX}_network_routing_reservations_count",
+    "Number of DHCP reservations listed on the network's routing resource.",
+    ("network_id",),
+    family="unverified",
+    source="get_routing().data.reservations.data (list length)",
+    tier="unverified",
+    evidence="documented",
+)
+
+NETWORK_ROUTING_FORWARDS_COUNT = _gauge(
+    f"{PREFIX}_network_routing_forwards_count",
+    "Number of port forwards listed on the network's routing resource.",
+    ("network_id",),
+    family="unverified",
+    source="get_routing().data.forwards.data (list length)",
+    tier="unverified",
+    evidence="documented",
+)
+
+NETWORK_ROUTING_PINHOLES_COUNT = _gauge(
+    f"{PREFIX}_network_routing_pinholes_count",
+    "Number of pinholes listed on the network's routing resource.",
+    ("network_id",),
+    family="unverified",
+    source="get_routing().data.pinholes.data (list length)",
+    tier="unverified",
+    evidence="documented",
+)
+
+BACKUP_ACCESS_POINTS_COUNT = _gauge(
+    f"{PREFIX}_backup_access_points_count",
+    "Number of configured Wi-Fi backup access points.",
+    ("network_id",),
+    family="unverified",
+    source="list_backup_access_points().data (list length)",
+    tier="unverified",
+    evidence="documented",
+)
+
+BACKUP_ACCESS_POINT_ENABLED = _gauge(
+    f"{PREFIX}_backup_access_point_enabled",
+    "Whether a configured Wi-Fi backup access point is enabled (1=yes, 0=no).",
+    ("network_id", "index"),
+    family="unverified",
+    source="list_backup_access_points().data[].enabled",
+    tier="unverified",
+    evidence="documented",
+)
+
+BACKUP_ACCESS_POINT_CONNECTIVITY_INFO = _info(
+    f"{PREFIX}_backup_access_point_connectivity_info",
+    "Connectivity status of a configured Wi-Fi backup access point. Never carries ssid/password.",
+    ("network_id", "index", "status"),
+    family="unverified",
+    source="list_backup_access_points().data[].connectivity.status",
+    tier="unverified",
+    evidence="documented",
+)
+
+CELLULAR_BACKUP_USAGE_ITEMS_COUNT = _gauge(
+    f"{PREFIX}_cellular_backup_usage_items_count",
+    "Number of cellular backup usage items recorded (element shape unobserved).",
+    ("network_id",),
+    family="unverified",
+    source="get_cellular_backup_usage().data.backup_usage_items (list length)",
+    tier="unverified",
+    evidence="verified",
+)
+
+CELLULAR_BACKUP_OUTAGES_COUNT = _gauge(
+    f"{PREFIX}_cellular_backup_outages_count",
+    "Number of cellular backup outage events recorded (element shape unobserved).",
+    ("network_id",),
+    family="unverified",
+    source="get_cellular_backup_events().data.outages (list length)",
+    tier="unverified",
+    evidence="verified",
+)
+
+NETWORK_SCAN_CONFLICTING_SSID = _gauge(
+    f"{PREFIX}_network_scan_conflicting_ssid",
+    "Whether the network scan detected a conflicting SSID nearby (1=yes, 0=no).",
+    ("network_id",),
+    family="unverified",
+    source="get_network_scan().data.conflicting_ssid",
+    tier="unverified",
+)
+
+SPEED_TESTS_TOTAL = _gauge(
+    f"{PREFIX}_speed_tests_total",
+    "Number of speed test history records returned within the requested window.",
+    ("network_id",),
+    family="unverified",
+    source="get_speed_tests(limit=...).data (list length)",
+    tier="unverified",
+)
+
+NETWORK_MULTISTATICIP_ENABLED = _gauge(
+    f"{PREFIX}_network_multistaticip_enabled",
+    "Whether multi-static-IP is configured on the network (1=yes, 0=no). "
+    "0 when the feature is not provisioned (EeroNotFoundError, an expected state).",
+    ("network_id",),
+    family="unverified",
+    source="get_multistaticip().data.enabled (404 -> 0)",
+    tier="unverified",
+)
+
+NETWORK_AC_COMPAT = _gauge(
+    f"{PREFIX}_network_ac_compat",
+    "The network's AC-compatibility flag (1=yes, 0=no).",
+    ("network_id",),
+    family="unverified",
+    source="get_ac_compat().data.enabled",
+    tier="unverified",
+)
+
+NETWORK_POWER_SAVING_SCHEDULES_COUNT = _gauge(
+    f"{PREFIX}_network_power_saving_schedules_count",
+    "Number of configured power-saving schedules (element shape unobserved).",
+    ("network_id",),
+    family="unverified",
+    source="get_power_saving_schedules().data.schedules (list length)",
+    tier="unverified",
+    evidence="verified",
+)
+
 
 def reset_all_metrics() -> None:
     """Reset all metrics to their default state.

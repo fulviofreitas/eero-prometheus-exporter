@@ -72,6 +72,7 @@ def _mock_client(network_details: dict, data_usage_periods: int = 3) -> MagicMoc
     client.get_advanced_content_filter = AsyncMock(return_value={})
     client.get_subnets_config = AsyncMock(return_value=[])
     client.get_profiles_insights = AsyncMock(return_value={})
+    client.get_channel_utilization = AsyncMock(return_value={})
     return client
 
 
@@ -181,6 +182,7 @@ async def test_requests_last_cycle_matches_adapter_call_count() -> None:
         include_data_usage=False,
         include_premium=False,
         include_extended=False,
+        include_rf=False,
     )
     collector = EeroCollector(session_file="/tmp/session.json", config=config)  # nosec B108
     mock_client = _mock_client(network_details)
@@ -189,5 +191,5 @@ async def test_requests_last_cycle_matches_adapter_call_count() -> None:
         await collector.collect()
 
     # get_networks + get_network only, with eeros_from_envelope=True and
-    # every optional family (including the extended tier) disabled.
+    # every optional family/tier (including extended and rf) disabled.
     assert EXPORTER_API_REQUESTS_LAST_CYCLE._value.get() == 2

@@ -289,6 +289,7 @@ def _mock_client(
     client.get_advanced_content_filter = AsyncMock(return_value={})
     client.get_subnets_config = AsyncMock(return_value=[])
     client.get_profiles_insights = AsyncMock(return_value={})
+    client.get_channel_utilization = AsyncMock(return_value={})
     return client
 
 
