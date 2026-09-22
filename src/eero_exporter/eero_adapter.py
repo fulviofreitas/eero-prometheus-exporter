@@ -722,6 +722,43 @@ class EeroClient:
         return dict(_extract_data(raw_response))
 
     @_wrap_api_call()
+    async def get_data_usage_breakdown(
+        self,
+        network_id: str,
+        *,
+        start: str,
+        end: str,
+        cadence: str | None = None,
+        timezone: str | None = None,
+    ) -> dict[str, Any]:
+        """Get the network/eero/device/profile data usage breakdown in one call.
+
+        A single request returns network totals plus per-eero, per-device,
+        per-profile, and unprofiled breakdowns (``data.eeros``,
+        ``data.devices``, ``data.profiles``, ``data.unprofiled``) -- see the
+        v8 probe shape summary §11.5. Preferred over
+        ``get_devices_data_usage``/``get_eeros_data_usage_summary`` (neither
+        of which carries a per-eero dimension).
+
+        Args:
+            network_id: Network identifier.
+            start: Window start, ISO 8601 timestamp.
+            end: Window end, ISO 8601 timestamp.
+            cadence: Optional bucket size, ``"daily"`` or ``"hourly"``.
+            timezone: Optional IANA timezone name.
+
+        Returns:
+            Extracted data usage breakdown payload from the response envelope.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        raw_response = await self._client.get_data_usage_breakdown(
+            network_id, start=start, end=end, cadence=cadence, timezone=timezone
+        )
+        return dict(_extract_data(raw_response))
+
+    @_wrap_api_call()
     async def get_devices_data_usage(
         self,
         network_id: str,

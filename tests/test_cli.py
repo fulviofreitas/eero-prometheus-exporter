@@ -283,7 +283,7 @@ class TestSessionFilePlumbing:
             runner.invoke(app, ["test", "--session-file", str(session_file)])
 
         _, kwargs = mock_collector_cls.call_args
-        assert kwargs["cookie_file"] == str(session_file)
+        assert kwargs["session_file"] == str(session_file)
 
 
 # ---------------------------------------------------------------------------

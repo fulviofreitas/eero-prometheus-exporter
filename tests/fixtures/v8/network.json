@@ -1,0 +1,85 @@
+{
+  "url": "/2.2/networks/999001",
+  "name": "Test Network",
+  "status": "connected",
+  "geo_ip": {
+    "isp": "Example ISP"
+  },
+  "wan_type": "DHCP",
+  "gateway_ip": "192.0.2.1",
+  "connection": {
+    "mode": "nat"
+  },
+  "health": {
+    "internet": {
+      "status": "connected",
+      "isp_up": true
+    },
+    "eero_network": {
+      "status": "connected"
+    }
+  },
+  "speed": {
+    "status": "none",
+    "date": "2026-09-21T12:47:05Z",
+    "up": {"value": 500.0, "units": "Mbps"},
+    "down": {"value": 500.0, "units": "Mbps"}
+  },
+  "wpa3": false,
+  "band_steering": true,
+  "sqm": false,
+  "upnp": true,
+  "thread": false,
+  "ipv6_upstream": true,
+  "dns_caching": false,
+  "power_saving": false,
+  "guest_network_enabled": false,
+  "guest_network": {
+    "name": "Guest",
+    "enabled": false
+  },
+  "backup_internet_enabled": true,
+  "custom_dns": [],
+  "premium_status": "active",
+  "premium_details": {
+    "tier": "plus"
+  },
+  "timezone": {
+    "value": "UTC"
+  },
+  "updates": {
+    "has_update": false,
+    "update_required": false
+  },
+  "ddns": {
+    "enabled": true
+  },
+  "capabilities": {
+    "sqm": {"capable": true}
+  },
+  "eeros": {
+    "count": 2,
+    "data": [
+      {
+        "url": "/2.2/eeros/1",
+        "location": "Living Room",
+        "model": "eero Pro 6E",
+        "serial": "SERIAL1",
+        "status": "green",
+        "gateway": true,
+        "heartbeat_ok": true,
+        "connected_clients_count": 5
+      },
+      {
+        "url": "/2.2/eeros/2",
+        "location": "Bedroom",
+        "model": "eero Pro 6E",
+        "serial": "SERIAL2",
+        "status": "green",
+        "gateway": false,
+        "heartbeat_ok": true,
+        "connected_clients_count": 3
+      }
+    ]
+  }
+}

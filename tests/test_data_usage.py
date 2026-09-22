@@ -23,6 +23,7 @@ from eero_exporter.eero_adapter import EeroClient, EeroValidationError
     "method",
     [
         "get_data_usage",
+        "get_data_usage_breakdown",
         "get_devices_data_usage",
         "get_eeros_data_usage_summary",
         "get_eero_data_usage",

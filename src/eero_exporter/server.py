@@ -877,28 +877,12 @@ def run_server(config: ExporterConfig) -> None:
     """
     # Create collector. `timeout` is intentionally NOT passed through: it is
     # an HTTP-server-only setting (the v8 SDK client has no such kwarg).
-    # Tier flags (include_extended/rf/per_profile/per_device/per_eero/
-    # unverified) are defined on ExporterConfig but not yet accepted by the
-    # collector -- that wiring lands in a later commit (§4.2, §4.3).
-    collector = EeroCollector(
-        include_devices=config.include_devices,
-        include_profiles=config.include_profiles,
-        include_premium=config.include_premium,
-        include_ethernet=config.include_ethernet,
-        include_thread=config.include_thread,
-        include_port_forwards=config.include_port_forwards,
-        include_reservations=config.include_reservations,
-        include_blacklist=config.include_blacklist,
-        include_diagnostics=config.include_diagnostics,
-        include_insights=config.include_insights,
-        include_data_usage=config.include_data_usage,
-        cookie_file=str(config.session_file),
-        send_legacy_cookie=config.send_legacy_cookie,
-        accept_language=config.accept_language,
-        get_retries=config.get_retries,
-    )
-    # Set collection interval for caching metrics
-    collector._collection_interval = config.collection_interval
+    # Every include_*/tier flag and every SDK client option is read straight
+    # off `config` by the collector's own __init__ (commit 3, §1). Tier
+    # flags with no consuming family yet (include_extended/rf/per_profile/
+    # per_device/per_eero/unverified) are stored as attributes for a later
+    # commit.
+    collector = EeroCollector(session_file=str(config.session_file), config=config)
 
     # Create HTTP server
     server = ExporterHTTPServer((config.host, config.port), MetricsHandler)

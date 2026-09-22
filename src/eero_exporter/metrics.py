@@ -976,6 +976,29 @@ EXPORTER_API_REQUESTS = Counter(
     labelnames=["endpoint", "status"],
 )
 
+# The complete, closed vocabulary for EXPORTER_API_REQUESTS's `status` label.
+# `_record_api_result` in collector.py never emits anything outside this set
+# -- see tests/test_collector_api_status.py.
+API_STATUS_VALUES: frozenset[str] = frozenset(
+    {
+        "success",
+        "error",
+        "auth",
+        "not_found",
+        "access_denied",
+        "premium_required",
+        "feature_unavailable",
+        "rate_limited",
+        "validation",
+        "transport",
+    }
+)
+
+EXPORTER_API_REQUESTS_LAST_CYCLE = Gauge(
+    f"{PREFIX}_exporter_api_requests_last_cycle",
+    "Number of eero API requests issued during the most recently completed collection cycle.",
+)
+
 
 def reset_all_metrics() -> None:
     """Reset all metrics to their default state.

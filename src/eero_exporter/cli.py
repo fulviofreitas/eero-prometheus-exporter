@@ -361,9 +361,8 @@ def test(
             raise typer.Exit(1)
 
         collector = EeroCollector(
-            include_devices=True,
-            include_profiles=True,
-            cookie_file=str(session_path),
+            session_file=str(session_path),
+            config=ExporterConfig(include_devices=True, include_profiles=True),
         )
 
         with Progress(
