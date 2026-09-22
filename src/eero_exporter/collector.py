@@ -23,6 +23,7 @@ from .eero_adapter import (
 )
 from .metrics import (
     ACCOUNT_NETWORKS_COUNT,
+    ACCOUNT_PREMIUM_NEXT_RENEWAL,
     API_STATUS_VALUES,
     DATA_USAGE_ACTIVE_CLIENTS,
     DATA_USAGE_DOWNLOAD_BYTES,
@@ -41,25 +42,39 @@ from .metrics import (
     DEVICE_INFO,
     DEVICE_IS_GUEST,
     DEVICE_LAST_ACTIVE_TIMESTAMP,
+    DEVICE_PACKET_STATS_RX_DROP_PPM,
+    DEVICE_PACKET_STATS_RX_DROPS,
+    DEVICE_PACKET_STATS_RX_PACKETS,
+    DEVICE_PACKET_STATS_TOTAL_PACKETS,
+    DEVICE_PACKET_STATS_TX_FAIL_PPM,
+    DEVICE_PACKET_STATS_TX_PACKETS,
+    DEVICE_PACKET_STATS_TX_RETRANSMIT_PPM,
+    DEVICE_PACKET_STATS_TX_RETRIES,
     DEVICE_PAUSED,
     DEVICE_PRIVATE,
     DEVICE_RX_BITRATE,
     DEVICE_RX_MCS,
     DEVICE_RX_NSS,
     DEVICE_SIGNAL_STRENGTH,
+    DEVICE_SUBNET_KIND_INFO,
     DEVICE_TX_BITRATE,
     DEVICE_TX_MCS,
     DEVICE_TX_NSS,
     DEVICE_WIFI_GENERATION,
     DEVICE_WIRELESS,
     DNS_CONFIG_INFO,
+    EERO_BAND_SUPPORTED,
     EERO_CONNECTED_CLIENTS,
     EERO_CONNECTED_WIRED_CLIENTS,
     EERO_CONNECTED_WIRELESS_CLIENTS,
+    EERO_CONNECTION_TYPE_INFO,
     EERO_DATA_USAGE_BYTES,
     EERO_HEARTBEAT_OK,
     EERO_INFO,
     EERO_IS_GATEWAY,
+    EERO_IS_PRIMARY,
+    EERO_JOINED,
+    EERO_LAST_HEARTBEAT,
     EERO_LAST_REBOOT,
     EERO_LED_BRIGHTNESS,
     EERO_LED_ON,
@@ -68,16 +83,27 @@ from .metrics import (
     EERO_NIGHTLIGHT_ENABLED,
     EERO_NIGHTLIGHT_SCHEDULE_ENABLED,
     EERO_OS_VERSION_INFO,
+    EERO_POWER_SAVING_ACTIVE,
+    EERO_POWER_SOURCE_INFO,
     EERO_PROVIDES_WIFI,
+    EERO_RADIO_CHANNEL,
+    EERO_RADIO_CHANNEL_UTILIZATION,
+    EERO_RADIO_CHANNEL_WIDTH,
+    EERO_RADIO_CLIENT_COUNT,
+    EERO_RADIO_COUNT,
+    EERO_RADIO_TX_POWER,
     EERO_STATUS,
     EERO_UP,
     EERO_UPDATE_AVAILABLE,
     EERO_UPTIME_SECONDS,
+    EERO_USING_WAN,
     EERO_WIRED,
     EERO_WIRED_INTERNET,
     ETHERNET_PORT_CARRIER,
     ETHERNET_PORT_INFO,
+    ETHERNET_PORT_IS_LTE,
     ETHERNET_PORT_IS_WAN,
+    ETHERNET_PORT_NEIGHBOR_INFO,
     ETHERNET_PORT_SPEED,
     EXPORTER_API_REQUESTS,
     EXPORTER_API_REQUESTS_LAST_CYCLE,
@@ -95,29 +121,49 @@ from .metrics import (
     NETWORK_BACKUP_INTERNET_ENABLED,
     NETWORK_BAND_STEERING_ENABLED,
     NETWORK_BLACKLISTED_DEVICES_COUNT,
+    NETWORK_CAPABILITY,
     NETWORK_CLIENTS_COUNT,
+    NETWORK_CONNECTION_MODE_INFO,
     NETWORK_CUSTOM_DNS_ENABLED,
     NETWORK_DATA_USAGE_BYTES,
+    NETWORK_DDNS_ENABLED,
+    NETWORK_DHCP_MODE_INFO,
     NETWORK_DHCP_RESERVATIONS_COUNT,
     NETWORK_DNS_CACHING_ENABLED,
+    NETWORK_DNS_MODE_INFO,
+    NETWORK_DNS_PARENT_SERVER_COUNT,
     NETWORK_DNS_SERVER_COUNT,
+    NETWORK_DOUBLE_NAT_DETECTED,
     NETWORK_EEROS_COUNT,
     NETWORK_GUEST_ENABLED,
     NETWORK_INFO,
     NETWORK_IPV6_ENABLED,
+    NETWORK_ISP_UP,
+    NETWORK_LAST_REBOOT,
+    NETWORK_MALWARE_BLOCK_ENABLED,
+    NETWORK_MLO_MODE_INFO,
     NETWORK_PORT_FORWARDS_COUNT,
     NETWORK_POWER_SAVING_ENABLED,
     NETWORK_PREMIUM_ENABLED,
     NETWORK_SQM_ENABLED,
     NETWORK_STATUS,
     NETWORK_THREAD_ENABLED,
+    NETWORK_TIMEZONE_INFO,
+    NETWORK_UPDATE_AVAILABLE,
+    NETWORK_UPDATE_TARGET_INFO,
     NETWORK_UPDATES_AVAILABLE,
     NETWORK_UPNP_ENABLED,
+    NETWORK_WAN_TYPE_INFO,
+    NETWORK_WIRELESS_MODE_INFO,
     NETWORK_WPA3_ENABLED,
     PORT_FORWARD_ENABLED,
     PORT_FORWARD_INFO,
+    PROFILE_BLOCKED_APPLICATIONS_COUNT,
+    PROFILE_CONNECTED_DEVICES_COUNT,
+    PROFILE_CONTENT_FILTERS_SET,
     PROFILE_DEVICES_COUNT,
     PROFILE_PAUSED,
+    PROFILE_SCHEDULES_COUNT,
     SPEED_DOWNLOAD_MBPS,
     SPEED_TEST_TIMESTAMP,
     SPEED_UPLOAD_MBPS,
@@ -225,6 +271,34 @@ def _parse_ethernet_speed_enum(speed: str | None) -> float | None:
         _UNKNOWN_ETHERNET_SPEEDS_SEEN.add(key)
         _LOGGER.debug("Unknown ethernet port speed enum %r", key)
     return mapped
+
+
+# The exact `radio_channel_stats` band vocabulary (§8/§11.2 of the v8 probe
+# shape summary) -- also `eeros[].bands[]`'s enum. Keys outside this set are
+# skipped defensively rather than exported under an unbounded label value.
+_CHANNEL_UTILIZATION_BANDS: frozenset[str] = frozenset(
+    {"band_2_4GHz", "band_5GHz_low", "band_5GHz_high", "band_5GHz_full", "band_6GHz"}
+)
+
+_LABEL_SANITIZE_RE = re.compile(r"[^a-z0-9_]")
+
+
+def _sanitize_label_value(value: str) -> str:
+    """Sanitise an API-provided key for use as a Prometheus label value.
+
+    Used for the eero API's own bounded vocabularies (capability names,
+    notification-setting keys) that may contain characters Prometheus label
+    values tolerate but that are worth normalising for consistency --
+    lower-cased, with every run of non ``[a-z0-9_]`` characters collapsed to
+    a single underscore.
+
+    Args:
+        value: The raw key/name from the API.
+
+    Returns:
+        The sanitised label value.
+    """
+    return _LABEL_SANITIZE_RE.sub("_", value.strip().lower())
 
 
 # Three timestamp shapes coexist across the eero API (§11.0 of the v8 probe
@@ -920,19 +994,23 @@ class EeroCollector:
             elif isp_data:
                 isp_name = str(isp_data)
 
-        # Extract public_ip - may be in public_ip or wan_ip
-        public_ip = network_details.get("public_ip") or network_details.get("wan_ip")
+        network_info: dict[str, str] = {
+            "name": network_name,
+            "status": status_str,
+            "isp": isp_name or "unknown",
+            "wan_type": network_details.get("wan_type") or "unknown",
+            "gateway_ip": network_details.get("gateway_ip") or "unknown",
+        }
+        # `public_ip` is only exported behind `--expose-public-ip` (D13) --
+        # off by default, the key is omitted entirely rather than masked.
+        if self._expose_public_ip:
+            ip_settings = network_details.get("ip_settings")
+            public_ip = (
+                ip_settings.get("public_ip") if isinstance(ip_settings, dict) else None
+            ) or network_details.get("public_ip")
+            network_info["public_ip"] = public_ip or "unknown"
 
-        NETWORK_INFO.labels(network_id=network_id).info(
-            {
-                "name": network_name,
-                "status": status_str,
-                "isp": isp_name or "unknown",
-                "public_ip": public_ip or "unknown",
-                "wan_type": network_details.get("wan_type") or "unknown",
-                "gateway_ip": network_details.get("gateway_ip") or "unknown",
-            }
-        )
+        NETWORK_INFO.labels(network_id=network_id).info(network_info)
 
         is_online = 1 if status_str.lower() in ("connected", "online") else 0
         NETWORK_STATUS.labels(network_id=network_id, name=network_name).set(is_online)
@@ -984,6 +1062,8 @@ class EeroCollector:
                     _LOGGER.warning("Failed to set SPEED_TEST_TIMESTAMP for network %s", network_id)
 
         await self._collect_network_feature_flags(client, network_id, network_name, network_details)
+        self._collect_network_envelope_extras(network_id, network_name, network_details)
+        self._collect_network_capabilities(network_id, network_details)
         await self._collect_eero_metrics(client, network_id, network_name, network_details)
 
         if self._include_devices:
@@ -1222,6 +1302,9 @@ class EeroCollector:
                     except Exception:
                         _LOGGER.warning("Failed to set EERO_PROVIDES_WIFI for eero %s", eero_id)
 
+                self._collect_eero_envelope_extras(network_id, eero_id, location, eero)
+                self._collect_eero_radio_metrics(network_id, eero_id, location, eero)
+
                 if self._include_ethernet:
                     await self._collect_ethernet_port_metrics(network_id, eero_id, location, eero)
 
@@ -1269,6 +1352,106 @@ class EeroCollector:
                 _LOGGER.warning("Skipping eero item %d: %s: %s", idx, type(exc).__name__, exc)
                 continue
 
+    def _collect_eero_envelope_extras(
+        self, network_id: str, eero_id: str, location: str, eero: dict[str, Any]
+    ) -> None:
+        """Collect commit-6 per-eero metrics (§8/§11.2 of the v8 probe).
+
+        Every value here is read off the eero item already collected --
+        zero extra requests.
+        """
+        common = {"network_id": network_id, "eero_id": eero_id, "location": location}
+
+        is_primary = eero.get("is_primary_node")
+        if is_primary is not None:
+            EERO_IS_PRIMARY.labels(**common).set(1 if is_primary else 0)
+
+        using_wan = eero.get("using_wan")
+        if using_wan is not None:
+            EERO_USING_WAN.labels(**common).set(1 if using_wan else 0)
+
+        last_heartbeat_ts = _parse_timestamp(eero.get("last_heartbeat"))
+        if last_heartbeat_ts is not None:
+            EERO_LAST_HEARTBEAT.labels(**common).set(last_heartbeat_ts)
+
+        joined_ts = _parse_timestamp(eero.get("joined"))
+        if joined_ts is not None:
+            EERO_JOINED.labels(**common).set(joined_ts)
+
+        bands = eero.get("bands")
+        if isinstance(bands, list):
+            for band in bands:
+                if band in _CHANNEL_UTILIZATION_BANDS:
+                    EERO_BAND_SUPPORTED.labels(**common, band=band).set(1)
+
+        bssids_with_bands = eero.get("bssids_with_bands")
+        if isinstance(bssids_with_bands, list):
+            EERO_RADIO_COUNT.labels(**common).set(len(bssids_with_bands))
+
+        power_saving_active = _coerce_power_saving_enabled(eero.get("power_saving"))
+        if power_saving_active is not None:
+            EERO_POWER_SAVING_ACTIVE.labels(**common).set(1 if power_saving_active else 0)
+
+        power_info = eero.get("power_info")
+        power_source = power_info.get("power_source") if isinstance(power_info, dict) else None
+        if power_source:
+            EERO_POWER_SOURCE_INFO.labels(**common).info({"source": str(power_source)})
+
+        connection_type = eero.get("connection_type")
+        if connection_type:
+            EERO_CONNECTION_TYPE_INFO.labels(**common).info(
+                {"connection_type": str(connection_type).upper()}
+            )
+
+    def _collect_eero_radio_metrics(
+        self, network_id: str, eero_id: str, location: str, eero: dict[str, Any]
+    ) -> None:
+        """Collect `radio_channel_stats` metrics for one eero (§8/§11.2 of the v8 probe).
+
+        `radio_channel_stats` is a dict keyed by the exact
+        `CHANNEL_UTILIZATION_BANDS` enum, five numeric fields per band --
+        free on the already-fetched eero item.
+        """
+        stats = eero.get("radio_channel_stats")
+        if not isinstance(stats, dict):
+            return
+
+        for band, band_stats in stats.items():
+            if band not in _CHANNEL_UTILIZATION_BANDS or not isinstance(band_stats, dict):
+                continue
+            labels = {
+                "network_id": network_id,
+                "eero_id": eero_id,
+                "location": location,
+                "band": band,
+            }
+
+            channel = _coerce_numeric(band_stats.get("channel"), field_name="radio_channel")
+            if channel is not None:
+                EERO_RADIO_CHANNEL.labels(**labels).set(channel)
+
+            channel_width = _coerce_numeric(
+                band_stats.get("channel_width"), field_name="radio_channel_width"
+            )
+            if channel_width is not None:
+                EERO_RADIO_CHANNEL_WIDTH.labels(**labels).set(channel_width)
+
+            tx_power = _coerce_numeric(band_stats.get("tx_power"), field_name="radio_tx_power")
+            if tx_power is not None:
+                EERO_RADIO_TX_POWER.labels(**labels).set(tx_power)
+
+            utilization = _coerce_numeric(
+                band_stats.get("channel_utilization"), field_name="radio_channel_utilization"
+            )
+            if utilization is not None:
+                EERO_RADIO_CHANNEL_UTILIZATION.labels(**labels).set(utilization)
+
+            client_count = _coerce_numeric(
+                band_stats.get("client_count"), field_name="radio_client_count"
+            )
+            if client_count is not None:
+                EERO_RADIO_CLIENT_COUNT.labels(**labels).set(client_count)
+
     async def _collect_device_metrics(
         self, client: EeroClient, network_id: str, network_name: str
     ) -> None:
@@ -1315,6 +1498,11 @@ class EeroCollector:
                 frequency = connectivity.get("frequency") if connectivity else None
                 band = _frequency_to_band(frequency)
 
+                # `profile.name` is bounded by the profile count (v8 migration
+                # plan §5.4) -- empty string when the device has no profile.
+                profile = device.get("profile")
+                profile_name = str(profile.get("name") or "") if isinstance(profile, dict) else ""
+
                 DEVICE_INFO.labels(network_id=network_id, device_id=device_id, mac=mac).info(
                     {
                         "name": name,
@@ -1324,8 +1512,15 @@ class EeroCollector:
                         "hostname": device.get("hostname") or "unknown",
                         "connection_type": connection_type,
                         "source_eero": source_eero,
+                        "profile": profile_name,
                     }
                 )
+
+                subnet_kind = device.get("subnet_kind")
+                if subnet_kind:
+                    DEVICE_SUBNET_KIND_INFO.labels(network_id=network_id, device_id=device_id).info(
+                        {"subnet_kind": str(subnet_kind)}
+                    )
 
                 connected = device.get("connected", False)
                 try:
@@ -1536,6 +1731,8 @@ class EeroCollector:
                                 band=band,
                             ).set(tx_nss)
 
+                    self._set_device_packet_stats(network_id, device_id, connectivity)
+
                 # `devices[].channel` is the verified top-level source; the
                 # summary explicitly refutes `connectivity.channel` (§7), but
                 # a fallback is kept since checking it is free.
@@ -1607,6 +1804,35 @@ class EeroCollector:
                 _LOGGER.warning("Skipping device item %d: %s: %s", idx, type(exc).__name__, exc)
                 continue
 
+    def _set_device_packet_stats(
+        self, network_id: str, device_id: str, connectivity: dict[str, Any]
+    ) -> None:
+        """Set the eight `connectivity.packet_stats` gauges for one device.
+
+        The API reports lifetime totals with no reset semantics, so these
+        are exported as Gauges, not Counters (§8/§11.3 of the v8 probe).
+        Every field is independently nullable.
+        """
+        packet_stats = connectivity.get("packet_stats")
+        if not isinstance(packet_stats, dict):
+            return
+
+        labels = {"network_id": network_id, "device_id": device_id}
+        field_metrics = (
+            ("rx_packets", DEVICE_PACKET_STATS_RX_PACKETS),
+            ("tx_packets", DEVICE_PACKET_STATS_TX_PACKETS),
+            ("total_packets", DEVICE_PACKET_STATS_TOTAL_PACKETS),
+            ("rx_drops", DEVICE_PACKET_STATS_RX_DROPS),
+            ("tx_retries", DEVICE_PACKET_STATS_TX_RETRIES),
+            ("tx_retransmit_ppm", DEVICE_PACKET_STATS_TX_RETRANSMIT_PPM),
+            ("tx_fail_ppm", DEVICE_PACKET_STATS_TX_FAIL_PPM),
+            ("rx_drop_ppm", DEVICE_PACKET_STATS_RX_DROP_PPM),
+        )
+        for field_name, metric in field_metrics:
+            value = _coerce_numeric(packet_stats.get(field_name), field_name=field_name)
+            if value is not None:
+                metric.labels(**labels).set(value)
+
     async def _collect_profile_metrics(self, client: EeroClient, network_id: str) -> None:
         """Collect metrics for profiles."""
         profiles, exc = await self._api_get("profiles", client.get_profiles(network_id))
@@ -1642,6 +1868,45 @@ class EeroCollector:
                 PROFILE_DEVICES_COUNT.labels(
                     network_id=network_id, profile_id=profile_id, name=name
                 ).set(len(devices))
+
+                connected_devices = sum(
+                    1 for d in devices if isinstance(d, dict) and d.get("connected")
+                )
+                PROFILE_CONNECTED_DEVICES_COUNT.labels(
+                    network_id=network_id, profile_id=profile_id, name=name
+                ).set(connected_devices)
+
+                # `schedule`/`premium_dns.blocked_applications` are free on
+                # this same profile item -- never call the per-profile
+                # `get_schedules`/`get_dns_policy_applications` endpoints
+                # (§8/§11.4 of the v8 probe shape summary).
+                schedule = profile.get("schedule")
+                if isinstance(schedule, list):
+                    PROFILE_SCHEDULES_COUNT.labels(
+                        network_id=network_id, profile_id=profile_id, name=name
+                    ).set(len(schedule))
+
+                premium_dns = profile.get("premium_dns")
+                blocked_applications = (
+                    premium_dns.get("blocked_applications")
+                    if isinstance(premium_dns, dict)
+                    else None
+                )
+                if isinstance(blocked_applications, list):
+                    PROFILE_BLOCKED_APPLICATIONS_COUNT.labels(
+                        network_id=network_id, profile_id=profile_id, name=name
+                    ).set(len(blocked_applications))
+
+                unified_content_filters = profile.get("unified_content_filters")
+                content_filters_set = (
+                    unified_content_filters.get("is_content_filters_set")
+                    if isinstance(unified_content_filters, dict)
+                    else None
+                )
+                if content_filters_set is not None:
+                    PROFILE_CONTENT_FILTERS_SET.labels(
+                        network_id=network_id, profile_id=profile_id, name=name
+                    ).set(1 if content_filters_set else 0)
             except Exception as exc:
                 _LOGGER.warning("Skipping profile item %d: %s: %s", idx, type(exc).__name__, exc)
                 continue
@@ -1966,6 +2231,149 @@ class EeroCollector:
     # `SQM_UPLOAD_BANDWIDTH`/`SQM_DOWNLOAD_BANDWIDTH` are left unset until a
     # later commit finds a source for them (or removes them).
 
+    def _collect_network_envelope_extras(
+        self,
+        network_id: str,
+        network_name: str,
+        network_details: dict[str, Any],
+    ) -> None:
+        """Collect commit-6 network-envelope metrics (§8/§11.1 of the v8 probe).
+
+        Every value here is read off the already-fetched network envelope --
+        zero extra requests. Synchronous (no API calls), unlike its sibling
+        sub-collectors.
+        """
+        common = {"network_id": network_id, "name": network_name}
+
+        health = network_details.get("health", {})
+        internet_health = health.get("internet", {}) if isinstance(health, dict) else {}
+        isp_up = internet_health.get("isp_up") if isinstance(internet_health, dict) else None
+        if isp_up is not None:
+            NETWORK_ISP_UP.labels(**common).set(1 if isp_up else 0)
+
+        ip_settings = network_details.get("ip_settings")
+        double_nat = ip_settings.get("double_nat") if isinstance(ip_settings, dict) else None
+        if double_nat is not None:
+            NETWORK_DOUBLE_NAT_DETECTED.labels(**common).set(1 if double_nat else 0)
+
+        last_reboot_ts = _parse_timestamp(network_details.get("last_reboot"))
+        if last_reboot_ts is not None:
+            NETWORK_LAST_REBOOT.labels(**common).set(last_reboot_ts)
+
+        connection = network_details.get("connection")
+        connection_mode = connection.get("mode") if isinstance(connection, dict) else None
+        if connection_mode:
+            NETWORK_CONNECTION_MODE_INFO.labels(network_id=network_id).info(
+                {"mode": str(connection_mode).upper()}
+            )
+
+        wan_type = network_details.get("wan_type")
+        if wan_type:
+            NETWORK_WAN_TYPE_INFO.labels(network_id=network_id).info({"type": str(wan_type)})
+
+        mlo_mode = network_details.get("mlo_mode")
+        if mlo_mode:
+            NETWORK_MLO_MODE_INFO.labels(network_id=network_id).info({"mode": str(mlo_mode)})
+
+        wireless_mode = network_details.get("wireless_mode")
+        if wireless_mode:
+            NETWORK_WIRELESS_MODE_INFO.labels(network_id=network_id).info(
+                {"mode": str(wireless_mode)}
+            )
+
+        ddns = network_details.get("ddns")
+        ddns_enabled = ddns.get("enabled") if isinstance(ddns, dict) else None
+        if ddns_enabled is not None:
+            NETWORK_DDNS_ENABLED.labels(**common).set(1 if ddns_enabled else 0)
+
+        premium_dns = network_details.get("premium_dns")
+        dns_policies = premium_dns.get("dns_policies") if isinstance(premium_dns, dict) else None
+        malware_block = (
+            dns_policies.get("block_malware") if isinstance(dns_policies, dict) else None
+        )
+        if malware_block is not None:
+            NETWORK_MALWARE_BLOCK_ENABLED.labels(**common).set(1 if malware_block else 0)
+
+        updates = network_details.get("updates")
+        if isinstance(updates, dict):
+            has_update = updates.get("has_update")
+            if has_update is not None:
+                NETWORK_UPDATE_AVAILABLE.labels(**common).set(1 if has_update else 0)
+            target_firmware = updates.get("target_firmware")
+            if target_firmware:
+                NETWORK_UPDATE_TARGET_INFO.labels(network_id=network_id).info(
+                    {"version": str(target_firmware)}
+                )
+
+        dns_obj = network_details.get("dns")
+        dns_mode = dns_obj.get("mode") if isinstance(dns_obj, dict) else None
+        if dns_mode:
+            NETWORK_DNS_MODE_INFO.labels(network_id=network_id, family="ipv4").info(
+                {"mode": str(dns_mode)}
+            )
+        # ipv6 DNS mode has no confirmed source on the envelope (§8/§10 --
+        # no `ipv6.name_servers.mode` was ever observed); only emitted if a
+        # future API response actually carries it.
+        ipv6_obj = network_details.get("ipv6")
+        ipv6_name_servers = ipv6_obj.get("name_servers") if isinstance(ipv6_obj, dict) else None
+        ipv6_dns_mode = (
+            ipv6_name_servers.get("mode") if isinstance(ipv6_name_servers, dict) else None
+        )
+        if ipv6_dns_mode:
+            NETWORK_DNS_MODE_INFO.labels(network_id=network_id, family="ipv6").info(
+                {"mode": str(ipv6_dns_mode)}
+            )
+
+        dns_parent = dns_obj.get("parent") if isinstance(dns_obj, dict) else None
+        parent_ips = dns_parent.get("ips") if isinstance(dns_parent, dict) else None
+        if isinstance(parent_ips, list):
+            NETWORK_DNS_PARENT_SERVER_COUNT.labels(**common).set(len(parent_ips))
+
+        dhcp_obj = network_details.get("dhcp")
+        dhcp_mode = dhcp_obj.get("mode") if isinstance(dhcp_obj, dict) else None
+        if dhcp_mode:
+            NETWORK_DHCP_MODE_INFO.labels(network_id=network_id).info({"mode": str(dhcp_mode)})
+
+        timezone_obj = network_details.get("timezone")
+        timezone_value = (
+            timezone_obj.get("value") if isinstance(timezone_obj, dict) else timezone_obj
+        )
+        if timezone_value:
+            NETWORK_TIMEZONE_INFO.labels(network_id=network_id).info(
+                {"timezone": str(timezone_value)}
+            )
+
+        premium_details = network_details.get("premium_details")
+        next_renewal = (
+            premium_details.get("next_billing_event_date")
+            if isinstance(premium_details, dict)
+            else None
+        )
+        next_renewal_ts = _parse_timestamp(next_renewal)
+        if next_renewal_ts is not None:
+            ACCOUNT_PREMIUM_NEXT_RENEWAL.labels(network_id=network_id).set(next_renewal_ts)
+
+    def _collect_network_capabilities(
+        self, network_id: str, network_details: dict[str, Any]
+    ) -> None:
+        """Collect the network envelope's ~119 `capabilities.<name>.capable` booleans.
+
+        A handful of entries lack a `capable` key entirely (non-standard
+        shapes, §8) -- those are skipped rather than guessed at.
+        """
+        capabilities = network_details.get("capabilities")
+        if not isinstance(capabilities, dict):
+            return
+        for name, spec in capabilities.items():
+            if not isinstance(spec, dict) or "capable" not in spec:
+                continue
+            capable = spec.get("capable")
+            if not isinstance(capable, bool):
+                continue
+            NETWORK_CAPABILITY.labels(
+                network_id=network_id, capability=_sanitize_label_value(str(name))
+            ).set(1 if capable else 0)
+
     async def _collect_ethernet_port_metrics(
         self, network_id: str, eero_id: str, location: str, eero: dict[str, Any]
     ) -> None:
@@ -2028,6 +2436,41 @@ class EeroCollector:
                     port_number=port_num_str,
                     port_name=port_name,
                 ).set(1 if is_wan else 0)
+
+            is_lte = port_status.get("isLte")
+            if is_lte is not None:
+                ETHERNET_PORT_IS_LTE.labels(
+                    network_id=network_id,
+                    eero_id=eero_id,
+                    location=location,
+                    port_number=port_num_str,
+                    port_name=port_name,
+                ).set(1 if is_lte else 0)
+
+            # `neighbor` is absent/null on unconnected ports. The only
+            # label-safe fields are `type` (bounded enum) and
+            # `metadata.port` (int) -- never `port_name`/`location`/`url`
+            # (§8/§11.2 of the v8 probe shape summary).
+            neighbor = port_status.get("neighbor")
+            if isinstance(neighbor, dict):
+                neighbor_type = neighbor.get("type")
+                neighbor_metadata = neighbor.get("metadata")
+                neighbor_port = (
+                    neighbor_metadata.get("port") if isinstance(neighbor_metadata, dict) else None
+                )
+                if neighbor_type is not None or neighbor_port is not None:
+                    ETHERNET_PORT_NEIGHBOR_INFO.labels(
+                        network_id=network_id,
+                        eero_id=eero_id,
+                        port_number=port_num_str,
+                    ).info(
+                        {
+                            "neighbor_type": str(neighbor_type) if neighbor_type else "unknown",
+                            "neighbor_port": str(neighbor_port)
+                            if neighbor_port is not None
+                            else "unknown",
+                        }
+                    )
 
             # `eero_ethernet_port_power_saving` was removed in 4.0.0 in
             # favour of the network-wide `eero_network_power_saving_enabled`

@@ -251,6 +251,9 @@ REMOVED_IN_4_0_0: frozenset[str] = frozenset(
         f"{PREFIX}_backup_connected",
         f"{PREFIX}_backup_data_used_bytes_total",
         f"{PREFIX}_backup_signal_strength",
+        # Renamed in commit 6: the field is a renewal date, not an expiry
+        # date -- see ACCOUNT_PREMIUM_NEXT_RENEWAL.
+        f"{PREFIX}_account_premium_expiration_timestamp_seconds",
     }
 )
 
@@ -347,13 +350,15 @@ ACCOUNT_NETWORKS_COUNT = _gauge(
     evidence="verified",
 )
 
-ACCOUNT_PREMIUM_EXPIRATION = _gauge(
-    f"{PREFIX}_account_premium_expiration_timestamp_seconds",
-    "Premium subscription expiration date (Unix epoch)",
+ACCOUNT_PREMIUM_NEXT_RENEWAL = _gauge(
+    f"{PREFIX}_account_premium_next_renewal_timestamp_seconds",
+    "Next premium subscription billing/renewal event (Unix epoch). "
+    "Renamed from `_expiration_` in 4.0.0 -- this field is a renewal date, "
+    "not an expiry date (v8 probe shape summary §6 Q3, §10 §5.3).",
     ("network_id",),
     family="account",
     source="network.data.premium_details.next_billing_event_date",
-    evidence="inferred",
+    evidence="verified",
 )
 
 # =============================================================================
@@ -583,6 +588,163 @@ DNS_CONFIG_INFO = _info(
 )
 
 # =============================================================================
+# NETWORK -- commit 6 additions: free fields on the already-fetched network
+# envelope (§5.2/§8/§11.1 of the v8 probe shape summary). Zero extra requests.
+# =============================================================================
+
+NETWORK_ISP_UP = _gauge(
+    f"{PREFIX}_network_isp_up",
+    "Whether the ISP/internet connection is reported up (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.health.internet.isp_up",
+    evidence="verified",
+)
+
+NETWORK_DOUBLE_NAT_DETECTED = _gauge(
+    f"{PREFIX}_network_double_nat_detected",
+    "Whether double NAT was detected on the network (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.ip_settings.double_nat",
+    evidence="verified",
+)
+
+NETWORK_LAST_REBOOT = _gauge(
+    f"{PREFIX}_network_last_reboot_timestamp_seconds",
+    "Timestamp of the network's (gateway eero's) last reboot (Unix epoch)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.last_reboot",
+    evidence="verified",
+)
+
+NETWORK_CONNECTION_MODE_INFO = _info(
+    f"{PREFIX}_network_connection_mode",
+    "Network connection mode (e.g. NAT, bridge)",
+    ("network_id",),
+    family="network_features",
+    source="network.data.connection.mode (upper-cased)",
+    evidence="verified",
+)
+
+NETWORK_WAN_TYPE_INFO = _info(
+    f"{PREFIX}_network_wan_type",
+    "Network WAN type (e.g. DHCP, PPPoE, static)",
+    ("network_id",),
+    family="network_features",
+    source="network.data.wan_type",
+    evidence="verified",
+)
+
+NETWORK_MLO_MODE_INFO = _info(
+    f"{PREFIX}_network_mlo_mode",
+    "Network Multi-Link Operation (MLO) mode",
+    ("network_id",),
+    family="network_features",
+    source="network.data.mlo_mode",
+    evidence="verified",
+)
+
+NETWORK_WIRELESS_MODE_INFO = _info(
+    f"{PREFIX}_network_wireless_mode",
+    "Network wireless mode",
+    ("network_id",),
+    family="network_features",
+    source="network.data.wireless_mode",
+    evidence="verified",
+)
+
+NETWORK_DDNS_ENABLED = _gauge(
+    f"{PREFIX}_network_ddns_enabled",
+    "Whether Dynamic DNS is enabled (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.ddns.enabled",
+    evidence="verified",
+)
+
+NETWORK_MALWARE_BLOCK_ENABLED = _gauge(
+    f"{PREFIX}_network_malware_block_enabled",
+    "Whether malware blocking is enabled network-wide (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.premium_dns.dns_policies.block_malware",
+    evidence="verified",
+)
+
+NETWORK_UPDATE_AVAILABLE = _gauge(
+    f"{PREFIX}_network_update_available",
+    "Whether a firmware update is available for the network (1=yes, 0=no)",
+    ("network_id", "name"),
+    family="network_features",
+    source="network.data.updates.has_update",
+    evidence="verified",
+)
+
+NETWORK_UPDATE_TARGET_INFO = _info(
+    f"{PREFIX}_network_update_target",
+    "The firmware version the network would update to, if an update is available",
+    ("network_id",),
+    family="network_features",
+    source="network.data.updates.target_firmware",
+    evidence="verified",
+)
+
+NETWORK_DNS_MODE_INFO = _info(
+    f"{PREFIX}_network_dns_mode",
+    "Network DNS mode, by IP family",
+    ("network_id", "family"),
+    family="network_features",
+    source="network.data.dns.mode (ipv4); network.data.ipv6.name_servers.mode (ipv6, if observed)",
+    evidence="verified",
+)
+
+NETWORK_DNS_PARENT_SERVER_COUNT = _gauge(
+    f"{PREFIX}_network_dns_parent_server_count",
+    "Number of parent (upstream/ISP) DNS servers configured",
+    ("network_id", "name"),
+    family="network_features",
+    source="len(network.data.dns.parent.ips)",
+    evidence="verified",
+)
+
+NETWORK_DHCP_MODE_INFO = _info(
+    f"{PREFIX}_network_dhcp_mode",
+    "Network DHCP mode",
+    ("network_id",),
+    family="network_features",
+    source="network.data.dhcp.mode",
+    evidence="verified",
+)
+
+NETWORK_TIMEZONE_INFO = _info(
+    f"{PREFIX}_network_timezone",
+    "Network configured timezone",
+    ("network_id",),
+    family="network_features",
+    source="network.data.timezone.value",
+    evidence="verified",
+)
+
+# =============================================================================
+# NETWORK CAPABILITIES -- the envelope's 119-entry `capabilities.<name>.capable`
+# boolean dict (§8/§11.1). The `capability` label value is the API's own key
+# name, sanitised (`[^a-z0-9_]` -> `_`); the vocabulary is bounded by the API,
+# not user input.
+# =============================================================================
+
+NETWORK_CAPABILITY = _gauge(
+    f"{PREFIX}_network_capability",
+    "Whether a named network capability/feature is available (1=yes, 0=no). "
+    "Capability names are the eero API's own feature keys.",
+    ("network_id", "capability"),
+    family="network_capabilities",
+    source="network.data.capabilities.<name>.capable",
+    evidence="verified",
+)
+
+# =============================================================================
 # GUEST NETWORK
 # =============================================================================
 
@@ -791,6 +953,145 @@ EERO_NIGHTLIGHT_SCHEDULE_ENABLED = _gauge(
 )
 
 # =============================================================================
+# EEROS -- commit 6 additions (§8/§11.2 of the v8 probe shape summary).
+# Every field below is embedded on the same `eeros.data[]` items already
+# collected above -- zero extra requests.
+# =============================================================================
+
+EERO_IS_PRIMARY = _gauge(
+    f"{PREFIX}_eero_is_primary",
+    "Whether this eero is the primary/gateway node of the mesh (1=yes, 0=no)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].is_primary_node",
+    evidence="verified",
+)
+
+EERO_USING_WAN = _gauge(
+    f"{PREFIX}_eero_using_wan",
+    "Whether this eero is actively using its WAN connection (1=yes, 0=no)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].using_wan",
+    evidence="verified",
+)
+
+EERO_LAST_HEARTBEAT = _gauge(
+    f"{PREFIX}_eero_last_heartbeat_timestamp_seconds",
+    "Timestamp of the eero's last heartbeat (Unix epoch)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].last_heartbeat",
+    evidence="verified",
+)
+
+EERO_JOINED = _gauge(
+    f"{PREFIX}_eero_joined_timestamp_seconds",
+    "Timestamp the eero joined the mesh (Unix epoch)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].joined",
+    evidence="verified",
+)
+
+EERO_BAND_SUPPORTED = _gauge(
+    f"{PREFIX}_eero_band_supported",
+    "Whether this eero supports a given radio band (1=supported). "
+    "Only supported bands are exported, one series per band.",
+    ("network_id", "eero_id", "location", "band"),
+    family="eeros",
+    source="eeros.data[].bands[]",
+    evidence="verified",
+)
+
+EERO_RADIO_COUNT = _gauge(
+    f"{PREFIX}_eero_radio_count",
+    "Number of radios (BSSID/band pairs) on this eero",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="len(eeros.data[].bssids_with_bands)",
+    evidence="verified",
+)
+
+EERO_POWER_SAVING_ACTIVE = _gauge(
+    f"{PREFIX}_eero_power_saving_active",
+    "Whether power saving is currently active on this eero (1=yes, 0=no)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].power_saving.schedule.active",
+    evidence="verified",
+)
+
+EERO_POWER_SOURCE_INFO = _info(
+    f"{PREFIX}_eero_power_source",
+    "The eero's power source (e.g. USB, PoE)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].power_info.power_source",
+    evidence="verified",
+)
+
+EERO_CONNECTION_TYPE_INFO = _info(
+    f"{PREFIX}_eero_connection_type",
+    "How this eero is connected to the mesh (wired/wireless)",
+    ("network_id", "eero_id", "location"),
+    family="eeros",
+    source="eeros.data[].connection_type (upper-cased on this resource)",
+    evidence="verified",
+)
+
+# =============================================================================
+# RADIO -- `eeros.data[].radio_channel_stats`, a dict keyed by the exact
+# `CHANNEL_UTILIZATION_BANDS` enum (§8/§11.2). Zero extra requests: 5 bands x
+# 5 numerics x E eeros, free on the eeros/network-envelope read.
+# =============================================================================
+
+EERO_RADIO_CHANNEL = _gauge(
+    f"{PREFIX}_eero_radio_channel",
+    "Current WiFi channel number for this eero's radio, by band",
+    ("network_id", "eero_id", "location", "band"),
+    family="radio",
+    source="eeros.data[].radio_channel_stats[band].channel",
+    evidence="verified",
+)
+
+EERO_RADIO_CHANNEL_WIDTH = _gauge(
+    f"{PREFIX}_eero_radio_channel_width_mhz",
+    "Current WiFi channel width in MHz for this eero's radio, by band",
+    ("network_id", "eero_id", "location", "band"),
+    family="radio",
+    source="eeros.data[].radio_channel_stats[band].channel_width",
+    evidence="verified",
+)
+
+EERO_RADIO_TX_POWER = _gauge(
+    f"{PREFIX}_eero_radio_tx_power_dbm",
+    "Current transmit power in dBm for this eero's radio, by band",
+    ("network_id", "eero_id", "location", "band"),
+    family="radio",
+    source="eeros.data[].radio_channel_stats[band].tx_power",
+    evidence="verified",
+)
+
+EERO_RADIO_CHANNEL_UTILIZATION = _gauge(
+    f"{PREFIX}_eero_radio_channel_utilization_percent",
+    "Current channel utilization percentage for this eero's radio, by band",
+    ("network_id", "eero_id", "location", "band"),
+    family="radio",
+    source="eeros.data[].radio_channel_stats[band].channel_utilization",
+    evidence="verified",
+)
+
+EERO_RADIO_CLIENT_COUNT = _gauge(
+    f"{PREFIX}_eero_radio_client_count",
+    "Number of clients currently connected to this eero's radio, by band",
+    ("network_id", "eero_id", "location", "band"),
+    family="radio",
+    source="eeros.data[].radio_channel_stats[band].client_count",
+    evidence="verified",
+)
+
+# =============================================================================
 # ETHERNET
 # =============================================================================
 
@@ -828,6 +1129,25 @@ ETHERNET_PORT_IS_WAN = _gauge(
     ("network_id", "eero_id", "location", "port_number", "port_name"),
     family="ethernet",
     source="eeros.data[].ethernet_status.statuses[].isWanPort",
+    evidence="verified",
+)
+
+ETHERNET_PORT_IS_LTE = _gauge(
+    f"{PREFIX}_ethernet_port_is_lte",
+    "Whether the Ethernet port is an LTE backup connection (1=yes, 0=no)",
+    ("network_id", "eero_id", "location", "port_number", "port_name"),
+    family="ethernet",
+    source="eeros.data[].ethernet_status.statuses[].isLte",
+    evidence="verified",
+)
+
+ETHERNET_PORT_NEIGHBOR_INFO = _info(
+    f"{PREFIX}_ethernet_port_neighbor",
+    "Neighbour device seen on this Ethernet port, if any (never location/URL -- "
+    "only the bounded `type` enum and the numeric `port` on the neighbour side).",
+    ("network_id", "eero_id", "port_number"),
+    family="ethernet",
+    source="eeros.data[].ethernet_status.statuses[].neighbor.{type,metadata.port}",
     evidence="verified",
 )
 
@@ -1050,6 +1370,96 @@ DEVICE_WIFI_GENERATION = _gauge(
 )
 
 # =============================================================================
+# CLIENT DEVICES -- commit 6 additions (§8/§11.3 of the v8 probe shape
+# summary). All free on the already-fetched `devices.data[]` items; the
+# `profile` label on `DEVICE_INFO` (added via the .info() call, not a new
+# constructor label) is bounded by the profile count, per the v8 migration
+# plan §5.4.
+# =============================================================================
+
+DEVICE_SUBNET_KIND_INFO = _info(
+    f"{PREFIX}_device_subnet_kind",
+    "Which subnet kind (main/guest) this device is on",
+    ("network_id", "device_id"),
+    family="devices",
+    source="devices.data[].subnet_kind",
+    evidence="verified",
+)
+
+DEVICE_PACKET_STATS_RX_PACKETS = _gauge(
+    f"{PREFIX}_device_packet_stats_rx_packets",
+    "Total received packets reported for this device (lifetime counter reported "
+    "as a gauge -- the API gives no reset semantics)",
+    ("network_id", "device_id"),
+    family="devices",
+    source="devices.data[].connectivity.packet_stats.rx_packets",
+    evidence="verified",
+)
+
+DEVICE_PACKET_STATS_TX_PACKETS = _gauge(
+    f"{PREFIX}_device_packet_stats_tx_packets",
+    "Total transmitted packets reported for this device",
+    ("network_id", "device_id"),
+    family="devices",
+    source="devices.data[].connectivity.packet_stats.tx_packets",
+    evidence="verified",
+)
+
+DEVICE_PACKET_STATS_TOTAL_PACKETS = _gauge(
+    f"{PREFIX}_device_packet_stats_total_packets",
+    "Total packets (rx+tx) reported for this device",
+    ("network_id", "device_id"),
+    family="devices",
+    source="devices.data[].connectivity.packet_stats.total_packets",
+    evidence="verified",
+)
+
+DEVICE_PACKET_STATS_RX_DROPS = _gauge(
+    f"{PREFIX}_device_packet_stats_rx_drops",
+    "Total dropped received packets reported for this device",
+    ("network_id", "device_id"),
+    family="devices",
+    source="devices.data[].connectivity.packet_stats.rx_drops",
+    evidence="verified",
+)
+
+DEVICE_PACKET_STATS_TX_RETRIES = _gauge(
+    f"{PREFIX}_device_packet_stats_tx_retries",
+    "Total transmit retries reported for this device",
+    ("network_id", "device_id"),
+    family="devices",
+    source="devices.data[].connectivity.packet_stats.tx_retries",
+    evidence="verified",
+)
+
+DEVICE_PACKET_STATS_TX_RETRANSMIT_PPM = _gauge(
+    f"{PREFIX}_device_packet_stats_tx_retransmit_ppm",
+    "Transmit retransmit rate in parts-per-million for this device",
+    ("network_id", "device_id"),
+    family="devices",
+    source="devices.data[].connectivity.packet_stats.tx_retransmit_ppm",
+    evidence="verified",
+)
+
+DEVICE_PACKET_STATS_TX_FAIL_PPM = _gauge(
+    f"{PREFIX}_device_packet_stats_tx_fail_ppm",
+    "Transmit failure rate in parts-per-million for this device",
+    ("network_id", "device_id"),
+    family="devices",
+    source="devices.data[].connectivity.packet_stats.tx_fail_ppm",
+    evidence="verified",
+)
+
+DEVICE_PACKET_STATS_RX_DROP_PPM = _gauge(
+    f"{PREFIX}_device_packet_stats_rx_drop_ppm",
+    "Receive drop rate in parts-per-million for this device",
+    ("network_id", "device_id"),
+    family="devices",
+    source="devices.data[].connectivity.packet_stats.rx_drop_ppm",
+    evidence="verified",
+)
+
+# =============================================================================
 # PROFILES
 # =============================================================================
 
@@ -1068,6 +1478,45 @@ PROFILE_DEVICES_COUNT = _gauge(
     ("network_id", "profile_id", "name"),
     family="profiles",
     source="len(profiles.data[].devices)",
+    evidence="verified",
+)
+
+# Commit 6 additions (§8/§11.4 of the v8 probe shape summary) -- all free on
+# the already-fetched `profiles.data[]` items.
+
+PROFILE_CONNECTED_DEVICES_COUNT = _gauge(
+    f"{PREFIX}_profile_connected_devices_count",
+    "Number of currently-connected devices in the profile",
+    ("network_id", "profile_id", "name"),
+    family="profiles",
+    source="sum(profiles.data[].devices[].connected)",
+    evidence="verified",
+)
+
+PROFILE_SCHEDULES_COUNT = _gauge(
+    f"{PREFIX}_profile_schedules_count",
+    "Number of schedules configured on the profile",
+    ("network_id", "profile_id", "name"),
+    family="profiles",
+    source="len(profiles.data[].schedule)",
+    evidence="verified",
+)
+
+PROFILE_BLOCKED_APPLICATIONS_COUNT = _gauge(
+    f"{PREFIX}_profile_blocked_applications_count",
+    "Number of applications blocked on the profile",
+    ("network_id", "profile_id", "name"),
+    family="profiles",
+    source="len(profiles.data[].premium_dns.blocked_applications)",
+    evidence="verified",
+)
+
+PROFILE_CONTENT_FILTERS_SET = _gauge(
+    f"{PREFIX}_profile_content_filters_set",
+    "Whether unified content filters are configured on the profile (1=yes, 0=no)",
+    ("network_id", "profile_id", "name"),
+    family="profiles",
+    source="profiles.data[].unified_content_filters.is_content_filters_set",
     evidence="verified",
 )
 
@@ -1257,7 +1706,7 @@ NETWORK_BLACKLISTED_DEVICES_COUNT = _gauge(
 # =============================================================================
 
 # `NETWORK_PREMIUM_ENABLED` (network_features) and
-# `ACCOUNT_PREMIUM_EXPIRATION` (account) already carry the premium signals
+# `ACCOUNT_PREMIUM_NEXT_RENEWAL` (account) already carry the premium signals
 # with a real source; this family is a placeholder for the extended-tier
 # premium reads (`get_backup_internet`, `list_backup_access_points`,
 # entitlement features) a later commit will add.

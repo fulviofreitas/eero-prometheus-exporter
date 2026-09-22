@@ -23,6 +23,12 @@
     "joined": "2025-03-05T01:16:11+0000",
     "last_heartbeat": "2026-09-21T23:46:07.185Z",
     "last_reboot": "2026-09-15T03:45:09.573Z",
+    "connection_type": "WIRED",
+    "bands": ["band_2_4GHz", "band_5GHz_full", "band_6GHz"],
+    "bssids_with_bands": ["bssid1", "bssid2", "bssid3"],
+    "power_info": {
+      "power_source": "USB"
+    },
     "uptime": {
       "since_last_reboot_s": 604800,
       "since_cloud_connection_s": 604700
@@ -43,7 +49,7 @@
           "hasCarrier": true,
           "speed": "P1000",
           "isWanPort": true,
-          "isLte": false,
+          "isLte": true,
           "isLeafWiredToUpstream": false,
           "power_saving": false,
           "port_name": "eth0",

@@ -17,6 +17,10 @@
     "last_active": "2026-09-21T23:40:00.123Z",
     "first_active": "2023-08-21T03:58:02.414659Z",
     "first_seen": "2026-01-01T00:00:00+0000",
+    "profile": {
+      "url": "/2.2/profiles/1",
+      "name": "Kids"
+    },
     "source": {
       "location": "Living Room",
       "is_gateway": true
@@ -44,6 +48,16 @@
         "guard_interval": "short",
         "channel_width": "80",
         "phy_type": "he"
+      },
+      "packet_stats": {
+        "rx_packets": 100000,
+        "tx_packets": 90000,
+        "total_packets": 190000,
+        "rx_drops": 12,
+        "tx_retries": 34,
+        "tx_retransmit_ppm": 56,
+        "tx_fail_ppm": 2,
+        "rx_drop_ppm": 1
       }
     }
   },
@@ -85,6 +99,38 @@
         "is_lte": false,
         "port_name": "eth1"
       }
+    }
+  },
+  {
+    "url": "/2.2/devices/3",
+    "mac": "AA:BB:CC:00:00:03",
+    "nickname": "tablet-1",
+    "hostname": "tablet-1",
+    "display_name": "Tablet 1",
+    "device_type": "tablet",
+    "connected": true,
+    "wireless": true,
+    "is_private": false,
+    "is_guest": true,
+    "connection_type": "wireless",
+    "channel": 6,
+    "manufacturer": "Example Corp",
+    "subnet_kind": "guest",
+    "last_active": "2026-09-21T23:42:00.000Z",
+    "first_active": "2023-10-01T00:00:00.000Z",
+    "first_seen": "2023-10-01T00:00:00.000Z",
+    "source": {
+      "location": "Bedroom",
+      "is_gateway": false
+    },
+    "connectivity": {
+      "frequency": 2437,
+      "signal": "-60 dBm",
+      "score": 0.6,
+      "score_bars": 3,
+      "snr": 20,
+      "inactive_time_ms": 500,
+      "rx_bitrate": "72.2 MBit/s"
     }
   }
 ]

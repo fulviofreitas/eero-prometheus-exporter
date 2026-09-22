@@ -1,0 +1,37 @@
+[
+  {
+    "url": "/2.2/profiles/1",
+    "name": "Kids",
+    "paused": false,
+    "default": false,
+    "schedule": [
+      {"day": "monday", "start": "20:00", "end": "07:00"}
+    ],
+    "devices": [
+      {"url": "/2.2/devices/1", "connected": true},
+      {"url": "/2.2/devices/4", "connected": false}
+    ],
+    "premium_dns": {
+      "blocked_applications": ["tiktok", "youtube"]
+    },
+    "unified_content_filters": {
+      "is_content_filters_set": true
+    }
+  },
+  {
+    "url": "/2.2/profiles/2",
+    "name": "Adults",
+    "paused": false,
+    "default": true,
+    "schedule": [],
+    "devices": [
+      {"url": "/2.2/devices/2", "connected": true}
+    ],
+    "premium_dns": {
+      "blocked_applications": []
+    },
+    "unified_content_filters": {
+      "is_content_filters_set": false
+    }
+  }
+]

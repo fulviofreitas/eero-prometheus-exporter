@@ -10,6 +10,13 @@
   "connection": {
     "mode": "nat"
   },
+  "mlo_mode": "disabled",
+  "wireless_mode": "default",
+  "ip_settings": {
+    "double_nat": false,
+    "public_ip": "203.0.113.99"
+  },
+  "last_reboot": "2026-09-15T03:45:09.573Z",
   "health": {
     "internet": {
       "status": "connected",
@@ -36,12 +43,18 @@
     "caching": false,
     "custom": {
       "ips": ["203.0.113.10", "203.0.113.11"]
+    },
+    "parent": {
+      "ips": ["203.0.113.1", "203.0.113.2"]
     }
+  },
+  "dhcp": {
+    "mode": "custom"
   },
   "premium_dns": {
     "dns_policies": {
       "ad_block": true,
-      "block_malware": false
+      "block_malware": true
     }
   },
   "power_saving": false,
@@ -53,20 +66,25 @@
   "backup_internet_enabled": true,
   "premium_status": "active",
   "premium_details": {
-    "tier": "plus"
+    "tier": "plus",
+    "next_billing_event_date": "2026-09-29T03:00:26Z"
   },
   "timezone": {
     "value": "UTC"
   },
   "updates": {
-    "has_update": false,
-    "update_required": false
+    "has_update": true,
+    "update_required": false,
+    "target_firmware": "6.21.0-abc"
   },
   "ddns": {
     "enabled": true
   },
   "capabilities": {
-    "sqm": {"capable": true}
+    "sqm": {"capable": true},
+    "wpa3": {"capable": true},
+    "block_apps": {"capable": false},
+    "eero_business_license_key": {"foo": "bar"}
   },
   "eeros": {
     "count": 2,

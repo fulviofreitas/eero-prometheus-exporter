@@ -7,6 +7,7 @@ from ``claude/tasks/probes/2026-09-21-shape-summary.md``.
 import json
 import logging
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,20 +24,68 @@ from eero_exporter.collector import (
 )
 from eero_exporter.config import ExporterConfig
 from eero_exporter.metrics import (
+    ACCOUNT_PREMIUM_NEXT_RENEWAL,
     DEVICE_CHANNEL,
+    DEVICE_INFO,
+    DEVICE_PACKET_STATS_RX_DROP_PPM,
+    DEVICE_PACKET_STATS_RX_DROPS,
+    DEVICE_PACKET_STATS_RX_PACKETS,
+    DEVICE_PACKET_STATS_TOTAL_PACKETS,
+    DEVICE_PACKET_STATS_TX_FAIL_PPM,
+    DEVICE_PACKET_STATS_TX_PACKETS,
+    DEVICE_PACKET_STATS_TX_RETRANSMIT_PPM,
+    DEVICE_PACKET_STATS_TX_RETRIES,
     DEVICE_RX_BITRATE,
+    DEVICE_SUBNET_KIND_INFO,
     DEVICE_TX_BITRATE,
+    EERO_BAND_SUPPORTED,
+    EERO_CONNECTION_TYPE_INFO,
+    EERO_IS_PRIMARY,
+    EERO_JOINED,
+    EERO_LAST_HEARTBEAT,
     EERO_LAST_REBOOT,
     EERO_NIGHTLIGHT_ENABLED,
+    EERO_POWER_SAVING_ACTIVE,
+    EERO_POWER_SOURCE_INFO,
+    EERO_RADIO_CHANNEL,
+    EERO_RADIO_CHANNEL_UTILIZATION,
+    EERO_RADIO_CHANNEL_WIDTH,
+    EERO_RADIO_CLIENT_COUNT,
+    EERO_RADIO_COUNT,
+    EERO_RADIO_TX_POWER,
     EERO_UPTIME_SECONDS,
+    EERO_USING_WAN,
+    ETHERNET_PORT_IS_LTE,
+    ETHERNET_PORT_NEIGHBOR_INFO,
     ETHERNET_PORT_SPEED,
     NETWORK_AD_BLOCK_ENABLED,
+    NETWORK_CAPABILITY,
+    NETWORK_CONNECTION_MODE_INFO,
     NETWORK_CUSTOM_DNS_ENABLED,
+    NETWORK_DDNS_ENABLED,
+    NETWORK_DHCP_MODE_INFO,
     NETWORK_DNS_CACHING_ENABLED,
+    NETWORK_DNS_MODE_INFO,
+    NETWORK_DNS_PARENT_SERVER_COUNT,
     NETWORK_DNS_SERVER_COUNT,
+    NETWORK_DOUBLE_NAT_DETECTED,
+    NETWORK_INFO,
+    NETWORK_ISP_UP,
+    NETWORK_LAST_REBOOT,
+    NETWORK_MALWARE_BLOCK_ENABLED,
+    NETWORK_MLO_MODE_INFO,
     NETWORK_POWER_SAVING_ENABLED,
+    NETWORK_TIMEZONE_INFO,
+    NETWORK_UPDATE_AVAILABLE,
+    NETWORK_UPDATE_TARGET_INFO,
+    NETWORK_WAN_TYPE_INFO,
+    NETWORK_WIRELESS_MODE_INFO,
     PORT_FORWARD_ENABLED,
     PORT_FORWARD_INFO,
+    PROFILE_BLOCKED_APPLICATIONS_COUNT,
+    PROFILE_CONNECTED_DEVICES_COUNT,
+    PROFILE_CONTENT_FILTERS_SET,
+    PROFILE_SCHEDULES_COUNT,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "v8"
@@ -209,6 +258,7 @@ def _mock_client(
     eeros: list | None = None,
     devices: list | None = None,
     forwards: list | None = None,
+    profiles: list | None = None,
 ) -> MagicMock:
     client = MagicMock()
     client.__aenter__ = AsyncMock(return_value=client)
@@ -219,7 +269,7 @@ def _mock_client(
     client.get_network = AsyncMock(return_value=network_details)
     client.get_eeros = AsyncMock(return_value=eeros or [])
     client.get_devices = AsyncMock(return_value=devices or [])
-    client.get_profiles = AsyncMock(return_value=[])
+    client.get_profiles = AsyncMock(return_value=profiles or [])
     client.get_data_usage = AsyncMock(return_value={"series": []})
     client.get_data_usage_breakdown = AsyncMock(
         return_value={"eeros": [], "devices": [], "profiles": [], "unprofiled": []}
@@ -525,3 +575,320 @@ async def test_port_forward_falls_back_to_legacy_keys() -> None:
 def test_port_forward_info_labels_have_no_forbidden_fields() -> None:
     assert "ip" not in PORT_FORWARD_INFO._labelnames
     assert "ip_address" not in PORT_FORWARD_INFO._labelnames
+
+
+# ============================================================================
+# Commit 6: network/eero/device/profile envelope metrics (zero extra
+# requests -- every value below comes from the network/eeros/devices/
+# profiles envelopes already fetched by earlier commits).
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_network_envelope_extras() -> None:
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    collector = EeroCollector(session_file="/tmp/session.json", config=_config())  # nosec B108
+    mock_client = _mock_client(network_details)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    labels = {"network_id": "999001", "name": "Test Network"}
+
+    assert NETWORK_ISP_UP.labels(**labels)._value.get() == 1
+    assert NETWORK_DOUBLE_NAT_DETECTED.labels(**labels)._value.get() == 0
+    assert NETWORK_LAST_REBOOT.labels(**labels)._value.get() is not None
+    assert NETWORK_DDNS_ENABLED.labels(**labels)._value.get() == 1
+    assert NETWORK_MALWARE_BLOCK_ENABLED.labels(**labels)._value.get() == 1
+    assert NETWORK_UPDATE_AVAILABLE.labels(**labels)._value.get() == 1
+    assert NETWORK_DNS_PARENT_SERVER_COUNT.labels(**labels)._value.get() == 2
+
+    assert ACCOUNT_PREMIUM_NEXT_RENEWAL.labels(network_id="999001")._value.get() is not None
+
+
+@pytest.mark.asyncio
+async def test_network_connection_mode_info_is_upper_cased() -> None:
+    """`connection.mode` is observed lowercase ('nat') but is exported upper-cased."""
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    collector = EeroCollector(session_file="/tmp/session.json", config=_config())  # nosec B108
+    mock_client = _mock_client(network_details)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    sample = _find_info_sample(NETWORK_CONNECTION_MODE_INFO, network_id="999001")
+    assert sample is not None
+    assert sample.labels["mode"] == "NAT"
+
+
+def _find_info_sample(metric: Any, **extra_labels: str) -> Any:
+    """Find the first exposition sample for an Info metric matching extra_labels."""
+    for family in metric.collect():
+        for sample in family.samples:
+            if not sample.name.endswith("_info"):
+                continue
+            if all(sample.labels.get(k) == v for k, v in extra_labels.items()):
+                return sample
+    return None
+
+
+@pytest.mark.asyncio
+async def test_network_wan_type_mlo_wireless_mode_and_dhcp_dns_timezone_info() -> None:
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    collector = EeroCollector(session_file="/tmp/session.json", config=_config())  # nosec B108
+    mock_client = _mock_client(network_details)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    wan_sample = _find_info_sample(NETWORK_WAN_TYPE_INFO, network_id="999001")
+    assert wan_sample is not None
+    assert wan_sample.labels["type"] == "DHCP"
+
+    wireless_sample = _find_info_sample(NETWORK_WIRELESS_MODE_INFO, network_id="999001")
+    assert wireless_sample is not None
+    assert wireless_sample.labels["mode"] == "default"
+
+    mlo_sample = _find_info_sample(NETWORK_MLO_MODE_INFO, network_id="999001")
+    assert mlo_sample is not None
+    assert mlo_sample.labels["mode"] == "disabled"
+
+    dhcp_sample = _find_info_sample(NETWORK_DHCP_MODE_INFO, network_id="999001")
+    assert dhcp_sample is not None
+    assert dhcp_sample.labels["mode"] == "custom"
+
+    dns_sample = _find_info_sample(NETWORK_DNS_MODE_INFO, network_id="999001", family="ipv4")
+    assert dns_sample is not None
+    assert dns_sample.labels["mode"] == "custom"
+
+    # ipv6 dns mode has no source in the fixture (matches the v8 probe: it
+    # was never observed) -- no series should exist for family="ipv6".
+    assert _find_info_sample(NETWORK_DNS_MODE_INFO, network_id="999001", family="ipv6") is None
+
+    tz_sample = _find_info_sample(NETWORK_TIMEZONE_INFO, network_id="999001")
+    assert tz_sample is not None
+    assert tz_sample.labels["timezone"] == "UTC"
+
+    update_target_sample = _find_info_sample(NETWORK_UPDATE_TARGET_INFO, network_id="999001")
+    assert update_target_sample is not None
+    assert update_target_sample.labels["version"] == "6.21.0-abc"
+
+
+@pytest.mark.asyncio
+async def test_network_capability_gauge_skips_non_boolean_entries() -> None:
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    collector = EeroCollector(session_file="/tmp/session.json", config=_config())  # nosec B108
+    mock_client = _mock_client(network_details)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    assert NETWORK_CAPABILITY.labels(network_id="999001", capability="sqm")._value.get() == 1
+    assert NETWORK_CAPABILITY.labels(network_id="999001", capability="wpa3")._value.get() == 1
+    assert NETWORK_CAPABILITY.labels(network_id="999001", capability="block_apps")._value.get() == 0
+    # `eero_business_license_key` has no `capable` key -- must never be set.
+    samples = [
+        s
+        for family in NETWORK_CAPABILITY.collect()
+        for s in family.samples
+        if s.labels.get("capability") == "eero_business_license_key"
+    ]
+    assert samples == []
+
+
+@pytest.mark.asyncio
+async def test_expose_public_ip_false_omits_public_ip_key() -> None:
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    collector = EeroCollector(
+        session_file="/tmp/session.json",  # nosec B108
+        config=_config(expose_public_ip=False),
+    )
+    mock_client = _mock_client(network_details)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    sample = _find_info_sample(NETWORK_INFO, network_id="999001")
+    assert sample is not None
+    assert "public_ip" not in sample.labels
+
+
+@pytest.mark.asyncio
+async def test_expose_public_ip_true_includes_public_ip_key() -> None:
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    collector = EeroCollector(
+        session_file="/tmp/session.json",  # nosec B108
+        config=_config(expose_public_ip=True),
+    )
+    mock_client = _mock_client(network_details)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    sample = _find_info_sample(NETWORK_INFO, network_id="999001")
+    assert sample is not None
+    assert sample.labels["public_ip"] == "203.0.113.99"
+
+
+@pytest.mark.asyncio
+async def test_eero_envelope_extras() -> None:
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    eeros = _load("eeros.json")
+    collector = EeroCollector(session_file="/tmp/session.json", config=_config())  # nosec B108
+    mock_client = _mock_client(network_details, eeros=eeros)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    labels = {"network_id": "999001", "eero_id": "1", "location": "Living Room"}
+
+    assert EERO_IS_PRIMARY.labels(**labels)._value.get() == 1
+    assert EERO_USING_WAN.labels(**labels)._value.get() == 1
+    assert EERO_LAST_HEARTBEAT.labels(**labels)._value.get() is not None
+    assert EERO_JOINED.labels(**labels)._value.get() is not None
+    assert EERO_RADIO_COUNT.labels(**labels)._value.get() == 3
+    assert EERO_POWER_SAVING_ACTIVE.labels(**labels)._value.get() == 0
+
+    for band in ("band_2_4GHz", "band_5GHz_full", "band_6GHz"):
+        assert EERO_BAND_SUPPORTED.labels(**labels, band=band)._value.get() == 1
+
+    source_sample = _find_info_sample(EERO_POWER_SOURCE_INFO, **labels)
+    assert source_sample is not None
+    assert source_sample.labels["source"] == "USB"
+
+    conn_sample = _find_info_sample(EERO_CONNECTION_TYPE_INFO, **labels)
+    assert conn_sample is not None
+    assert conn_sample.labels["connection_type"] == "WIRED"
+
+
+@pytest.mark.asyncio
+async def test_eero_radio_channel_stats_metrics() -> None:
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    eeros = _load("eeros.json")
+    collector = EeroCollector(session_file="/tmp/session.json", config=_config())  # nosec B108
+    mock_client = _mock_client(network_details, eeros=eeros)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    labels = {
+        "network_id": "999001",
+        "eero_id": "1",
+        "location": "Living Room",
+        "band": "band_2_4GHz",
+    }
+    assert EERO_RADIO_CHANNEL.labels(**labels)._value.get() == 6
+    assert EERO_RADIO_CHANNEL_WIDTH.labels(**labels)._value.get() == 20
+    assert EERO_RADIO_TX_POWER.labels(**labels)._value.get() == 20
+    assert EERO_RADIO_CHANNEL_UTILIZATION.labels(**labels)._value.get() == 15
+    assert EERO_RADIO_CLIENT_COUNT.labels(**labels)._value.get() == 3
+
+
+@pytest.mark.asyncio
+async def test_ethernet_port_is_lte_and_neighbor_info() -> None:
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    eeros = _load("eeros.json")
+    collector = EeroCollector(
+        session_file="/tmp/session.json",  # nosec B108
+        config=_config(include_ethernet=True),
+    )
+    mock_client = _mock_client(network_details, eeros=eeros)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    is_lte = ETHERNET_PORT_IS_LTE.labels(
+        network_id="999001",
+        eero_id="1",
+        location="Living Room",
+        port_number="1",
+        port_name="eth0",
+    )._value.get()
+    assert is_lte == 1
+
+    neighbor_sample = _find_info_sample(
+        ETHERNET_PORT_NEIGHBOR_INFO, network_id="999001", eero_id="1", port_number="1"
+    )
+    assert neighbor_sample is not None
+    assert neighbor_sample.labels["neighbor_type"] == "EERO"
+    assert neighbor_sample.labels["neighbor_port"] == "2"
+    assert "location" not in neighbor_sample.labels
+    assert "url" not in neighbor_sample.labels
+
+
+def test_ethernet_port_neighbor_info_never_carries_location_or_url() -> None:
+    for family in ETHERNET_PORT_NEIGHBOR_INFO.collect():
+        for sample in family.samples:
+            assert "location" not in sample.labels
+            assert "url" not in sample.labels
+            assert "port_name" not in sample.labels
+
+
+@pytest.mark.asyncio
+async def test_device_profile_label_and_subnet_kind() -> None:
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    devices = _load("devices.json")
+    collector = EeroCollector(session_file="/tmp/session.json", config=_config())  # nosec B108
+    mock_client = _mock_client(network_details, devices=devices)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    info_sample = _find_info_sample(DEVICE_INFO, network_id="999001", device_id="1")
+    assert info_sample is not None
+    assert info_sample.labels["profile"] == "Kids"
+
+    # device 2 has no profile object -- empty string, never omitted/"unknown".
+    info_sample_2 = _find_info_sample(DEVICE_INFO, network_id="999001", device_id="2")
+    assert info_sample_2 is not None
+    assert info_sample_2.labels["profile"] == ""
+
+    subnet_sample = _find_info_sample(DEVICE_SUBNET_KIND_INFO, network_id="999001", device_id="3")
+    assert subnet_sample is not None
+    assert subnet_sample.labels["subnet_kind"] == "guest"
+
+
+@pytest.mark.asyncio
+async def test_device_packet_stats_metrics() -> None:
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    devices = _load("devices.json")
+    collector = EeroCollector(session_file="/tmp/session.json", config=_config())  # nosec B108
+    mock_client = _mock_client(network_details, devices=devices)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    labels = {"network_id": "999001", "device_id": "1"}
+    assert DEVICE_PACKET_STATS_RX_PACKETS.labels(**labels)._value.get() == 100000
+    assert DEVICE_PACKET_STATS_TX_PACKETS.labels(**labels)._value.get() == 90000
+    assert DEVICE_PACKET_STATS_TOTAL_PACKETS.labels(**labels)._value.get() == 190000
+    assert DEVICE_PACKET_STATS_RX_DROPS.labels(**labels)._value.get() == 12
+    assert DEVICE_PACKET_STATS_TX_RETRIES.labels(**labels)._value.get() == 34
+    assert DEVICE_PACKET_STATS_TX_RETRANSMIT_PPM.labels(**labels)._value.get() == 56
+    assert DEVICE_PACKET_STATS_TX_FAIL_PPM.labels(**labels)._value.get() == 2
+    assert DEVICE_PACKET_STATS_RX_DROP_PPM.labels(**labels)._value.get() == 1
+
+
+@pytest.mark.asyncio
+async def test_profile_envelope_metrics() -> None:
+    network_details = json.loads((FIXTURES / "network.json").read_text())
+    profiles = _load("profiles.json")
+    collector = EeroCollector(
+        session_file="/tmp/session.json",  # nosec B108
+        config=_config(include_profiles=True),
+    )
+    mock_client = _mock_client(network_details, profiles=profiles)
+
+    with patch("eero_exporter.collector.EeroClient", return_value=mock_client):
+        assert await collector.collect() is True
+
+    labels = {"network_id": "999001", "profile_id": "1", "name": "Kids"}
+    assert PROFILE_SCHEDULES_COUNT.labels(**labels)._value.get() == 1
+    assert PROFILE_BLOCKED_APPLICATIONS_COUNT.labels(**labels)._value.get() == 2
+    assert PROFILE_CONNECTED_DEVICES_COUNT.labels(**labels)._value.get() == 1
+    assert PROFILE_CONTENT_FILTERS_SET.labels(**labels)._value.get() == 1
+
+    labels_2 = {"network_id": "999001", "profile_id": "2", "name": "Adults"}
+    assert PROFILE_SCHEDULES_COUNT.labels(**labels_2)._value.get() == 0
+    assert PROFILE_BLOCKED_APPLICATIONS_COUNT.labels(**labels_2)._value.get() == 0
+    assert PROFILE_CONTENT_FILTERS_SET.labels(**labels_2)._value.get() == 0
