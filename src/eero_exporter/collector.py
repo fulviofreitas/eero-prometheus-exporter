@@ -935,6 +935,215 @@ def _get_wifi_generation(device: dict[str, Any]) -> int | None:
     return None
 
 
+class _SeriesTracker:
+    """Tracks the label sets a per-item metric family writes each cycle and
+    removes any label set from a prior cycle that was not re-observed.
+
+    A `prometheus_client` gauge/info child never disappears once
+    `.labels(...)` has created it -- when an item's mutable label (name,
+    connection_type, source_eero, location, ...) changes, or the item
+    itself disappears (a device leaves the network, an eero is removed,
+    ...), the old series stays frozen at its last value forever. That is
+    the root cause of the stale-series bug: `eero_device_connected` (and
+    the other per-device/per-eero/per-profile gauges) accumulate one dead
+    series per roam/rename/departure on top of the live one, so
+    `count(eero_device_connected == 1)` overstates the true device count
+    and grows without bound with pod uptime.
+
+    This tracker records every label set actually written during the
+    current collection pass (`observe()`) and, once that pass has *fully
+    succeeded* for a given scope, removes any previously-seen label set
+    within that same scope (e.g. one network, or one network + insight
+    type) that was not re-written (`prune()`).
+
+    Never call `prune()` for a scope whose underlying API call failed or
+    was skipped this cycle -- that would erase good data on a transient
+    error instead of a genuine removal. Always scope `prune()` calls to at
+    least `network_id` (devices/eeros/profiles are network-scoped) so a
+    multi-network deployment can never prune one network's series while
+    processing another.
+    """
+
+    def __init__(self) -> None:
+        self._seen: dict[int, set[tuple[str, ...]]] = {}
+
+    def observe(self, metric: Any, labels: dict[str, str]) -> Any:
+        """Set `labels` on `metric` and record them as written this cycle.
+
+        Equivalent to `metric.labels(**labels)`, plus the bookkeeping a
+        later `prune()` call needs to tell a live label set from a stale
+        one.
+
+        Args:
+            metric: The metric family being written (a Gauge or Info).
+            labels: The label name/value pairs passed to `.labels()`.
+
+        Returns:
+            The child metric, exactly as `metric.labels(**labels)` would.
+        """
+        child = metric.labels(**labels)
+        labelnames = metric._labelnames
+        key = tuple(str(labels.get(name, "")) for name in labelnames)
+        self._seen.setdefault(id(metric), set()).add(key)
+        return child
+
+    def prune(self, metric: Any, scope: dict[str, str]) -> None:
+        """Remove every `metric` label set matching `scope` not observed this cycle.
+
+        Args:
+            metric: The metric family to prune.
+            scope: Required label name/value pairs, e.g.
+                `{"network_id": network_id}` or `{"network_id": network_id,
+                "type": insight_type}`. Only existing label sets matching
+                every entry are candidates for removal, so pruning one
+                network (or one network + insight type) never touches
+                another's series.
+        """
+        labelnames = metric._labelnames
+        try:
+            scope_indices = [(labelnames.index(name), value) for name, value in scope.items()]
+        except ValueError:  # pragma: no cover - defensive: scope key not a label
+            return
+        seen = self._seen.get(id(metric), set())
+        try:
+            existing_keys = list(metric._metrics.keys())
+        except AttributeError:  # pragma: no cover - defensive
+            return
+        for key in existing_keys:
+            if any(key[idx] != value for idx, value in scope_indices):
+                continue
+            if key in seen:
+                continue
+            try:
+                metric.remove(*key)
+            except KeyError:  # pragma: no cover - race with a concurrent scrape
+                continue
+
+    def reset_cycle(self) -> None:
+        """Clear all per-cycle observation state; call once at the top of `collect()`."""
+        self._seen.clear()
+
+
+# The per-device gauges/infos pruned by `network_id` at the end of a
+# successful `_collect_device_metrics()` pass. Every one of these carries at
+# least one mutable secondary label (name, manufacturer, connection_type,
+# source_eero, band, ...) alongside the stable `device_id` -- a roam, rename,
+# or band change creates a brand-new label combination that
+# `_SeriesTracker.prune()` must retire once the old one is no longer written.
+_DEVICE_PRUNE_METRICS: tuple[Any, ...] = (
+    DEVICE_INFO,
+    DEVICE_SUBNET_KIND_INFO,
+    DEVICE_CONNECTED,
+    DEVICE_WIRELESS,
+    DEVICE_BLOCKED,
+    DEVICE_PAUSED,
+    DEVICE_IS_GUEST,
+    DEVICE_SIGNAL_STRENGTH,
+    DEVICE_CONNECTION_SCORE,
+    DEVICE_CONNECTION_SCORE_BARS,
+    DEVICE_FREQUENCY,
+    DEVICE_RX_BITRATE,
+    DEVICE_TX_BITRATE,
+    DEVICE_RX_MCS,
+    DEVICE_RX_NSS,
+    DEVICE_TX_MCS,
+    DEVICE_TX_NSS,
+    DEVICE_CHANNEL,
+    DEVICE_PRIVATE,
+    DEVICE_CONNECTED_TO_GATEWAY,
+    DEVICE_LAST_ACTIVE_TIMESTAMP,
+    DEVICE_FIRST_SEEN_TIMESTAMP,
+    DEVICE_WIFI_GENERATION,
+    DEVICE_PACKET_STATS_RX_PACKETS,
+    DEVICE_PACKET_STATS_TX_PACKETS,
+    DEVICE_PACKET_STATS_TOTAL_PACKETS,
+    DEVICE_PACKET_STATS_RX_DROPS,
+    DEVICE_PACKET_STATS_TX_RETRIES,
+    DEVICE_PACKET_STATS_TX_RETRANSMIT_PPM,
+    DEVICE_PACKET_STATS_TX_FAIL_PPM,
+    DEVICE_PACKET_STATS_RX_DROP_PPM,
+)
+
+# The per-eero gauges/infos pruned by `network_id` at the end of a
+# successful `_collect_eero_metrics()` pass (main loop, envelope extras, and
+# `radio_channel_stats`). Most carry a `location` label, which changes on a
+# rename.
+_EERO_PRUNE_METRICS: tuple[Any, ...] = (
+    EERO_INFO,
+    EERO_OS_VERSION_INFO,
+    EERO_STATUS,
+    EERO_IS_GATEWAY,
+    EERO_CONNECTED_CLIENTS,
+    EERO_CONNECTED_WIRED_CLIENTS,
+    EERO_CONNECTED_WIRELESS_CLIENTS,
+    EERO_MESH_QUALITY,
+    EERO_UPTIME_SECONDS,
+    EERO_LED_ON,
+    EERO_UPDATE_AVAILABLE,
+    EERO_HEARTBEAT_OK,
+    EERO_WIRED,
+    EERO_LED_BRIGHTNESS,
+    EERO_LAST_REBOOT,
+    EERO_PROVIDES_WIFI,
+    EERO_NIGHTLIGHT_ENABLED,
+    EERO_NIGHTLIGHT_BRIGHTNESS,
+    EERO_NIGHTLIGHT_SCHEDULE_ENABLED,
+    EERO_IS_PRIMARY,
+    EERO_USING_WAN,
+    EERO_LAST_HEARTBEAT,
+    EERO_JOINED,
+    EERO_BAND_SUPPORTED,
+    EERO_RADIO_COUNT,
+    EERO_POWER_SAVING_ACTIVE,
+    EERO_POWER_SOURCE_INFO,
+    EERO_CONNECTION_TYPE_INFO,
+    EERO_RADIO_CHANNEL,
+    EERO_RADIO_CHANNEL_WIDTH,
+    EERO_RADIO_TX_POWER,
+    EERO_RADIO_CHANNEL_UTILIZATION,
+    EERO_RADIO_CLIENT_COUNT,
+)
+
+# The ethernet-port metrics pruned by (`network_id`, `eero_id`) at the end of
+# each eero's `_collect_ethernet_port_metrics()` call -- `port_name` and
+# `location` are both free-form and can change without the physical port
+# (`port_number`) changing.
+_ETHERNET_PORT_PRUNE_METRICS: tuple[Any, ...] = (
+    ETHERNET_PORT_INFO,
+    ETHERNET_PORT_CARRIER,
+    ETHERNET_PORT_SPEED,
+    ETHERNET_PORT_IS_WAN,
+    ETHERNET_PORT_IS_LTE,
+    ETHERNET_PORT_NEIGHBOR_INFO,
+)
+
+# The per-profile gauges pruned by `network_id` at the end of a successful
+# `_collect_profile_metrics()` pass -- all carry a `name` label.
+_PROFILE_PRUNE_METRICS: tuple[Any, ...] = (
+    PROFILE_PAUSED,
+    PROFILE_DEVICES_COUNT,
+    PROFILE_CONNECTED_DEVICES_COUNT,
+    PROFILE_SCHEDULES_COUNT,
+    PROFILE_BLOCKED_APPLICATIONS_COUNT,
+    PROFILE_CONTENT_FILTERS_SET,
+)
+
+# The RF-tier channel-utilization gauges/infos pruned by (`network_id`,
+# `eero_id`, `band`) at the end of a successful `_collect_rf_metrics()` pass.
+_CHANNEL_UTILIZATION_PRUNE_METRICS: tuple[Any, ...] = (
+    EERO_CHANNEL_UTILIZATION_AVG_PERCENT,
+    EERO_CHANNEL_UTILIZATION_MAX_PERCENT,
+    EERO_CHANNEL_UTILIZATION_P99_PERCENT,
+    EERO_CHANNEL_BUSY_MINUTES,
+    EERO_CHANNEL_INFO,
+    EERO_CHANNEL_ACS_EVENTS_TOTAL,
+    EERO_CHANNEL_BUSY_LAST,
+    EERO_CHANNEL_NOISE_LAST,
+    EERO_CHANNEL_RX_TX_LAST,
+    EERO_CHANNEL_RX_OTHER_LAST,
+)
+
+
 class EeroCollector:
     """Collector for eero metrics."""
 
@@ -1007,6 +1216,23 @@ class EeroCollector:
         # None otherwise (success or a non-auth failure). Consumed by
         # server.py to implement `--auth-failure-exit` (§2).
         self.last_error_kind: str | None = None
+
+        # Removes stale per-item label sets (device roams to a new eero,
+        # renames, or leaves the network; an eero/profile is removed; ...)
+        # after each family that is fully re-collected this cycle. See
+        # `_SeriesTracker` for the design and `_track()` below for the
+        # per-call recording helper.
+        self._series = _SeriesTracker()
+
+    def _track(self, metric: Any, **labels: str) -> Any:
+        """Set `labels` on `metric` while recording them for a later `prune()`.
+
+        Drop-in replacement for `metric.labels(**labels)` used by every
+        per-item family that is pruned at the end of its collection pass
+        (device, eero, profile, RF channel utilization, and the
+        `per_device` insights tier).
+        """
+        return self._series.observe(metric, labels)
 
     async def _api_get(self, endpoint: str, coro: Any) -> tuple[Any, Exception | None]:
         """Await an eero API call, classify+record its outcome, and count it.
@@ -1087,6 +1313,7 @@ class EeroCollector:
         self.last_error_kind = None
         self._api_requests_this_cycle = 0
         _UNVERIFIED_KEYS_LOGGED_THIS_CYCLE.clear()
+        self._series.reset_cycle()
 
         try:
             async with EeroClient(
@@ -1353,7 +1580,7 @@ class EeroCollector:
                 _LOGGER.warning(f"Failed to get eeros: {exc}")
                 return []
 
-        NETWORK_EEROS_COUNT.labels(network_id=network_id, name=network_name).set(len(eeros))
+        self._track(NETWORK_EEROS_COUNT, network_id=network_id, name=network_name).set(len(eeros))
 
         # Count eeros with updates available. `isinstance` guard so a single
         # malformed (non-dict) item can't crash this count before the
@@ -1361,7 +1588,7 @@ class EeroCollector:
         updates_count = sum(
             1 for e in eeros if isinstance(e, dict) and e.get("update_available", False)
         )
-        NETWORK_UPDATES_AVAILABLE.labels(network_id=network_id, name=network_name).set(
+        self._track(NETWORK_UPDATES_AVAILABLE, network_id=network_id, name=network_name).set(
             updates_count
         )
 
@@ -1379,7 +1606,7 @@ class EeroCollector:
 
                 os_version = eero.get("os_version") or eero.get("os") or "unknown"
 
-                EERO_INFO.labels(network_id=network_id, eero_id=eero_id).info(
+                self._track(EERO_INFO, network_id=network_id, eero_id=eero_id).info(
                     {
                         "location": location,
                         "model": model,
@@ -1392,8 +1619,8 @@ class EeroCollector:
                 )
 
                 # Separate OS version info for easier alerting
-                EERO_OS_VERSION_INFO.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
+                self._track(
+                    EERO_OS_VERSION_INFO, network_id=network_id, eero_id=eero_id, location=location
                 ).info(
                     {
                         "version": os_version,
@@ -1410,21 +1637,29 @@ class EeroCollector:
                 if is_online == 0 and eero.get("heartbeat_ok", False):
                     is_online = 1
                 _LOGGER.debug(f"Eero {eero_id} status='{status}' -> is_online={is_online}")
-                EERO_STATUS.labels(
-                    network_id=network_id, eero_id=eero_id, location=location, model=model
+                self._track(
+                    EERO_STATUS,
+                    network_id=network_id,
+                    eero_id=eero_id,
+                    location=location,
+                    model=model,
                 ).set(is_online)
 
                 is_gateway = 1 if eero.get("gateway", False) else 0
-                EERO_IS_GATEWAY.labels(
-                    network_id=network_id, eero_id=eero_id, location=location
+                self._track(
+                    EERO_IS_GATEWAY, network_id=network_id, eero_id=eero_id, location=location
                 ).set(is_gateway)
 
                 clients_count = _coerce_numeric(
                     eero.get("connected_clients_count", 0), field_name="connected_clients_count"
                 )
                 try:
-                    EERO_CONNECTED_CLIENTS.labels(
-                        network_id=network_id, eero_id=eero_id, location=location, model=model
+                    self._track(
+                        EERO_CONNECTED_CLIENTS,
+                        network_id=network_id,
+                        eero_id=eero_id,
+                        location=location,
+                        model=model,
                     ).set(clients_count or 0)
                 except Exception:
                     _LOGGER.warning("Failed to set EERO_CONNECTED_CLIENTS for eero %s", eero_id)
@@ -1435,8 +1670,11 @@ class EeroCollector:
                 )
                 if wired_clients is not None:
                     try:
-                        EERO_CONNECTED_WIRED_CLIENTS.labels(
-                            network_id=network_id, eero_id=eero_id, location=location
+                        self._track(
+                            EERO_CONNECTED_WIRED_CLIENTS,
+                            network_id=network_id,
+                            eero_id=eero_id,
+                            location=location,
                         ).set(wired_clients)
                     except Exception:
                         _LOGGER.warning(
@@ -1449,8 +1687,11 @@ class EeroCollector:
                 )
                 if wireless_clients is not None:
                     try:
-                        EERO_CONNECTED_WIRELESS_CLIENTS.labels(
-                            network_id=network_id, eero_id=eero_id, location=location
+                        self._track(
+                            EERO_CONNECTED_WIRELESS_CLIENTS,
+                            network_id=network_id,
+                            eero_id=eero_id,
+                            location=location,
                         ).set(wireless_clients)
                     except Exception:
                         _LOGGER.warning(
@@ -1462,7 +1703,8 @@ class EeroCollector:
                 )
                 if mesh_quality is not None:
                     try:
-                        EERO_MESH_QUALITY.labels(
+                        self._track(
+                            EERO_MESH_QUALITY,
                             network_id=network_id,
                             eero_id=eero_id,
                             location=location,
@@ -1478,34 +1720,40 @@ class EeroCollector:
                 )
                 if uptime is not None:
                     try:
-                        EERO_UPTIME_SECONDS.labels(
-                            network_id=network_id, eero_id=eero_id, location=location
+                        self._track(
+                            EERO_UPTIME_SECONDS,
+                            network_id=network_id,
+                            eero_id=eero_id,
+                            location=location,
                         ).set(uptime)
                     except Exception:
                         _LOGGER.warning("Failed to set EERO_UPTIME_SECONDS for eero %s", eero_id)
 
                 led_on = eero.get("led_on")
                 if led_on is not None:
-                    EERO_LED_ON.labels(
-                        network_id=network_id, eero_id=eero_id, location=location
+                    self._track(
+                        EERO_LED_ON, network_id=network_id, eero_id=eero_id, location=location
                     ).set(1 if led_on else 0)
 
                 update_available = eero.get("update_available")
                 if update_available is not None:
-                    EERO_UPDATE_AVAILABLE.labels(
-                        network_id=network_id, eero_id=eero_id, location=location
+                    self._track(
+                        EERO_UPDATE_AVAILABLE,
+                        network_id=network_id,
+                        eero_id=eero_id,
+                        location=location,
                     ).set(1 if update_available else 0)
 
                 heartbeat_ok = eero.get("heartbeat_ok")
                 if heartbeat_ok is not None:
-                    EERO_HEARTBEAT_OK.labels(
-                        network_id=network_id, eero_id=eero_id, location=location
+                    self._track(
+                        EERO_HEARTBEAT_OK, network_id=network_id, eero_id=eero_id, location=location
                     ).set(1 if heartbeat_ok else 0)
 
                 wired = eero.get("wired")
                 if wired is not None:
-                    EERO_WIRED.labels(
-                        network_id=network_id, eero_id=eero_id, location=location
+                    self._track(
+                        EERO_WIRED, network_id=network_id, eero_id=eero_id, location=location
                     ).set(1 if wired else 0)
 
                 led_brightness = _coerce_numeric(
@@ -1513,8 +1761,11 @@ class EeroCollector:
                 )
                 if led_brightness is not None:
                     try:
-                        EERO_LED_BRIGHTNESS.labels(
-                            network_id=network_id, eero_id=eero_id, location=location
+                        self._track(
+                            EERO_LED_BRIGHTNESS,
+                            network_id=network_id,
+                            eero_id=eero_id,
+                            location=location,
                         ).set(led_brightness)
                     except Exception:
                         _LOGGER.warning("Failed to set EERO_LED_BRIGHTNESS for eero %s", eero_id)
@@ -1524,8 +1775,11 @@ class EeroCollector:
                     reboot_ts = _parse_timestamp(last_reboot)
                     if reboot_ts is not None:
                         try:
-                            EERO_LAST_REBOOT.labels(
-                                network_id=network_id, eero_id=eero_id, location=location
+                            self._track(
+                                EERO_LAST_REBOOT,
+                                network_id=network_id,
+                                eero_id=eero_id,
+                                location=location,
                             ).set(reboot_ts)
                         except Exception:
                             _LOGGER.warning("Failed to set EERO_LAST_REBOOT for eero %s", eero_id)
@@ -1533,8 +1787,11 @@ class EeroCollector:
                 provides_wifi = eero.get("provides_wifi")
                 if provides_wifi is not None:
                     try:
-                        EERO_PROVIDES_WIFI.labels(
-                            network_id=network_id, eero_id=eero_id, location=location
+                        self._track(
+                            EERO_PROVIDES_WIFI,
+                            network_id=network_id,
+                            eero_id=eero_id,
+                            location=location,
                         ).set(1 if provides_wifi else 0)
                     except Exception:
                         _LOGGER.warning("Failed to set EERO_PROVIDES_WIFI for eero %s", eero_id)
@@ -1550,8 +1807,11 @@ class EeroCollector:
                     nl_enabled = nightlight.get("enabled")
                     if nl_enabled is not None:
                         try:
-                            EERO_NIGHTLIGHT_ENABLED.labels(
-                                network_id=network_id, eero_id=eero_id, location=location
+                            self._track(
+                                EERO_NIGHTLIGHT_ENABLED,
+                                network_id=network_id,
+                                eero_id=eero_id,
+                                location=location,
                             ).set(1 if nl_enabled else 0)
                         except Exception:
                             _LOGGER.warning(
@@ -1564,8 +1824,11 @@ class EeroCollector:
                     )
                     if nl_brightness is not None:
                         try:
-                            EERO_NIGHTLIGHT_BRIGHTNESS.labels(
-                                network_id=network_id, eero_id=eero_id, location=location
+                            self._track(
+                                EERO_NIGHTLIGHT_BRIGHTNESS,
+                                network_id=network_id,
+                                eero_id=eero_id,
+                                location=location,
                             ).set(nl_brightness)
                         except Exception:
                             _LOGGER.warning(
@@ -1577,8 +1840,11 @@ class EeroCollector:
                         schedule_enabled = nl_schedule.get("enabled")
                         if schedule_enabled is not None:
                             try:
-                                EERO_NIGHTLIGHT_SCHEDULE_ENABLED.labels(
-                                    network_id=network_id, eero_id=eero_id, location=location
+                                self._track(
+                                    EERO_NIGHTLIGHT_SCHEDULE_ENABLED,
+                                    network_id=network_id,
+                                    eero_id=eero_id,
+                                    location=location,
                                 ).set(1 if schedule_enabled else 0)
                             except Exception:
                                 _LOGGER.warning(
@@ -1588,6 +1854,12 @@ class EeroCollector:
             except Exception as exc:
                 _LOGGER.warning("Skipping eero item %d: %s: %s", idx, type(exc).__name__, exc)
                 continue
+
+        # The eeros read above succeeded (or came from the network envelope
+        # fetched this cycle), so every eero was just re-observed -- retire
+        # any label set left over from a rename or a removed eero.
+        for metric in _EERO_PRUNE_METRICS:
+            self._series.prune(metric, {"network_id": network_id})
 
         return eeros
 
@@ -1603,42 +1875,42 @@ class EeroCollector:
 
         is_primary = eero.get("is_primary_node")
         if is_primary is not None:
-            EERO_IS_PRIMARY.labels(**common).set(1 if is_primary else 0)
+            self._track(EERO_IS_PRIMARY, **common).set(1 if is_primary else 0)
 
         using_wan = eero.get("using_wan")
         if using_wan is not None:
-            EERO_USING_WAN.labels(**common).set(1 if using_wan else 0)
+            self._track(EERO_USING_WAN, **common).set(1 if using_wan else 0)
 
         last_heartbeat_ts = _parse_timestamp(eero.get("last_heartbeat"))
         if last_heartbeat_ts is not None:
-            EERO_LAST_HEARTBEAT.labels(**common).set(last_heartbeat_ts)
+            self._track(EERO_LAST_HEARTBEAT, **common).set(last_heartbeat_ts)
 
         joined_ts = _parse_timestamp(eero.get("joined"))
         if joined_ts is not None:
-            EERO_JOINED.labels(**common).set(joined_ts)
+            self._track(EERO_JOINED, **common).set(joined_ts)
 
         bands = eero.get("bands")
         if isinstance(bands, list):
             for band in bands:
                 if band in _CHANNEL_UTILIZATION_BANDS:
-                    EERO_BAND_SUPPORTED.labels(**common, band=band).set(1)
+                    self._track(EERO_BAND_SUPPORTED, **common, band=band).set(1)
 
         bssids_with_bands = eero.get("bssids_with_bands")
         if isinstance(bssids_with_bands, list):
-            EERO_RADIO_COUNT.labels(**common).set(len(bssids_with_bands))
+            self._track(EERO_RADIO_COUNT, **common).set(len(bssids_with_bands))
 
         power_saving_active = _coerce_power_saving_enabled(eero.get("power_saving"))
         if power_saving_active is not None:
-            EERO_POWER_SAVING_ACTIVE.labels(**common).set(1 if power_saving_active else 0)
+            self._track(EERO_POWER_SAVING_ACTIVE, **common).set(1 if power_saving_active else 0)
 
         power_info = eero.get("power_info")
         power_source = power_info.get("power_source") if isinstance(power_info, dict) else None
         if power_source:
-            EERO_POWER_SOURCE_INFO.labels(**common).info({"source": str(power_source)})
+            self._track(EERO_POWER_SOURCE_INFO, **common).info({"source": str(power_source)})
 
         connection_type = eero.get("connection_type")
         if connection_type:
-            EERO_CONNECTION_TYPE_INFO.labels(**common).info(
+            self._track(EERO_CONNECTION_TYPE_INFO, **common).info(
                 {"connection_type": str(connection_type).upper()}
             )
 
@@ -1667,29 +1939,29 @@ class EeroCollector:
 
             channel = _coerce_numeric(band_stats.get("channel"), field_name="radio_channel")
             if channel is not None:
-                EERO_RADIO_CHANNEL.labels(**labels).set(channel)
+                self._track(EERO_RADIO_CHANNEL, **labels).set(channel)
 
             channel_width = _coerce_numeric(
                 band_stats.get("channel_width"), field_name="radio_channel_width"
             )
             if channel_width is not None:
-                EERO_RADIO_CHANNEL_WIDTH.labels(**labels).set(channel_width)
+                self._track(EERO_RADIO_CHANNEL_WIDTH, **labels).set(channel_width)
 
             tx_power = _coerce_numeric(band_stats.get("tx_power"), field_name="radio_tx_power")
             if tx_power is not None:
-                EERO_RADIO_TX_POWER.labels(**labels).set(tx_power)
+                self._track(EERO_RADIO_TX_POWER, **labels).set(tx_power)
 
             utilization = _coerce_numeric(
                 band_stats.get("channel_utilization"), field_name="radio_channel_utilization"
             )
             if utilization is not None:
-                EERO_RADIO_CHANNEL_UTILIZATION.labels(**labels).set(utilization)
+                self._track(EERO_RADIO_CHANNEL_UTILIZATION, **labels).set(utilization)
 
             client_count = _coerce_numeric(
                 band_stats.get("client_count"), field_name="radio_client_count"
             )
             if client_count is not None:
-                EERO_RADIO_CLIENT_COUNT.labels(**labels).set(client_count)
+                self._track(EERO_RADIO_CLIENT_COUNT, **labels).set(client_count)
 
     async def _collect_device_metrics(
         self, client: EeroClient, network_id: str, network_name: str
@@ -1712,7 +1984,9 @@ class EeroCollector:
         connected_count = sum(
             1 for d in devices if isinstance(d, dict) and d.get("connected", False)
         )
-        NETWORK_CLIENTS_COUNT.labels(network_id=network_id, name=network_name).set(connected_count)
+        self._track(NETWORK_CLIENTS_COUNT, network_id=network_id, name=network_name).set(
+            connected_count
+        )
 
         # Count guest network clients
         guest_count = sum(
@@ -1720,7 +1994,7 @@ class EeroCollector:
             for d in devices
             if isinstance(d, dict) and d.get("connected", False) and d.get("is_guest", False)
         )
-        GUEST_NETWORK_CONNECTED_CLIENTS.labels(network_id=network_id, name=network_name).set(
+        self._track(GUEST_NETWORK_CONNECTED_CLIENTS, network_id=network_id, name=network_name).set(
             guest_count
         )
 
@@ -1755,7 +2029,7 @@ class EeroCollector:
                 profile = device.get("profile")
                 profile_name = str(profile.get("name") or "") if isinstance(profile, dict) else ""
 
-                DEVICE_INFO.labels(network_id=network_id, device_id=device_id, mac=mac).info(
+                self._track(DEVICE_INFO, network_id=network_id, device_id=device_id, mac=mac).info(
                     {
                         "name": name,
                         "manufacturer": manufacturer,
@@ -1770,13 +2044,14 @@ class EeroCollector:
 
                 subnet_kind = device.get("subnet_kind")
                 if subnet_kind:
-                    DEVICE_SUBNET_KIND_INFO.labels(network_id=network_id, device_id=device_id).info(
-                        {"subnet_kind": str(subnet_kind)}
-                    )
+                    self._track(
+                        DEVICE_SUBNET_KIND_INFO, network_id=network_id, device_id=device_id
+                    ).info({"subnet_kind": str(subnet_kind)})
 
                 connected = device.get("connected", False)
                 try:
-                    DEVICE_CONNECTED.labels(
+                    self._track(
+                        DEVICE_CONNECTED,
                         network_id=network_id,
                         device_id=device_id,
                         name=name,
@@ -1791,7 +2066,8 @@ class EeroCollector:
 
                 wireless = device.get("wireless", False)
                 try:
-                    DEVICE_WIRELESS.labels(
+                    self._track(
+                        DEVICE_WIRELESS,
                         network_id=network_id,
                         device_id=device_id,
                         name=name,
@@ -1803,7 +2079,8 @@ class EeroCollector:
 
                 blocked = device.get("blacklisted", False)
                 try:
-                    DEVICE_BLOCKED.labels(
+                    self._track(
+                        DEVICE_BLOCKED,
                         network_id=network_id,
                         device_id=device_id,
                         name=name,
@@ -1815,7 +2092,8 @@ class EeroCollector:
 
                 paused = device.get("paused", False)
                 try:
-                    DEVICE_PAUSED.labels(
+                    self._track(
+                        DEVICE_PAUSED,
                         network_id=network_id,
                         device_id=device_id,
                         name=name,
@@ -1827,7 +2105,8 @@ class EeroCollector:
 
                 is_guest = device.get("is_guest", False)
                 try:
-                    DEVICE_IS_GUEST.labels(
+                    self._track(
+                        DEVICE_IS_GUEST,
                         network_id=network_id,
                         device_id=device_id,
                         name=name,
@@ -1840,7 +2119,8 @@ class EeroCollector:
                     signal = _parse_signal_strength(connectivity.get("signal"))
                     if signal is not None:
                         try:
-                            DEVICE_SIGNAL_STRENGTH.labels(
+                            self._track(
+                                DEVICE_SIGNAL_STRENGTH,
                                 network_id=network_id,
                                 device_id=device_id,
                                 name=name,
@@ -1856,7 +2136,8 @@ class EeroCollector:
                     score = _coerce_numeric(connectivity.get("score"), field_name="score")
                     if score is not None:
                         try:
-                            DEVICE_CONNECTION_SCORE.labels(
+                            self._track(
+                                DEVICE_CONNECTION_SCORE,
                                 network_id=network_id,
                                 device_id=device_id,
                                 name=name,
@@ -1874,7 +2155,8 @@ class EeroCollector:
                     )
                     if score_bars is not None:
                         try:
-                            DEVICE_CONNECTION_SCORE_BARS.labels(
+                            self._track(
+                                DEVICE_CONNECTION_SCORE_BARS,
                                 network_id=network_id,
                                 device_id=device_id,
                                 name=name,
@@ -1890,7 +2172,8 @@ class EeroCollector:
 
                     if frequency is not None:
                         try:
-                            DEVICE_FREQUENCY.labels(
+                            self._track(
+                                DEVICE_FREQUENCY,
                                 network_id=network_id,
                                 device_id=device_id,
                                 name=name,
@@ -1916,7 +2199,8 @@ class EeroCollector:
                         rx_bitrate = _parse_bitrate(connectivity.get("rx_bitrate"))
                     if rx_bitrate is not None:
                         try:
-                            DEVICE_RX_BITRATE.labels(
+                            self._track(
+                                DEVICE_RX_BITRATE,
                                 network_id=network_id,
                                 device_id=device_id,
                                 name=name,
@@ -1932,7 +2216,8 @@ class EeroCollector:
                     tx_bitrate = _rate_bps_to_mbps(tx_rate_info)
                     if tx_bitrate is not None:
                         try:
-                            DEVICE_TX_BITRATE.labels(
+                            self._track(
+                                DEVICE_TX_BITRATE,
                                 network_id=network_id,
                                 device_id=device_id,
                                 name=name,
@@ -1948,7 +2233,8 @@ class EeroCollector:
                     if rx_rate_info:
                         rx_mcs = rx_rate_info.get("mcs")
                         if rx_mcs is not None:
-                            DEVICE_RX_MCS.labels(
+                            self._track(
+                                DEVICE_RX_MCS,
                                 network_id=network_id,
                                 device_id=device_id,
                                 name=name,
@@ -1957,7 +2243,8 @@ class EeroCollector:
 
                         rx_nss = rx_rate_info.get("nss")
                         if rx_nss is not None:
-                            DEVICE_RX_NSS.labels(
+                            self._track(
+                                DEVICE_RX_NSS,
                                 network_id=network_id,
                                 device_id=device_id,
                                 name=name,
@@ -1967,7 +2254,8 @@ class EeroCollector:
                     if tx_rate_info:
                         tx_mcs = tx_rate_info.get("mcs")
                         if tx_mcs is not None:
-                            DEVICE_TX_MCS.labels(
+                            self._track(
+                                DEVICE_TX_MCS,
                                 network_id=network_id,
                                 device_id=device_id,
                                 name=name,
@@ -1976,7 +2264,8 @@ class EeroCollector:
 
                         tx_nss = tx_rate_info.get("nss")
                         if tx_nss is not None:
-                            DEVICE_TX_NSS.labels(
+                            self._track(
+                                DEVICE_TX_NSS,
                                 network_id=network_id,
                                 device_id=device_id,
                                 name=name,
@@ -1992,7 +2281,8 @@ class EeroCollector:
                 if channel is None and connectivity:
                     channel = connectivity.get("channel")
                 if channel is not None:
-                    DEVICE_CHANNEL.labels(
+                    self._track(
+                        DEVICE_CHANNEL,
                         network_id=network_id,
                         device_id=device_id,
                         name=name,
@@ -2002,7 +2292,8 @@ class EeroCollector:
 
                 is_private = device.get("is_private")
                 if is_private is not None:
-                    DEVICE_PRIVATE.labels(
+                    self._track(
+                        DEVICE_PRIVATE,
                         network_id=network_id,
                         device_id=device_id,
                         name=name,
@@ -2013,7 +2304,8 @@ class EeroCollector:
                 if source and isinstance(source, dict):
                     source_is_gateway = source.get("is_gateway")
                     if source_is_gateway is not None:
-                        DEVICE_CONNECTED_TO_GATEWAY.labels(
+                        self._track(
+                            DEVICE_CONNECTED_TO_GATEWAY,
                             network_id=network_id,
                             device_id=device_id,
                             name=name,
@@ -2025,7 +2317,8 @@ class EeroCollector:
                 if last_active:
                     last_active_ts = _parse_timestamp(last_active)
                     if last_active_ts is not None:
-                        DEVICE_LAST_ACTIVE_TIMESTAMP.labels(
+                        self._track(
+                            DEVICE_LAST_ACTIVE_TIMESTAMP,
                             network_id=network_id,
                             device_id=device_id,
                             name=name,
@@ -2036,7 +2329,8 @@ class EeroCollector:
                 if first_seen:
                     first_seen_ts = _parse_timestamp(first_seen)
                     if first_seen_ts is not None:
-                        DEVICE_FIRST_SEEN_TIMESTAMP.labels(
+                        self._track(
+                            DEVICE_FIRST_SEEN_TIMESTAMP,
                             network_id=network_id,
                             device_id=device_id,
                             name=name,
@@ -2046,7 +2340,8 @@ class EeroCollector:
                 # WiFi generation
                 wifi_gen = _get_wifi_generation(device)
                 if wifi_gen is not None:
-                    DEVICE_WIFI_GENERATION.labels(
+                    self._track(
+                        DEVICE_WIFI_GENERATION,
                         network_id=network_id,
                         device_id=device_id,
                         name=name,
@@ -2055,6 +2350,13 @@ class EeroCollector:
             except Exception as exc:
                 _LOGGER.warning("Skipping device item %d: %s: %s", idx, type(exc).__name__, exc)
                 continue
+
+        # The devices GET above succeeded (an early return already happened
+        # otherwise), so every device on the network was just re-observed --
+        # any label set left over from a roam, rename, or a device that has
+        # since left the network is safe to retire now.
+        for metric in _DEVICE_PRUNE_METRICS:
+            self._series.prune(metric, {"network_id": network_id})
 
         return cast(list[dict[str, Any]], devices)
 
@@ -2085,7 +2387,7 @@ class EeroCollector:
         for field_name, metric in field_metrics:
             value = _coerce_numeric(packet_stats.get(field_name), field_name=field_name)
             if value is not None:
-                metric.labels(**labels).set(value)
+                self._track(metric, **labels).set(value)
 
     async def _collect_profile_metrics(
         self, client: EeroClient, network_id: str
@@ -2115,9 +2417,9 @@ class EeroCollector:
                     continue
 
                 paused = profile.get("paused", False)
-                PROFILE_PAUSED.labels(network_id=network_id, profile_id=profile_id, name=name).set(
-                    1 if paused else 0
-                )
+                self._track(
+                    PROFILE_PAUSED, network_id=network_id, profile_id=profile_id, name=name
+                ).set(1 if paused else 0)
 
                 devices_data = profile.get("devices", [])
                 if isinstance(devices_data, dict):
@@ -2126,15 +2428,18 @@ class EeroCollector:
                     devices = devices_data
                 else:
                     devices = []
-                PROFILE_DEVICES_COUNT.labels(
-                    network_id=network_id, profile_id=profile_id, name=name
+                self._track(
+                    PROFILE_DEVICES_COUNT, network_id=network_id, profile_id=profile_id, name=name
                 ).set(len(devices))
 
                 connected_devices = sum(
                     1 for d in devices if isinstance(d, dict) and d.get("connected")
                 )
-                PROFILE_CONNECTED_DEVICES_COUNT.labels(
-                    network_id=network_id, profile_id=profile_id, name=name
+                self._track(
+                    PROFILE_CONNECTED_DEVICES_COUNT,
+                    network_id=network_id,
+                    profile_id=profile_id,
+                    name=name,
                 ).set(connected_devices)
 
                 # `schedule`/`premium_dns.blocked_applications` are free on
@@ -2143,8 +2448,11 @@ class EeroCollector:
                 # (§8/§11.4 of the v8 probe shape summary).
                 schedule = profile.get("schedule")
                 if isinstance(schedule, list):
-                    PROFILE_SCHEDULES_COUNT.labels(
-                        network_id=network_id, profile_id=profile_id, name=name
+                    self._track(
+                        PROFILE_SCHEDULES_COUNT,
+                        network_id=network_id,
+                        profile_id=profile_id,
+                        name=name,
                     ).set(len(schedule))
 
                 premium_dns = profile.get("premium_dns")
@@ -2154,8 +2462,11 @@ class EeroCollector:
                     else None
                 )
                 if isinstance(blocked_applications, list):
-                    PROFILE_BLOCKED_APPLICATIONS_COUNT.labels(
-                        network_id=network_id, profile_id=profile_id, name=name
+                    self._track(
+                        PROFILE_BLOCKED_APPLICATIONS_COUNT,
+                        network_id=network_id,
+                        profile_id=profile_id,
+                        name=name,
                     ).set(len(blocked_applications))
 
                 unified_content_filters = profile.get("unified_content_filters")
@@ -2165,12 +2476,21 @@ class EeroCollector:
                     else None
                 )
                 if content_filters_set is not None:
-                    PROFILE_CONTENT_FILTERS_SET.labels(
-                        network_id=network_id, profile_id=profile_id, name=name
+                    self._track(
+                        PROFILE_CONTENT_FILTERS_SET,
+                        network_id=network_id,
+                        profile_id=profile_id,
+                        name=name,
                     ).set(1 if content_filters_set else 0)
             except Exception as exc:
                 _LOGGER.warning("Skipping profile item %d: %s: %s", idx, type(exc).__name__, exc)
                 continue
+
+        # The profiles GET above succeeded (an early return already happened
+        # otherwise), so every profile was just re-observed -- retire any
+        # label set left over from a rename or a deleted profile.
+        for metric in _PROFILE_PRUNE_METRICS:
+            self._series.prune(metric, {"network_id": network_id})
 
         return cast(list[dict[str, Any]], profiles)
 
@@ -2735,19 +3055,28 @@ class EeroCollector:
     async def _collect_ethernet_port_metrics(
         self, network_id: str, eero_id: str, location: str, eero: dict[str, Any]
     ) -> None:
-        """Collect ethernet port metrics for an eero device."""
+        """Collect ethernet port metrics for an eero device.
+
+        `ethernet_status` is read off the eero item already fetched this
+        cycle (no separate GET), so every branch below -- including the
+        early returns for "no ethernet_status"/"no statuses" -- reflects a
+        fully current view and prunes stale ports for this eero before
+        returning.
+        """
         ethernet_status = eero.get("ethernet_status", {})
         if not ethernet_status:
+            self._prune_ethernet_ports(network_id, eero_id)
             return
 
         wired_internet = ethernet_status.get("wiredInternet")
         if wired_internet is not None:
-            EERO_WIRED_INTERNET.labels(
-                network_id=network_id, eero_id=eero_id, location=location
+            self._track(
+                EERO_WIRED_INTERNET, network_id=network_id, eero_id=eero_id, location=location
             ).set(1 if wired_internet else 0)
 
         statuses = ethernet_status.get("statuses", [])
         if not statuses or not isinstance(statuses, list):
+            self._prune_ethernet_ports(network_id, eero_id)
             return
 
         for port_status in statuses:
@@ -2761,13 +3090,14 @@ class EeroCollector:
             # `original_speed`/`derated_reason` were removed in 4.0.0 -- both
             # are always null on every observed port (§11.11); `port_name`
             # is the only field with a real value.
-            ETHERNET_PORT_INFO.labels(
-                network_id=network_id, eero_id=eero_id, port_number=port_num_str
+            self._track(
+                ETHERNET_PORT_INFO, network_id=network_id, eero_id=eero_id, port_number=port_num_str
             ).info({"port_name": port_name})
 
             has_carrier = port_status.get("hasCarrier")
             if has_carrier is not None:
-                ETHERNET_PORT_CARRIER.labels(
+                self._track(
+                    ETHERNET_PORT_CARRIER,
                     network_id=network_id,
                     eero_id=eero_id,
                     location=location,
@@ -2777,7 +3107,8 @@ class EeroCollector:
 
             speed = _parse_ethernet_speed_enum(port_status.get("speed"))
             if speed is not None:
-                ETHERNET_PORT_SPEED.labels(
+                self._track(
+                    ETHERNET_PORT_SPEED,
                     network_id=network_id,
                     eero_id=eero_id,
                     location=location,
@@ -2787,7 +3118,8 @@ class EeroCollector:
 
             is_wan = port_status.get("isWanPort")
             if is_wan is not None:
-                ETHERNET_PORT_IS_WAN.labels(
+                self._track(
+                    ETHERNET_PORT_IS_WAN,
                     network_id=network_id,
                     eero_id=eero_id,
                     location=location,
@@ -2797,7 +3129,8 @@ class EeroCollector:
 
             is_lte = port_status.get("isLte")
             if is_lte is not None:
-                ETHERNET_PORT_IS_LTE.labels(
+                self._track(
+                    ETHERNET_PORT_IS_LTE,
                     network_id=network_id,
                     eero_id=eero_id,
                     location=location,
@@ -2817,7 +3150,8 @@ class EeroCollector:
                     neighbor_metadata.get("port") if isinstance(neighbor_metadata, dict) else None
                 )
                 if neighbor_type is not None or neighbor_port is not None:
-                    ETHERNET_PORT_NEIGHBOR_INFO.labels(
+                    self._track(
+                        ETHERNET_PORT_NEIGHBOR_INFO,
                         network_id=network_id,
                         eero_id=eero_id,
                         port_number=port_num_str,
@@ -2833,6 +3167,18 @@ class EeroCollector:
             # `eero_ethernet_port_power_saving` was removed in 4.0.0 in
             # favour of the network-wide `eero_network_power_saving_enabled`
             # (§11.11 lists the per-port key as removed).
+
+        self._prune_ethernet_ports(network_id, eero_id)
+
+    def _prune_ethernet_ports(self, network_id: str, eero_id: str) -> None:
+        """Retire ethernet-port label sets for `eero_id` not written this cycle.
+
+        Scoped to a single (network, eero) pair so a port renumbered,
+        renamed, or removed on one eero can never affect another eero's
+        ports.
+        """
+        for metric in _ETHERNET_PORT_PRUNE_METRICS:
+            self._series.prune(metric, {"network_id": network_id, "eero_id": eero_id})
 
     async def _collect_premium_metrics(
         self,
@@ -3471,8 +3817,8 @@ class EeroCollector:
                 role_eero_id = meta_item.get("eero_id")
                 role = meta_item.get("role")
                 if role_eero_id is not None and role:
-                    EERO_EERO_ROLE_INFO.labels(
-                        network_id=network_id, eero_id=str(role_eero_id)
+                    self._track(
+                        EERO_EERO_ROLE_INFO, network_id=network_id, eero_id=str(role_eero_id)
                     ).info({"role": str(role)})
 
         utilization = data.get("utilization")
@@ -3493,30 +3839,30 @@ class EeroCollector:
                     item.get("average_utilization"), field_name="average_utilization"
                 )
                 if avg is not None:
-                    EERO_CHANNEL_UTILIZATION_AVG_PERCENT.labels(**labels).set(avg)
+                    self._track(EERO_CHANNEL_UTILIZATION_AVG_PERCENT, **labels).set(avg)
 
                 max_utilization = _coerce_numeric(
                     item.get("max_utilization"), field_name="max_utilization"
                 )
                 if max_utilization is not None:
-                    EERO_CHANNEL_UTILIZATION_MAX_PERCENT.labels(**labels).set(max_utilization)
+                    self._track(EERO_CHANNEL_UTILIZATION_MAX_PERCENT, **labels).set(max_utilization)
 
                 p99 = _coerce_numeric(item.get("p99_utilization"), field_name="p99_utilization")
                 if p99 is not None:
-                    EERO_CHANNEL_UTILIZATION_P99_PERCENT.labels(**labels).set(p99)
+                    self._track(EERO_CHANNEL_UTILIZATION_P99_PERCENT, **labels).set(p99)
 
                 busy_minutes = _coerce_numeric(
                     item.get("minutes_over_busy_threshold"),
                     field_name="minutes_over_busy_threshold",
                 )
                 if busy_minutes is not None:
-                    EERO_CHANNEL_BUSY_MINUTES.labels(**labels).set(busy_minutes)
+                    self._track(EERO_CHANNEL_BUSY_MINUTES, **labels).set(busy_minutes)
 
                 channel = item.get("channel")
                 center_channel = item.get("center_channel")
                 channel_bandwidth = item.get("channel_bandwidth")
                 frequency = item.get("frequency")
-                EERO_CHANNEL_INFO.labels(**labels).info(
+                self._track(EERO_CHANNEL_INFO, **labels).info(
                     {
                         "channel": str(channel) if channel is not None else "unknown",
                         "center_channel": (
@@ -3529,7 +3875,7 @@ class EeroCollector:
 
                 acs_events = item.get("acs_events")
                 if isinstance(acs_events, list):
-                    EERO_CHANNEL_ACS_EVENTS_TOTAL.labels(**labels).set(len(acs_events))
+                    self._track(EERO_CHANNEL_ACS_EVENTS_TOTAL, **labels).set(len(acs_events))
 
                 time_series = item.get("time_series_data")
                 if isinstance(time_series, list) and time_series:
@@ -3537,22 +3883,22 @@ class EeroCollector:
                     if isinstance(last_sample, dict):
                         busy = _coerce_numeric(last_sample.get("busy"), field_name="channel_busy")
                         if busy is not None:
-                            EERO_CHANNEL_BUSY_LAST.labels(**labels).set(busy)
+                            self._track(EERO_CHANNEL_BUSY_LAST, **labels).set(busy)
                         noise = _coerce_numeric(
                             last_sample.get("noise"), field_name="channel_noise"
                         )
                         if noise is not None:
-                            EERO_CHANNEL_NOISE_LAST.labels(**labels).set(noise)
+                            self._track(EERO_CHANNEL_NOISE_LAST, **labels).set(noise)
                         rx_tx = _coerce_numeric(
                             last_sample.get("rx_tx"), field_name="channel_rx_tx"
                         )
                         if rx_tx is not None:
-                            EERO_CHANNEL_RX_TX_LAST.labels(**labels).set(rx_tx)
+                            self._track(EERO_CHANNEL_RX_TX_LAST, **labels).set(rx_tx)
                         rx_other = _coerce_numeric(
                             last_sample.get("rx_other"), field_name="channel_rx_other"
                         )
                         if rx_other is not None:
-                            EERO_CHANNEL_RX_OTHER_LAST.labels(**labels).set(rx_other)
+                            self._track(EERO_CHANNEL_RX_OTHER_LAST, **labels).set(rx_other)
             except Exception as item_exc:
                 _LOGGER.warning(
                     "Skipping channel utilization item %d: %s: %s",
@@ -3561,6 +3907,13 @@ class EeroCollector:
                     item_exc,
                 )
                 continue
+
+        # The channel_utilization GET above succeeded (an early return
+        # already happened otherwise), so every (eero, band) pair was just
+        # re-observed -- retire any pair left over from a removed eero.
+        for metric in _CHANNEL_UTILIZATION_PRUNE_METRICS:
+            self._series.prune(metric, {"network_id": network_id})
+        self._series.prune(EERO_EERO_ROLE_INFO, {"network_id": network_id})
 
     async def _collect_per_device_metrics(self, client: EeroClient, network_id: str) -> None:
         """Collect the `per_device` tier: device-level insights, list-level (§9 #11, §11.6).
@@ -3602,8 +3955,11 @@ class EeroCollector:
                     total = item.get("sum")
                     if total is None:
                         continue
-                    DEVICE_INSIGHTS_TOTAL.labels(
-                        network_id=network_id, device_id=device_id, type=insight_type
+                    self._track(
+                        DEVICE_INSIGHTS_TOTAL,
+                        network_id=network_id,
+                        device_id=device_id,
+                        type=insight_type,
                     ).set(float(total))
                 except Exception as item_exc:
                     _LOGGER.warning(
@@ -3613,6 +3969,15 @@ class EeroCollector:
                         item_exc,
                     )
                     continue
+
+            # This insight type's GET succeeded and returned every device
+            # with that insight type this cycle -- retire any device that no
+            # longer appears for it. Scoped to (network_id, type) so a
+            # failure on a different insight type this cycle (the `continue`
+            # above) never prunes this one, and vice versa.
+            self._series.prune(
+                DEVICE_INSIGHTS_TOTAL, {"network_id": network_id, "type": insight_type}
+            )
 
     async def _collect_per_eero_metrics(
         self,
