@@ -40,7 +40,7 @@ jobs:
     steps:
       - name: 🔍 Look up release-published artifact
         id: check
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             // A manual dispatch is for re-publishing a release whose image
