@@ -180,15 +180,22 @@ def test_grid_positions_fit_the_24_column_grid() -> None:
     assert not bad, f"panels outside the 24-column grid: {bad}"
 
 
-def test_collapsed_rows_name_their_include_flag() -> None:
-    """Optional tiers are collapsed rows whose title names the enabling flag."""
+def test_collapsed_rows_keep_panels_and_optional_tiers_are_collapsed() -> None:
+    """Collapsed rows must keep their nested panels, and every optional tier
+    (a row whose title names an ``--include-`` flag) must be collapsed.
+
+    The graph-first redesign also collapses *secondary* rows (RF, Devices, Data
+    usage, ...) so the page opens on the Overview plus a couple of key rows, so
+    not every collapsed row names a flag -- but a flag-named row is always an
+    opt-in tier and must stay collapsed, and no collapsed row may lose its
+    nested panels (Grafana drops panels that are not nested under the row)."""
     rows = [p for p in _dashboard()["panels"] if p.get("type") == "row"]
     collapsed = [r for r in rows if r.get("collapsed")]
-    assert collapsed, "expected at least one collapsed optional-tier row"
-    bad = [r["title"] for r in collapsed if "--include-" not in r["title"]]
-    assert not bad, f"collapsed rows without an --include- flag in the title: {bad}"
+    assert collapsed, "expected at least one collapsed row"
     for r in collapsed:
         assert r.get("panels"), f"collapsed row {r['title']!r} has no panels"
+    open_tiers = [r["title"] for r in rows if "--include-" in r["title"] and not r.get("collapsed")]
+    assert not open_tiers, f"optional-tier rows must be collapsed: {open_tiers}"
 
 
 def test_every_default_off_tier_has_a_collapsed_row() -> None:
