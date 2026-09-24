@@ -108,6 +108,18 @@
     },
 
     // ==========================================================================
+    // 🟢 eero-api: range strategy (kept out of the update-type rules below --
+    // Renovate rejects a packageRule that combines matchUpdateTypes with
+    // rangeStrategy, since rangeStrategy must be decided independent of
+    // update type)
+    // ==========================================================================
+    {
+      matchPackageNames: ["eero-api"],
+      matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
+      rangeStrategy: "bump",
+    },
+
+    // ==========================================================================
     // 🟢 eero-api minor/patch updates (keep current behaviour)
     // ==========================================================================
     // Updates trigger minor version bump via feat(deps): prefix.
@@ -118,7 +130,6 @@
       matchUpdateTypes: ["minor", "patch"],
       groupName: "eero-api",
       description: "🟢 eero-api minor/patch update (triggers minor release, requires review)",
-      rangeStrategy: "bump",
       automerge: false,
       addLabels: ["eero-api", "feature", "critical", "needs-review"],
       reviewers: ["fulviofreitas"],
@@ -150,7 +161,6 @@
       matchUpdateTypes: ["major"],
       groupName: "eero-api-major",
       description: "🔴 eero-api major update (breaking change, requires manual integration)",
-      rangeStrategy: "bump",
       automerge: false,
       addLabels: ["eero-api", "breaking-change", "needs-review", "do-not-merge"],
       reviewers: ["fulviofreitas"],
