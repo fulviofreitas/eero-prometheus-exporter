@@ -90,6 +90,12 @@ jobs:
 
           SUFFIX="$VERSION_SUFFIX"
 
+          # The version is later spliced into sed programs; only allow PEP 440-safe characters.
+          if [ -n "$SUFFIX" ] && ! [[ "$SUFFIX" =~ ^[A-Za-z0-9.]+$ ]]; then
+            echo "::error::version_suffix must match ^[A-Za-z0-9.]+$"
+            exit 1
+          fi
+
           if [ -n "$SUFFIX" ]; then
             TEST_VERSION="${CURRENT_VERSION}.${SUFFIX}"
           else
@@ -100,8 +106,9 @@ jobs:
           echo "📦 Test version: ${TEST_VERSION}"
 
       - name: 🔧 Update version for test release
+        env:
+          TEST_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          TEST_VERSION="${{ steps.version.outputs.version }}"
 
           # Update pyproject.toml
           sed -i "s/^version = \"[^\"]*\"/version = \"${TEST_VERSION}\"/" pyproject.toml
