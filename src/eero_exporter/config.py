@@ -115,6 +115,9 @@ class ExporterConfig:
     timeout: int = 30  # seconds
 
     # Session settings
+    # Reviewed: opengrep's return-not-in-function misreads lambda bodies as a bare
+    # `return` (a real one would be a SyntaxError), so each lambda carries a nosemgrep.
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     session_file: Path = field(default_factory=lambda: DEFAULT_SESSION_FILE)
 
     # Per-family metrics toggles (core tier, all default on)
@@ -149,6 +152,7 @@ class ExporterConfig:
     accept_language: str = "en-US"
 
     # Data-usage / optimisation flags
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     data_usage_periods: list[str] = field(default_factory=lambda: list(VALID_DATA_USAGE_PERIODS))
     eeros_from_envelope: bool = False
 

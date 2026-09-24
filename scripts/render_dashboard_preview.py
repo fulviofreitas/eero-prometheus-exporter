@@ -192,16 +192,22 @@ def _eero_info(labels: dict[str, str]) -> dict[str, str]:
 ENTITY_INFO: dict[str, Callable[[dict[str, str]], dict[str, str]]] = {
     "eero_device": _device_info,
     "eero_eero": _eero_info,
+    # Reviewed: opengrep's return-not-in-function misreads lambda bodies as a bare
+    # `return` (a real one would be a SyntaxError), so each lambda carries a nosemgrep.
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     "eero_eero_os_version": lambda lab: {"version": "7.4.1", "model": "eero 6+"},
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     "eero_port_forward": lambda lab: {
         "description": {"f1": "Web server", "f2": "WireGuard"}[lab["forward_id"]],
         "client_port": {"f1": "443", "f2": "51820"}[lab["forward_id"]],
     },
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     "eero_channel_info": lambda lab: {
         "channel": {"2.4GHz": "6", "5GHz": "149", "6GHz": "37"}[lab["band"]],
         "center_channel": {"2.4GHz": "6", "5GHz": "155", "6GHz": "47"}[lab["band"]],
         "channel_bandwidth": {"2.4GHz": "20MHz", "5GHz": "80MHz", "6GHz": "160MHz"}[lab["band"]],
     },
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     "eero_ethernet_port": lambda lab: {"port_name": f"eth{int(lab['port_number']) - 1}"},
 }
 
