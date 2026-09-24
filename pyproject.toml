@@ -1,6 +1,6 @@
 [project]
 name = "eero-prometheus-exporter"
-version = "4.0.1"
+version = "4.1.0"
 description = "Modern Prometheus exporter for eero mesh WiFi networks"
 readme = "README.md"
 license = { text = "MIT" }

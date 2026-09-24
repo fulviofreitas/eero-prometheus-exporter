@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.1.0](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v4.0.1...v4.1.0) (2026-09-24)
+
+### ✨ Features
+
+* **grafana:** graph-first dashboard redesign with consistent grid ([#134](https://github.com/fulviofreitas/eero-prometheus-exporter/issues/134)) ([4cfbb70](https://github.com/fulviofreitas/eero-prometheus-exporter/commit/4cfbb708b58b6821c687633493772fc38b385ece))
+
 ## [4.0.1](https://github.com/fulviofreitas/eero-prometheus-exporter/compare/v4.0.0...v4.0.1) (2026-09-23)
 
 ### 🐛 Bug Fixes
