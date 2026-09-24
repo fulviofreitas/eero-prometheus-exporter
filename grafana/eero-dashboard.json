@@ -628,7 +628,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Clients — wireless vs wired",
+      "title": "Clients — wireless and wired",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -672,7 +672,44 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              },
+              {
+                "id": "custom.stacking",
+                "value": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -699,6 +736,11 @@
           "expr": "sum(eero_eero_connected_wired_clients_count{network_id=~\"$network_id\"})",
           "refId": "B",
           "legendFormat": "Wired"
+        },
+        {
+          "expr": "sum(eero_eero_connected_wireless_clients_count{network_id=~\"$network_id\"}) + sum(eero_eero_connected_wired_clients_count{network_id=~\"$network_id\"})",
+          "refId": "C",
+          "legendFormat": "Total"
         }
       ],
       "description": "Eero-level client counts (stay correct when per-device series go stale).",
@@ -1878,7 +1920,44 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              },
+              {
+                "id": "custom.stacking",
+                "value": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -1897,6 +1976,11 @@
           "expr": "sum by (location) (eero_eero_connected_clients_count{network_id=~\"$network_id\", eero_id=~\"$eero_id\"})",
           "refId": "A",
           "legendFormat": "{{location}}"
+        },
+        {
+          "expr": "sum(eero_eero_connected_clients_count{network_id=~\"$network_id\", eero_id=~\"$eero_id\"})",
+          "refId": "B",
+          "legendFormat": "Total"
         }
       ],
       "gridPos": {
@@ -1953,7 +2037,44 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              },
+              {
+                "id": "custom.stacking",
+                "value": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -1972,6 +2093,11 @@
           "expr": "sum by (location) (eero_eero_connected_wireless_clients_count{network_id=~\"$network_id\", eero_id=~\"$eero_id\"})",
           "refId": "A",
           "legendFormat": "{{location}}"
+        },
+        {
+          "expr": "sum(eero_eero_connected_wireless_clients_count{network_id=~\"$network_id\", eero_id=~\"$eero_id\"})",
+          "refId": "B",
+          "legendFormat": "Total"
         }
       ],
       "gridPos": {
@@ -2028,7 +2154,44 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              },
+              {
+                "id": "custom.stacking",
+                "value": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -2047,6 +2210,11 @@
           "expr": "sum by (location) (eero_eero_connected_wired_clients_count{network_id=~\"$network_id\", eero_id=~\"$eero_id\"})",
           "refId": "A",
           "legendFormat": "{{location}}"
+        },
+        {
+          "expr": "sum(eero_eero_connected_wired_clients_count{network_id=~\"$network_id\", eero_id=~\"$eero_id\"})",
+          "refId": "B",
+          "legendFormat": "Total"
         }
       ],
       "gridPos": {
@@ -3719,7 +3887,44 @@
                 ]
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Total"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "text"
+                    }
+                  },
+                  {
+                    "id": "custom.stacking",
+                    "value": {
+                      "mode": "none",
+                      "group": "A"
+                    }
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.lineStyle",
+                    "value": {
+                      "fill": "dash",
+                      "dash": [
+                        10,
+                        10
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "legend": {
@@ -3741,6 +3946,11 @@
               "expr": "sum by (location, band) (eero_eero_radio_client_count{network_id=~\"$network_id\", eero_id=~\"$eero_id\"})",
               "refId": "A",
               "legendFormat": "{{location}} {{band}}"
+            },
+            {
+              "expr": "sum(eero_eero_radio_client_count{network_id=~\"$network_id\", eero_id=~\"$eero_id\"})",
+              "refId": "B",
+              "legendFormat": "Total"
             }
           ],
           "gridPos": {
@@ -7304,7 +7514,44 @@
                 ]
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Total"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "text"
+                    }
+                  },
+                  {
+                    "id": "custom.stacking",
+                    "value": {
+                      "mode": "none",
+                      "group": "A"
+                    }
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.lineStyle",
+                    "value": {
+                      "fill": "dash",
+                      "dash": [
+                        10,
+                        10
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "legend": {
@@ -7326,6 +7573,11 @@
               "expr": "max by (name) (eero_profile_connected_devices_count{network_id=~\"$network_id\"})",
               "refId": "A",
               "legendFormat": "{{name}}"
+            },
+            {
+              "expr": "sum(max by (name) (eero_profile_connected_devices_count{network_id=~\"$network_id\"}))",
+              "refId": "B",
+              "legendFormat": "Total"
             }
           ],
           "gridPos": {
@@ -8744,6 +8996,42 @@
                     }
                   }
                 ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Total"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "text"
+                    }
+                  },
+                  {
+                    "id": "custom.stacking",
+                    "value": {
+                      "mode": "none",
+                      "group": "A"
+                    }
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.lineStyle",
+                    "value": {
+                      "fill": "dash",
+                      "dash": [
+                        10,
+                        10
+                      ]
+                    }
+                  }
+                ]
               }
             ]
           },
@@ -8767,6 +9055,11 @@
               "expr": "sum by (status) (rate(eero_exporter_api_requests_total[5m]))",
               "refId": "A",
               "legendFormat": "{{status}}"
+            },
+            {
+              "expr": "sum(rate(eero_exporter_api_requests_total[5m]))",
+              "refId": "B",
+              "legendFormat": "Total"
             }
           ],
           "gridPos": {
@@ -9592,7 +9885,44 @@
                 ]
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Total"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "text"
+                    }
+                  },
+                  {
+                    "id": "custom.stacking",
+                    "value": {
+                      "mode": "none",
+                      "group": "A"
+                    }
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.lineStyle",
+                    "value": {
+                      "fill": "dash",
+                      "dash": [
+                        10,
+                        10
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "legend": {
@@ -9614,6 +9944,11 @@
               "expr": "max by (location) ((eero_eero_connections_count{network_id=~\"$network_id\", eero_id=~\"$eero_id\"}) * on (network_id, eero_id) group_left(location) topk by (network_id, eero_id) (1, group by (network_id, eero_id, location) (eero_eero_status{network_id=~\"$network_id\"})))",
               "refId": "A",
               "legendFormat": "{{location}}"
+            },
+            {
+              "expr": "sum(max by (location) ((eero_eero_connections_count{network_id=~\"$network_id\", eero_id=~\"$eero_id\"}) * on (network_id, eero_id) group_left(location) topk by (network_id, eero_id) (1, group by (network_id, eero_id, location) (eero_eero_status{network_id=~\"$network_id\"}))))",
+              "refId": "B",
+              "legendFormat": "Total"
             }
           ],
           "gridPos": {

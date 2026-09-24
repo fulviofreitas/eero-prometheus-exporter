@@ -266,8 +266,19 @@ def timeseries(
     decimals: int | None = None,
     thresholds: Thresholds | None = None,
     overrides: list[dict[str, Any]] | None = None,
+    total: str | None = None,
     description: str = "",
 ) -> Panel:
+    """Line/bar chart; ``total`` adds a dashed, unstacked "Total" line over stacked series."""
+    if total:
+        items = [*items, (total, "Total")]
+        total_style = {
+            "color": {"mode": "fixed", "fixedColor": "text"},
+            "custom.stacking": {"mode": "none", "group": "A"},
+            "custom.fillOpacity": 0,
+            "custom.lineStyle": {"fill": "dash", "dash": [10, 10]},
+        }
+        overrides = [*(overrides or []), override("Total", **total_style)]
     p = base(title, "timeseries", unit, description)
     d = p["fieldConfig"]["defaults"]
     single = len(items) == 1 and "{{" not in items[0][1]
@@ -712,12 +723,16 @@ def overview(g: Grid) -> None:
     g.line(
         (
             timeseries(
-                "Clients — wireless vs wired",
+                "Clients — wireless and wired",
                 [
                     (f"sum(eero_eero_connected_wireless_clients_count{{{N}}})", "Wireless"),
                     (f"sum(eero_eero_connected_wired_clients_count{{{N}}})", "Wired"),
                 ],
                 stack=True,
+                total=(
+                    f"sum(eero_eero_connected_wireless_clients_count{{{N}}}) "
+                    f"+ sum(eero_eero_connected_wired_clients_count{{{N}}})"
+                ),
                 description="Eero-level client counts (stay correct when per-device series go stale).",
             ),
             HALF,
@@ -1035,6 +1050,7 @@ def eero_mesh(g: Grid) -> None:
                     title,
                     [(f"sum by (location) ({metric}{{{NE}}})", "{{location}}")],
                     stack=True,
+                    total=f"sum({metric}{{{NE}}})",
                 ),
                 THIRD,
             )
@@ -1155,6 +1171,7 @@ def rf(g: Grid) -> None:
                 "Wireless clients per radio",
                 [(f"sum by (location, band) (eero_eero_radio_client_count{{{NE}}})", LB)],
                 stack=True,
+                total=f"sum(eero_eero_radio_client_count{{{NE}}})",
             ),
             HALF,
         ),
@@ -1677,6 +1694,7 @@ def profiles_insights(g: Grid) -> None:
                 "Connected devices per profile",
                 [(by_profile("eero_profile_connected_devices_count"), "{{name}}")],
                 stack=True,
+                total=f"sum({by_profile('eero_profile_connected_devices_count')})",
             ),
             HALF,
         ),
@@ -1886,6 +1904,7 @@ def exporter(g: Grid) -> None:
                 [("sum by (status) (rate(eero_exporter_api_requests_total[5m]))", "{{status}}")],
                 "reqps",
                 stack=True,
+                total="sum(rate(eero_exporter_api_requests_total[5m]))",
                 overrides=status_overrides,
             ),
             HALF,
@@ -2004,6 +2023,7 @@ def opt_per_eero(g: Grid) -> None:
                 "Wireless connections per eero",
                 [(loc("eero_eero_connections_count"), "{{location}}")],
                 stack=True,
+                total=f"sum({loc('eero_eero_connections_count')})",
             ),
             HALF,
         ),
