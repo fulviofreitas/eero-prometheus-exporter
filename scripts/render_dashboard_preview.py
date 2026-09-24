@@ -565,12 +565,19 @@ def cmd_screenshot(args: argparse.Namespace) -> None:
             actual = page.evaluate("window.scrollY")
             # Hide fixed/sticky chrome (footer always, the top bar after the first
             # screen) so it does not get stitched into the middle of the page.
+            # The kiosk "Powered by Grafana" badge is not position:fixed -- it is
+            # anchored inside the scroll container -- so it has to be matched by
+            # its text; left visible it overlays the bottom of each tile and cuts
+            # through whichever panel sits under the seam.
             page.evaluate(
                 """(first) => { for (const e of document.querySelectorAll('body *')) {
                     const pos = getComputedStyle(e).position;
                     const bar = String(e.className).includes('dashboard-controls');
-                    if ((pos === 'fixed' && e.getBoundingClientRect().top > 100) ||
-                        (bar && !first)) {
+                    const r = e.getBoundingClientRect();
+                    const badge = r.height < 80 && r.width < 400 &&
+                        (e.textContent || '').trim().startsWith('Powered by');
+                    if (((pos === 'fixed' || pos === 'sticky') && r.top > 100) ||
+                        (bar && !first) || badge) {
                         e.style.visibility = 'hidden';
                     } } }""",
                 not tiles,
