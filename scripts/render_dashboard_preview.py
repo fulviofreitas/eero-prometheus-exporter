@@ -34,7 +34,9 @@ import math
 import random
 import shutil
 import signal
-import subprocess
+
+# Reviewed: subprocess is only called with list argv and no shell (see cmd_backfill/cmd_serve).
+import subprocess  # nosec B404
 import sys
 import time
 import zlib
@@ -190,16 +192,22 @@ def _eero_info(labels: dict[str, str]) -> dict[str, str]:
 ENTITY_INFO: dict[str, Callable[[dict[str, str]], dict[str, str]]] = {
     "eero_device": _device_info,
     "eero_eero": _eero_info,
+    # Reviewed: opengrep's return-not-in-function misreads lambda bodies as a bare
+    # `return` (a real one would be a SyntaxError), so each lambda carries a nosemgrep.
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     "eero_eero_os_version": lambda lab: {"version": "7.4.1", "model": "eero 6+"},
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     "eero_port_forward": lambda lab: {
         "description": {"f1": "Web server", "f2": "WireGuard"}[lab["forward_id"]],
         "client_port": {"f1": "443", "f2": "51820"}[lab["forward_id"]],
     },
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     "eero_channel_info": lambda lab: {
         "channel": {"2.4GHz": "6", "5GHz": "149", "6GHz": "37"}[lab["band"]],
         "center_channel": {"2.4GHz": "6", "5GHz": "155", "6GHz": "47"}[lab["band"]],
         "channel_bandwidth": {"2.4GHz": "20MHz", "5GHz": "80MHz", "6GHz": "160MHz"}[lab["band"]],
     },
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     "eero_ethernet_port": lambda lab: {"port_name": f"eth{int(lab['port_number']) - 1}"},
 }
 
@@ -263,7 +271,9 @@ ValueFn = Callable[[float, float], float]
 def _wave(lo: float, hi: float) -> ValueFn:
     def f(t: float, s: float) -> float:
         diurnal = 0.5 + 0.5 * math.sin(2 * math.pi * (t - 0.3) + s)
-        noise = random.uniform(-0.02, 0.02)
+        # Reviewed: jitter for synthetic preview data, not a security-sensitive value.
+        # nosemgrep: python_random_rule-random
+        noise = random.uniform(-0.02, 0.02)  # nosec B311
         return round(lo + (hi - lo) * min(1.0, max(0.0, diurnal + noise)), 2)
 
     return f
@@ -397,7 +407,9 @@ def _openmetrics_lines(start: float, end: float) -> Iterator[str]:
                     rate = 0.05 if ("error" in m.name or labels.get("status") != "success") else 0.4
                     if labels.get("status") == "success":
                         rate *= 1 + (seed % 3)
-                    total += rate * STEP_S * random.uniform(0.6, 1.4)
+                    # Reviewed: jitter for synthetic preview data, not security-sensitive.
+                    # nosemgrep: python_random_rule-random
+                    total += rate * STEP_S * random.uniform(0.6, 1.4)  # nosec B311
                     v = round(total)
                 else:
                     v = fn(frac, seed)
@@ -418,7 +430,9 @@ def cmd_backfill(args: argparse.Namespace) -> None:
     with om.open("w") as fh:
         for line in _openmetrics_lines(start, end):
             fh.write(line)
-    subprocess.run(
+    # Reviewed: binary from the operator's local --prometheus path; list argv, no shell.
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit  # noqa: E501
+    subprocess.run(  # nosec B603
         [
             str(prom / "promtool"),
             "tsdb",
@@ -465,7 +479,9 @@ def cmd_serve(args: argparse.Namespace) -> None:
     for sub in ("plugins", "alerting", "notifiers"):
         (prov / sub).mkdir(parents=True, exist_ok=True)
     procs = [
-        subprocess.Popen(
+        # Reviewed: binary from the operator's local --prometheus path; list argv, no shell.
+        # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit  # noqa: E501
+        subprocess.Popen(  # nosec B603
             [
                 str(prom / "prometheus"),
                 f"--config.file={WORK / 'prometheus.yml'}",
@@ -476,7 +492,9 @@ def cmd_serve(args: argparse.Namespace) -> None:
             stdout=(WORK / "prometheus.log").open("w"),
             stderr=subprocess.STDOUT,
         ),
-        subprocess.Popen(
+        # Reviewed: binary from the operator's local --grafana path; list argv, no shell.
+        # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit  # noqa: E501
+        subprocess.Popen(  # nosec B603
             [str(graf / "bin" / "grafana"), "server", f"--homepath={graf}"],
             env={
                 "PATH": "/usr/bin:/bin",

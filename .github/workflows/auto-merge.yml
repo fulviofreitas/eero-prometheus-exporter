@@ -239,6 +239,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
+        # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout -- see the tamper-protection comment above; ref is pinned to base, not PR head
         uses: actions/checkout@v7
         with:
           # Belt-and-suspenders: pull_request_target already defaults to the

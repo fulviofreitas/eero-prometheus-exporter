@@ -1,6 +1,7 @@
 """HTTP server for exposing Prometheus metrics."""
 
 import asyncio
+import contextlib
 import hmac
 import html
 import json
@@ -116,10 +117,9 @@ class AuthUiState:
         self._pending_client = None
         self._pending_expiry = None
         if client is not None:
-            try:
+            # Best-effort cleanup of a client that is being discarded.
+            with contextlib.suppress(Exception):
                 self._run_coro(client.__aexit__(None, None, None))
-            except Exception:  # noqa: BLE001 - best-effort cleanup only
-                pass
 
     def _expire_pending_locked(self) -> None:
         if (
@@ -356,7 +356,7 @@ class MetricsHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: object) -> None:
         """Override to use our logger."""
-        _LOGGER.debug(f"HTTP: {format % args}")
+        _LOGGER.debug("HTTP: " + format, *args)
 
     def _auth_state(self) -> "AuthUiState | None":
         """Return the server's `AuthUiState`, or `None` when auth-ui is off."""
@@ -403,7 +403,7 @@ class MetricsHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(output)
         except Exception as e:
-            _LOGGER.error(f"Error generating metrics: {e}")
+            _LOGGER.error("Error generating metrics: %s", e)
             self.send_error(500)
 
     def _serve_ready(self) -> None:
@@ -748,7 +748,7 @@ class MetricsHandler(BaseHTTPRequestHandler):
         try:
             state.verify(code)
         except EeroAuthError as e:
-            _LOGGER.info(f"auth ui: verify failed ({type(e).__name__})")
+            _LOGGER.info("auth ui: verify failed (%s)", type(e).__name__)
             self._send_auth_denied(state)
             return
         except (EeroValidationError, EeroRateLimitError, EeroAPIError) as e:
@@ -796,7 +796,7 @@ async def collection_loop(
             ``SystemExit(AUTH_FAILURE_EXIT_CODE)`` instead of letting the
             loop keep retrying forever (§2, D6). Default off.
     """
-    _LOGGER.info(f"Starting collection loop (interval: {interval}s)")
+    _LOGGER.info("Starting collection loop (interval: %ss)", interval)
 
     async def do_collection() -> None:
         """Perform collection and update health state."""
@@ -922,7 +922,7 @@ def run_server(config: ExporterConfig) -> None:
 
     # Create HTTP server
     server = ExporterHTTPServer((config.host, config.port), MetricsHandler)
-    _LOGGER.info(f"HTTP server listening on {config.host}:{config.port}")
+    _LOGGER.info("HTTP server listening on %s:%s", config.host, config.port)
 
     _health_state["auth_ui_enabled"] = config.auth_ui
 
@@ -944,7 +944,7 @@ def run_server(config: ExporterConfig) -> None:
 
     def signal_handler(signum: int, frame: object) -> None:
         """Handle shutdown signals."""
-        _LOGGER.info(f"Received signal {signum}, shutting down...")
+        _LOGGER.info("Received signal %s, shutting down...", signum)
         if loop:
             loop.call_soon_threadsafe(stop_event.set)
         server.shutdown()

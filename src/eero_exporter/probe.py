@@ -880,16 +880,22 @@ def _extract_profile(ctx: ProbeContext, payload: Any) -> None:
 
 _NET = ("network_id",)
 
+# Reviewed: opengrep's return-not-in-function misreads lambda bodies as a bare
+# `return` (a real one would be a SyntaxError), so each lambda carries a nosemgrep.
 #: The complete read allowlist, in execution order. Every ``method`` below is
 #: documented as a read in the SDK's ``wiki/API-Reference.md``; no write-named
 #: method appears anywhere in this module.
 PROBE_STEPS: tuple[ProbeStep, ...] = (
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     ProbeStep("account", "get_account", lambda c, x: c.get_account()),
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     ProbeStep("networks", "get_networks", lambda c, x: c.get_networks(), extract=_extract_network),
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     ProbeStep("network", "get_network", lambda c, x: c.get_network(x.network_id), requires=_NET),
     ProbeStep(
         "eeros",
         "get_eeros",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_eeros(x.network_id),
         requires=_NET,
         extract=_extract_eero,
@@ -897,6 +903,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "devices",
         "get_devices",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_devices(x.network_id),
         requires=_NET,
         extract=_extract_device,
@@ -904,18 +911,21 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "devices-thread",
         "get_devices",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_devices(x.network_id, thread=True),
         requires=_NET,
     ),
     ProbeStep(
         "devices-proxied-node",
         "get_devices",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_devices(x.network_id, proxied_node=True),
         requires=_NET,
     ),
     ProbeStep(
         "profiles",
         "get_profiles",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_profiles(x.network_id),
         requires=_NET,
         extract=_extract_profile,
@@ -923,12 +933,14 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "guest-network",
         "get_guest_network",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_guest_network(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "speed-tests",
         "get_speed_tests",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_speed_tests(x.network_id, limit=5),
         requires=_NET,
     ),
@@ -936,12 +948,14 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "data-usage-network",
         "get_data_usage",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_data_usage(x.network_id, start=x.start, end=x.end, cadence="daily"),
         requires=_NET,
     ),
     ProbeStep(
         "data-usage-breakdown",
         "get_data_usage_breakdown",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_data_usage_breakdown(
             x.network_id, start=x.start, end=x.end, cadence="daily"
         ),
@@ -950,6 +964,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "data-usage-devices",
         "get_devices_data_usage",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_devices_data_usage(
             x.network_id, start=x.start, end=x.end, cadence="daily"
         ),
@@ -958,6 +973,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "data-usage-eeros-summary",
         "get_eeros_data_usage_summary",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_eeros_data_usage_summary(
             x.network_id, start=x.start, end=x.end, cadence="daily"
         ),
@@ -966,6 +982,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "data-usage-unprofiled-devices",
         "get_unprofiled_devices_data_usage",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_unprofiled_devices_data_usage(
             x.network_id, start=x.start, end=x.end, cadence="daily"
         ),
@@ -974,6 +991,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "data-usage-unprofiled-summary",
         "get_unprofiled_data_usage_summary",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_unprofiled_data_usage_summary(
             x.network_id, start=x.start, end=x.end, cadence="daily"
         ),
@@ -982,12 +1000,14 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "data-usage-report-settings",
         "get_data_usage_report_settings",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_data_usage_report_settings(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "data-usage-profile",
         "get_profile_data_usage",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_profile_data_usage(
             str(x.profile_id), x.network_id, start=x.start, end=x.end, cadence="daily"
         ),
@@ -996,6 +1016,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "data-usage-device",
         "get_device_data_usage",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_device_data_usage(
             str(x.device_mac), x.network_id, start=x.start, end=x.end, cadence="daily"
         ),
@@ -1004,6 +1025,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "data-usage-eero",
         "get_eero_data_usage",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_eero_data_usage(
             str(x.eero_id), x.network_id, start=x.start, end=x.end, cadence="daily"
         ),
@@ -1013,6 +1035,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "insights-network-adblock",
         "get_insights",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_insights(
             x.network_id, start=x.start, end=x.end, insight_type="adblock", cadence="daily"
         ),
@@ -1021,6 +1044,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "insights-network-blocked",
         "get_insights",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_insights(
             x.network_id, start=x.start, end=x.end, insight_type="blocked", cadence="daily"
         ),
@@ -1029,6 +1053,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "insights-network-inspected",
         "get_insights",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_insights(
             x.network_id, start=x.start, end=x.end, insight_type="inspected", cadence="daily"
         ),
@@ -1037,6 +1062,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "insights-devices",
         "get_devices_insights",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_devices_insights(
             x.network_id, start=x.start, end=x.end, cadence="daily", insight_type="blocked"
         ),
@@ -1045,6 +1071,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "insights-profiles",
         "get_profiles_insights",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_profiles_insights(
             x.network_id, start=x.start, end=x.end, cadence="daily", insight_type="blocked"
         ),
@@ -1054,44 +1081,52 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "entitlement-features",
         "get_entitlement_features",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_entitlement_features(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "upsell-features",
         "get_upsell_features",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_upsell_features(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "model-capabilities",
         "get_model_capabilities",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_model_capabilities(x.network_id),
         requires=_NET,
     ),
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     ProbeStep("premium-customer", "get_premium_customer", lambda c, x: c.get_premium_customer()),
     # --- backup internet and cellular --------------------------------------
     ProbeStep(
         "backup-internet",
         "get_backup_internet",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_backup_internet(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "cellular-backup-usage",
         "get_cellular_backup_usage",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_cellular_backup_usage(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "cellular-backup-events",
         "get_cellular_backup_events",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_cellular_backup_events(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "backup-access-points",
         "list_backup_access_points",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.list_backup_access_points(x.network_id),
         requires=_NET,
     ),
@@ -1099,12 +1134,14 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "wpa3-per-band",
         "get_wpa3_per_band",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_wpa3_per_band(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "fast-transition",
         "get_fast_transition",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_fast_transition(x.network_id),
         requires=_NET,
     ),
@@ -1112,26 +1149,31 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "permissions",
         "get_permissions",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_permissions(x.network_id),
         requires=_NET,
     ),
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     ProbeStep("members", "get_members", lambda c, x: c.get_members(x.network_id), requires=_NET),
     # --- notifications ------------------------------------------------------
     ProbeStep(
         "notification-settings",
         "get_notification_settings",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_notification_settings(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "notifications-has-unread",
         "has_unread_notifications",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.has_unread_notifications(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "notification-history",
         "get_notification_history",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_notification_history(x.network_id),
         requires=_NET,
     ),
@@ -1139,12 +1181,14 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "dns-advanced-content-filter",
         "get_advanced_content_filter",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_advanced_content_filter(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "dns-policy-applications",
         "get_dns_policy_applications",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_dns_policy_applications(str(x.profile_id), x.network_id),
         requires=("network_id", "profile_id"),
     ),
@@ -1152,44 +1196,58 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "subnets-config",
         "get_subnets_config",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_subnets_config(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "multistaticip",
         "get_multistaticip",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_multistaticip(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "power-saving-schedules",
         "get_power_saving_schedules",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_power_saving_schedules(x.network_id),
         requires=_NET,
     ),
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     ProbeStep("thread", "get_thread", lambda c, x: c.get_thread(x.network_id), requires=_NET),
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     ProbeStep("updates", "get_updates", lambda c, x: c.get_updates(x.network_id), requires=_NET),
     ProbeStep(
         "diagnostics",
         "get_diagnostics",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_diagnostics(x.network_id),
         requires=_NET,
     ),
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     ProbeStep("routing", "get_routing", lambda c, x: c.get_routing(x.network_id), requires=_NET),
+    # nosemgrep: python.lang.maintainability.return.return-not-in-function
     ProbeStep("support", "get_support", lambda c, x: c.get_support(x.network_id), requires=_NET),
     ProbeStep(
-        "ac-compat", "get_ac_compat", lambda c, x: c.get_ac_compat(x.network_id), requires=_NET
+        "ac-compat",
+        "get_ac_compat",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
+        lambda c, x: c.get_ac_compat(x.network_id),
+        requires=_NET,
     ),
     # --- transfer statistics ------------------------------------------------
     ProbeStep(
         "transfer-network",
         "get_transfer_stats",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_transfer_stats(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "transfer-device",
         "get_transfer_stats",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_transfer_stats(x.network_id, str(x.device_mac)),
         requires=("network_id", "device_mac"),
     ),
@@ -1201,6 +1259,7 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "channel-utilization",
         "get_channel_utilization",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_channel_utilization(x.network_id, start=x.start, end=x.end),
         requires=_NET,
     ),
@@ -1208,12 +1267,14 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "network-scan",
         "get_network_scan",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_network_scan(x.network_id),
         requires=_NET,
     ),
     ProbeStep(
         "app-events",
         "get_app_events",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_app_events(x.network_id, page_size=20),
         requires=_NET,
     ),
@@ -1221,18 +1282,21 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "eero-nightlight",
         "get_nightlight",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_nightlight(str(x.eero_id), x.network_id),
         requires=("network_id", "eero_id"),
     ),
     ProbeStep(
         "eero-connections",
         "get_connections",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_connections(str(x.eero_id), x.network_id),
         requires=("network_id", "eero_id"),
     ),
     ProbeStep(
         "eero-ouicheck",
         "get_ouicheck",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_ouicheck(
             x.network_id, serial=str(x.eero_serial), version=str(x.eero_os_version)
         ),
@@ -1241,12 +1305,14 @@ PROBE_STEPS: tuple[ProbeStep, ...] = (
     ProbeStep(
         "device-labels",
         "get_device_labels",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_device_labels(str(x.device_id), x.network_id),
         requires=("network_id", "device_id"),
     ),
     ProbeStep(
         "profile-schedules",
         "get_schedules",
+        # nosemgrep: python.lang.maintainability.return.return-not-in-function
         lambda c, x: c.get_schedules(str(x.profile_id), x.network_id),
         requires=("network_id", "profile_id"),
     ),
@@ -1414,8 +1480,9 @@ def inspect_session_file(path: Path) -> dict[str, Any]:
     info: dict[str, Any] = {
         "exists": path.exists(),
         "schema_version": None,
-        "token_key": None,
-        "token_present": False,
+        # Reviewed: key *names* with None/False placeholders, not credentials (see docstring).
+        "token_key": None,  # nosec B105
+        "token_present": False,  # nosec B105
         "mode": None,
     }
     if not info["exists"]:
