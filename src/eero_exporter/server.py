@@ -356,7 +356,7 @@ class MetricsHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: object) -> None:
         """Override to use our logger."""
-        _LOGGER.debug("HTTP: %s", format % args)
+        _LOGGER.debug("HTTP: " + format, *args)
 
     def _auth_state(self) -> "AuthUiState | None":
         """Return the server's `AuthUiState`, or `None` when auth-ui is off."""
