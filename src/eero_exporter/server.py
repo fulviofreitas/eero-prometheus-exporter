@@ -1,6 +1,7 @@
 """HTTP server for exposing Prometheus metrics."""
 
 import asyncio
+import contextlib
 import hmac
 import html
 import json
@@ -116,10 +117,9 @@ class AuthUiState:
         self._pending_client = None
         self._pending_expiry = None
         if client is not None:
-            try:
+            # Best-effort cleanup of a client that is being discarded.
+            with contextlib.suppress(Exception):
                 self._run_coro(client.__aexit__(None, None, None))
-            except Exception:  # noqa: BLE001 - best-effort cleanup only  # nosec B110
-                pass
 
     def _expire_pending_locked(self) -> None:
         if (
