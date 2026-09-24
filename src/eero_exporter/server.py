@@ -118,7 +118,7 @@ class AuthUiState:
         if client is not None:
             try:
                 self._run_coro(client.__aexit__(None, None, None))
-            except Exception:  # noqa: BLE001 - best-effort cleanup only
+            except Exception:  # noqa: BLE001 - best-effort cleanup only  # nosec B110
                 pass
 
     def _expire_pending_locked(self) -> None:

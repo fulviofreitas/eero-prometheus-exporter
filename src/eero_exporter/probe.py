@@ -1414,8 +1414,9 @@ def inspect_session_file(path: Path) -> dict[str, Any]:
     info: dict[str, Any] = {
         "exists": path.exists(),
         "schema_version": None,
-        "token_key": None,
-        "token_present": False,
+        # Reviewed: key *names* with None/False placeholders, not credentials (see docstring).
+        "token_key": None,  # nosec B105
+        "token_present": False,  # nosec B105
         "mode": None,
     }
     if not info["exists"]:
