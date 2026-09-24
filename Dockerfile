@@ -9,17 +9,15 @@ WORKDIR /app
 
 # Install build dependencies with cache mount
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install build uv
+    pip install build==1.6.1 uv==0.12.18
 
 # Copy only files needed for build
 COPY pyproject.toml README.md uv.lock ./
 COPY src/ ./src/
 
-# Build wheel
-RUN python -m build --wheel
-
-# Export frozen requirements from uv.lock
-RUN uv export --frozen --no-dev --no-emit-project -o requirements.txt
+# Build wheel, then export frozen requirements from uv.lock
+RUN python -m build --wheel && \
+    uv export --frozen --no-dev --no-emit-project -o requirements.txt
 
 # Final stage
 FROM python:3.14-slim
@@ -45,8 +43,8 @@ COPY --from=builder /app/dist/*.whl ./
 # Install dependencies from frozen lock, then the application wheel
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system -r requirements.txt && \
-    uv pip install --system --no-deps *.whl && \
-    rm *.whl requirements.txt
+    uv pip install --system --no-deps ./*.whl && \
+    rm ./*.whl requirements.txt
 
 # Create config directory with proper permissions
 RUN mkdir -p /home/eero/.config/eero-exporter && \
