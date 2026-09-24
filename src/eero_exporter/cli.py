@@ -122,7 +122,7 @@ async def _resolve_network_status(client: EeroClient, network: dict[str, Any]) -
             network_details = await client.get_network(network_id)
             return _parse_network_status(network_details.get("status"))
         except EeroAPIError as e:
-            _LOGGER.debug(f"Failed to get network details for {network_id}: {e}")
+            _LOGGER.debug("Failed to get network details for %s: %s", network_id, e)
 
     return _parse_network_status(network.get("status"))
 

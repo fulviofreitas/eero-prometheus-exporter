@@ -182,7 +182,7 @@ class ExporterConfig:
             logged and fall back to the defaults rather than raising.
         """
         if not path.exists():
-            _LOGGER.info(f"Config file not found at {path}, using defaults")
+            _LOGGER.info("Config file not found at %s, using defaults", path)
             return cls()
 
         try:
@@ -194,7 +194,7 @@ class ExporterConfig:
 
             return cls(**_coerce_yaml_fields(data))
         except Exception as e:
-            _LOGGER.warning(f"Error loading config from {path}: {e}, using defaults")
+            _LOGGER.warning("Error loading config from %s: %s, using defaults", path, e)
             return cls()
 
     def merge_overrides(self, **overrides: Any) -> ExporterConfig:
@@ -291,7 +291,7 @@ class ExporterConfig:
         with open(save_path, "w") as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False)
 
-        _LOGGER.info(f"Configuration saved to {save_path}")
+        _LOGGER.info("Configuration saved to %s", save_path)
 
 
 def _coerce_yaml_fields(data: dict[str, Any]) -> dict[str, Any]:
