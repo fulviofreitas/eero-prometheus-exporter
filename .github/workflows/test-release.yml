@@ -78,6 +78,8 @@ jobs:
 
       - name: 🏷️ Determine test version
         id: version
+        env:
+          VERSION_SUFFIX: ${{ github.event.inputs.version_suffix }}
         run: |
           # Read current version from VERSION file or pyproject.toml
           if [ -f VERSION ]; then
@@ -86,7 +88,7 @@ jobs:
             CURRENT_VERSION=$(grep -Po '(?<=^version = ")[^"]*' pyproject.toml)
           fi
 
-          SUFFIX="${{ github.event.inputs.version_suffix }}"
+          SUFFIX="$VERSION_SUFFIX"
 
           if [ -n "$SUFFIX" ]; then
             TEST_VERSION="${CURRENT_VERSION}.${SUFFIX}"
@@ -123,7 +125,7 @@ jobs:
 
       - name: 📤 Publish to TestPyPI
         if: github.event.inputs.dry_run != 'true'
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
