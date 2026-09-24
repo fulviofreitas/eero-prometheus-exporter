@@ -29,13 +29,6 @@ engines:
   opengrep:
     exclude_paths:
       - "tests/**"
-      # `return` only makes sense inside a function -- fires on every
-      # `lambda c, x: c.method(...)` entry in probe.py's PROBE_STEPS table
-      # and config.py's `field(default_factory=lambda: ...)` defaults. None
-      # of these lines contain a `return` statement; the rule misfires on
-      # lambda bodies. Both files have no other opengrep findings.
-      - "src/eero_exporter/probe.py"
-      - "src/eero_exporter/config.py"
   pylintpython3:
     exclude_paths:
       - "tests/**"
