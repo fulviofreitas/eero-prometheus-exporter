@@ -793,7 +793,7 @@
       }
     },
     {
-      "id": 17,
+      "id": 18,
       "type": "row",
       "title": "Network & WAN",
       "collapsed": false,
@@ -807,8 +807,8 @@
     },
     {
       "id": 11,
-      "type": "stat",
-      "title": "Network settings",
+      "type": "table",
+      "title": "Internet & LAN",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -817,6 +817,13 @@
         "defaults": {
           "unit": "none",
           "mappings": [],
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
           "color": {
             "mode": "fixed",
             "fixedColor": "text"
@@ -831,130 +838,219 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Setting"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#898781"
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "colorMode": "none",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "name",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "text": {
-          "titleSize": 13,
-          "valueSize": 18
-        },
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
+        "cellHeight": "sm",
+        "showHeader": false,
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
           ],
-          "fields": "",
-          "values": false
-        }
+          "countRows": false,
+          "fields": ""
+        },
+        "sortBy": []
       },
       "targets": [
         {
-          "expr": "eero_network_info{network_id=~\"$network_id\"}",
+          "expr": "group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(eero_network_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"isp\", \"(.*)\"), \"setting\", \"ISP\", \"\", \"\"), \"order\", \"01\", \"\", \"\")) or group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(eero_network_wan_type_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"type\", \"(.*)\"), \"setting\", \"WAN\", \"\", \"\"), \"order\", \"02\", \"\", \"\")) or group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(eero_network_connection_mode_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"mode\", \"(.*)\"), \"setting\", \"Connection\", \"\", \"\"), \"order\", \"03\", \"\", \"\")) or group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(eero_network_dhcp_mode_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"mode\", \"(.*)\"), \"setting\", \"DHCP\", \"\", \"\"), \"order\", \"04\", \"\", \"\")) or group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(label_replace(eero_network_dns_mode_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"mode\", \"(.*)\"), \"setting\", \"DNS · IPv4\", \"family\", \"ipv4\"), \"setting\", \"DNS · IPv6\", \"family\", \"ipv6\"), \"order\", \"05$1\", \"family\", \"(.*)\")) or group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(eero_dns_config_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"mode\", \"(.*)\"), \"setting\", \"DNS config\", \"\", \"\"), \"order\", \"06\", \"\", \"\")) or group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(eero_network_timezone_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"timezone\", \"(.*)\"), \"setting\", \"Timezone\", \"\", \"\"), \"order\", \"07\", \"\", \"\")) or group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(eero_network_role_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"role\", \"(.*)\"), \"setting\", \"Account role\", \"\", \"\"), \"order\", \"08\", \"\", \"\"))",
           "refId": "A",
-          "legendFormat": "ISP · {{isp}}",
-          "instant": true,
-          "range": false
+          "legendFormat": "__auto",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "order"
+              }
+            ]
+          }
         },
         {
-          "expr": "eero_network_wan_type_info{network_id=~\"$network_id\"}",
-          "refId": "B",
-          "legendFormat": "WAN · {{type}}",
-          "instant": true,
-          "range": false
-        },
-        {
-          "expr": "eero_network_connection_mode_info{network_id=~\"$network_id\"}",
-          "refId": "C",
-          "legendFormat": "Mode · {{mode}}",
-          "instant": true,
-          "range": false
-        },
-        {
-          "expr": "eero_network_wireless_mode_info{network_id=~\"$network_id\"}",
-          "refId": "D",
-          "legendFormat": "Wi-Fi · {{mode}}",
-          "instant": true,
-          "range": false
-        },
-        {
-          "expr": "eero_network_mlo_mode_info{network_id=~\"$network_id\"}",
-          "refId": "E",
-          "legendFormat": "MLO · {{mode}}",
-          "instant": true,
-          "range": false
-        },
-        {
-          "expr": "eero_network_dhcp_mode_info{network_id=~\"$network_id\"}",
-          "refId": "F",
-          "legendFormat": "DHCP · {{mode}}",
-          "instant": true,
-          "range": false
-        },
-        {
-          "expr": "eero_network_dns_mode_info{network_id=~\"$network_id\"}",
-          "refId": "G",
-          "legendFormat": "DNS {{family}} · {{mode}}",
-          "instant": true,
-          "range": false
-        },
-        {
-          "expr": "eero_dns_config_info{network_id=~\"$network_id\"}",
-          "refId": "H",
-          "legendFormat": "DNS config · {{mode}}",
-          "instant": true,
-          "range": false
-        },
-        {
-          "expr": "eero_network_wpa3_band_mode{network_id=~\"$network_id\"} == 1",
-          "refId": "I",
-          "legendFormat": "{{band}} · {{mode}}",
-          "instant": true,
-          "range": false
-        },
-        {
-          "expr": "eero_network_update_target_info{network_id=~\"$network_id\"}",
-          "refId": "J",
-          "legendFormat": "Target fw · {{version}}",
-          "instant": true,
-          "range": false
-        },
-        {
-          "expr": "eero_guest_network_info{network_id=~\"$network_id\"}",
-          "refId": "K",
-          "legendFormat": "Guest · {{name}}",
-          "instant": true,
-          "range": false
-        },
-        {
-          "expr": "eero_network_role_info{network_id=~\"$network_id\"}",
-          "refId": "L",
-          "legendFormat": "Role · {{role}}",
-          "instant": true,
-          "range": false
-        },
-        {
-          "expr": "eero_network_timezone_info{network_id=~\"$network_id\"}",
-          "refId": "M",
-          "legendFormat": "{{timezone}}",
-          "instant": true,
-          "range": false
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "order": true,
+              "network_id": true
+            },
+            "indexByName": {
+              "setting": 0,
+              "value": 1
+            },
+            "renameByName": {
+              "setting": "Setting",
+              "value": "Value"
+            }
+          }
         }
       ],
       "gridPos": {
-        "h": 8,
-        "w": 24,
+        "h": 10,
+        "w": 12,
         "x": 0,
         "y": 22
       }
     },
     {
       "id": 12,
+      "type": "table",
+      "title": "Wi-Fi & firmware",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [],
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Setting"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#898781"
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": false,
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        },
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "expr": "group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(eero_network_wireless_mode_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"mode\", \"(.*)\"), \"setting\", \"Wireless mode\", \"\", \"\"), \"order\", \"01\", \"\", \"\")) or group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(eero_network_mlo_mode_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"mode\", \"(.*)\"), \"setting\", \"MLO\", \"\", \"\"), \"order\", \"02\", \"\", \"\")) or group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(eero_network_wpa3_band_mode{network_id=~\"$network_id\"} == 1, \"mode\", \"$1/$2\", \"mode\", \"(WPA2)_(WPA3)\"), \"value\", \"$1\", \"mode\", \"(.*)\"), \"setting\", \"Security · $1\", \"band\", \"(.*)\"), \"setting\", \"Security · $1 GHz\", \"band\", \"([0-9]+)_ghz\"), \"setting\", \"Security · $1.$2 GHz\", \"band\", \"([0-9]+)_([0-9]+)_ghz\"), \"order\", \"03$1\", \"band\", \"(.*)\")) or group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(eero_guest_network_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"name\", \"(.*)\"), \"setting\", \"Guest network\", \"\", \"\"), \"order\", \"04\", \"\", \"\")) or group by (network_id, setting, value, order) (label_replace(label_replace(label_replace(eero_network_update_target_info{network_id=~\"$network_id\"}, \"value\", \"$1\", \"version\", \"(.*)\"), \"setting\", \"Target firmware\", \"\", \"\"), \"order\", \"05\", \"\", \"\"))",
+          "refId": "A",
+          "legendFormat": "__auto",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "order"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "order": true,
+              "network_id": true
+            },
+            "indexByName": {
+              "setting": 0,
+              "value": 1
+            },
+            "renameByName": {
+              "setting": "Setting",
+              "value": "Value"
+            }
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      }
+    },
+    {
+      "id": 13,
       "type": "stat",
       "title": "Key dates",
       "datasource": {
@@ -984,13 +1080,13 @@
       "options": {
         "colorMode": "none",
         "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
         "textMode": "value_and_name",
         "wideLayout": true,
         "showPercentChange": false,
         "text": {
-          "titleSize": 13,
+          "titleSize": 14,
           "valueSize": 18
         },
         "reduceOptions": {
@@ -1035,11 +1131,11 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 30
+        "y": 32
       }
     },
     {
-      "id": 13,
+      "id": 14,
       "type": "state-timeline",
       "title": "Security & filtering features",
       "datasource": {
@@ -1150,11 +1246,11 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 30
+        "y": 32
       }
     },
     {
-      "id": 14,
+      "id": 15,
       "type": "state-timeline",
       "title": "Connectivity features",
       "datasource": {
@@ -1265,11 +1361,11 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 30
+        "y": 32
       }
     },
     {
-      "id": 15,
+      "id": 16,
       "type": "bargauge",
       "title": "Configuration counts",
       "datasource": {
@@ -1409,11 +1505,11 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 38
+        "y": 40
       }
     },
     {
-      "id": 16,
+      "id": 17,
       "type": "table",
       "title": "Port forwards",
       "datasource": {
@@ -1559,11 +1655,11 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 38
+        "y": 40
       }
     },
     {
-      "id": 31,
+      "id": 32,
       "type": "row",
       "title": "Eero mesh health",
       "collapsed": false,
@@ -1571,12 +1667,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 50
       },
       "panels": []
     },
     {
-      "id": 18,
+      "id": 19,
       "type": "state-timeline",
       "title": "Eero status",
       "datasource": {
@@ -1652,11 +1748,11 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 49
+        "y": 51
       }
     },
     {
-      "id": 19,
+      "id": 20,
       "type": "state-timeline",
       "title": "Heartbeat",
       "datasource": {
@@ -1732,11 +1828,11 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 49
+        "y": 51
       }
     },
     {
-      "id": 20,
+      "id": 21,
       "type": "timeseries",
       "title": "Clients per eero",
       "datasource": {
@@ -1807,11 +1903,11 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 57
+        "y": 59
       }
     },
     {
-      "id": 21,
+      "id": 22,
       "type": "timeseries",
       "title": "Wireless clients per eero",
       "datasource": {
@@ -1882,11 +1978,11 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 57
+        "y": 59
       }
     },
     {
-      "id": 22,
+      "id": 23,
       "type": "timeseries",
       "title": "Wired clients per eero",
       "datasource": {
@@ -1957,11 +2053,11 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 57
+        "y": 59
       }
     },
     {
-      "id": 23,
+      "id": 24,
       "type": "timeseries",
       "title": "Uptime since last reboot",
       "datasource": {
@@ -2035,11 +2131,11 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 65
+        "y": 67
       }
     },
     {
-      "id": 24,
+      "id": 25,
       "type": "timeseries",
       "title": "Mesh quality",
       "datasource": {
@@ -2116,11 +2212,11 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 65
+        "y": 67
       }
     },
     {
-      "id": 25,
+      "id": 26,
       "type": "timeseries",
       "title": "Time since last heartbeat",
       "datasource": {
@@ -2194,11 +2290,11 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 73
+        "y": 75
       }
     },
     {
-      "id": 26,
+      "id": 27,
       "type": "timeseries",
       "title": "LED & nightlight brightness",
       "datasource": {
@@ -2279,11 +2375,11 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 73
+        "y": 75
       }
     },
     {
-      "id": 27,
+      "id": 28,
       "type": "timeseries",
       "title": "Ethernet link speed",
       "datasource": {
@@ -2357,11 +2453,11 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 81
+        "y": 83
       }
     },
     {
-      "id": 28,
+      "id": 29,
       "type": "state-timeline",
       "title": "Ethernet link state",
       "datasource": {
@@ -2437,11 +2533,11 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 81
+        "y": 83
       }
     },
     {
-      "id": 29,
+      "id": 30,
       "type": "table",
       "title": "Eero inventory",
       "datasource": {
@@ -3194,11 +3290,11 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 91
       }
     },
     {
-      "id": 30,
+      "id": 31,
       "type": "table",
       "title": "Ethernet ports & LLDP neighbours",
       "datasource": {
@@ -3474,11 +3570,11 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 99
+        "y": 101
       }
     },
     {
-      "id": 46,
+      "id": 47,
       "type": "row",
       "title": "RF & radios",
       "collapsed": true,
@@ -3486,11 +3582,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 109
+        "y": 111
       },
       "panels": [
         {
-          "id": 32,
+          "id": 33,
           "type": "timeseries",
           "title": "Radio channel utilisation",
           "datasource": {
@@ -3573,11 +3669,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 110
+            "y": 112
           }
         },
         {
-          "id": 33,
+          "id": 34,
           "type": "timeseries",
           "title": "Wireless clients per radio",
           "datasource": {
@@ -3651,11 +3747,11 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 110
+            "y": 112
           }
         },
         {
-          "id": 34,
+          "id": 35,
           "type": "timeseries",
           "title": "Channel",
           "datasource": {
@@ -3726,11 +3822,11 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 118
+            "y": 120
           }
         },
         {
-          "id": 35,
+          "id": 36,
           "type": "timeseries",
           "title": "Channel width",
           "datasource": {
@@ -3801,11 +3897,11 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 118
+            "y": 120
           }
         },
         {
-          "id": 36,
+          "id": 37,
           "type": "timeseries",
           "title": "Tx power",
           "datasource": {
@@ -3875,11 +3971,11 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 118
+            "y": 120
           }
         },
         {
-          "id": 37,
+          "id": 38,
           "type": "timeseries",
           "title": "Average channel utilisation (window)",
           "datasource": {
@@ -3962,11 +4058,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 126
+            "y": 128
           }
         },
         {
-          "id": 38,
+          "id": 39,
           "type": "timeseries",
           "title": "p99 channel utilisation (window)",
           "datasource": {
@@ -4049,11 +4145,11 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 126
+            "y": 128
           }
         },
         {
-          "id": 39,
+          "id": 40,
           "type": "timeseries",
           "title": "Busy airtime (latest sample)",
           "datasource": {
@@ -4124,11 +4220,11 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 134
+            "y": 136
           }
         },
         {
-          "id": 40,
+          "id": 41,
           "type": "timeseries",
           "title": "Own vs other-BSS airtime",
           "datasource": {
@@ -4205,11 +4301,11 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 134
+            "y": 136
           }
         },
         {
-          "id": 41,
+          "id": 42,
           "type": "timeseries",
           "title": "Noise floor (latest sample)",
           "datasource": {
@@ -4279,11 +4375,11 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 134
+            "y": 136
           }
         },
         {
-          "id": 42,
+          "id": 43,
           "type": "timeseries",
           "title": "Minutes over busy threshold",
           "datasource": {
@@ -4354,11 +4450,11 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 142
+            "y": 144
           }
         },
         {
-          "id": 43,
+          "id": 44,
           "type": "timeseries",
           "title": "ACS channel changes (window)",
           "datasource": {
@@ -4429,11 +4525,11 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 142
+            "y": 144
           }
         },
         {
-          "id": 44,
+          "id": 45,
           "type": "bargauge",
           "title": "Peak utilisation (window)",
           "datasource": {
@@ -4510,12 +4606,12 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 142
+            "y": 144
           }
         },
         {
-          "id": 45,
-          "type": "stat",
+          "id": 46,
+          "type": "table",
           "title": "Channel plan",
           "datasource": {
             "type": "prometheus",
@@ -4525,63 +4621,213 @@
             "defaults": {
               "unit": "none",
               "mappings": [],
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "filterable": true,
+                "inspect": false
+              },
               "color": {
-                "mode": "fixed",
-                "fixedColor": "text"
+                "mode": "thresholds"
               },
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "blue",
                     "value": null
                   }
                 ]
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "roster"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "v0"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "v1"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "v2"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "v3"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "v4"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": true
+                  }
+                ]
+              }
+            ]
           },
           "options": {
-            "colorMode": "none",
-            "graphMode": "none",
-            "justifyMode": "center",
-            "orientation": "auto",
-            "textMode": "name",
-            "wideLayout": true,
-            "showPercentChange": false,
-            "text": {
-              "titleSize": 13,
-              "valueSize": 18
-            },
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false,
+              "reducer": [
+                "sum"
               ],
-              "fields": "",
-              "values": false
-            }
+              "countRows": false,
+              "fields": ""
+            },
+            "sortBy": [
+              {
+                "desc": false,
+                "displayName": "Eero"
+              }
+            ]
           },
           "targets": [
             {
-              "expr": "(max by (network_id, eero_id, band, channel, channel_bandwidth) (eero_channel_info_info{network_id=~\"$network_id\", eero_id=~\"$eero_id\"})) * on (network_id, eero_id) group_left(location) topk by (network_id, eero_id) (1, group by (network_id, eero_id, location) (eero_eero_status{network_id=~\"$network_id\"}))",
-              "refId": "A",
-              "legendFormat": "{{location}} {{band}} · ch {{channel}} · {{channel_bandwidth}}",
-              "instant": true,
-              "range": false
+              "expr": "group by (network_id, eero_id, location) (eero_eero_status{network_id=~\"$network_id\", eero_id=~\"$eero_id\"})",
+              "refId": "E",
+              "legendFormat": "__auto",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "(group by (network_id, eero_id, b24) (label_replace(label_join(max by (network_id, eero_id, channel, channel_bandwidth) (eero_channel_info_info{network_id=~\"$network_id\", eero_id=~\"$eero_id\", band=~\".*2[._]4_?GHz\"}), \"b24\", \" · \", \"channel\", \"channel_bandwidth\"), \"b24\", \"ch $1\", \"b24\", \"(.*)\"))) * on (network_id, eero_id) group_left(location) topk by (network_id, eero_id) (1, group by (network_id, eero_id, location) (eero_eero_status{network_id=~\"$network_id\"}))",
+              "refId": "C0",
+              "legendFormat": "__auto",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "(group by (network_id, eero_id, b5) (label_replace(label_join(max by (network_id, eero_id, channel, channel_bandwidth) (eero_channel_info_info{network_id=~\"$network_id\", eero_id=~\"$eero_id\", band=~\"(band_)?5_?GHz(_full)?\"}), \"b5\", \" · \", \"channel\", \"channel_bandwidth\"), \"b5\", \"ch $1\", \"b5\", \"(.*)\"))) * on (network_id, eero_id) group_left(location) topk by (network_id, eero_id) (1, group by (network_id, eero_id, location) (eero_eero_status{network_id=~\"$network_id\"}))",
+              "refId": "C1",
+              "legendFormat": "__auto",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "(group by (network_id, eero_id, b5l) (label_replace(label_join(max by (network_id, eero_id, channel, channel_bandwidth) (eero_channel_info_info{network_id=~\"$network_id\", eero_id=~\"$eero_id\", band=~\".*5_?GHz_low\"}), \"b5l\", \" · \", \"channel\", \"channel_bandwidth\"), \"b5l\", \"ch $1\", \"b5l\", \"(.*)\"))) * on (network_id, eero_id) group_left(location) topk by (network_id, eero_id) (1, group by (network_id, eero_id, location) (eero_eero_status{network_id=~\"$network_id\"}))",
+              "refId": "C2",
+              "legendFormat": "__auto",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "(group by (network_id, eero_id, b5h) (label_replace(label_join(max by (network_id, eero_id, channel, channel_bandwidth) (eero_channel_info_info{network_id=~\"$network_id\", eero_id=~\"$eero_id\", band=~\".*5_?GHz_high\"}), \"b5h\", \" · \", \"channel\", \"channel_bandwidth\"), \"b5h\", \"ch $1\", \"b5h\", \"(.*)\"))) * on (network_id, eero_id) group_left(location) topk by (network_id, eero_id) (1, group by (network_id, eero_id, location) (eero_eero_status{network_id=~\"$network_id\"}))",
+              "refId": "C3",
+              "legendFormat": "__auto",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "(group by (network_id, eero_id, b6) (label_replace(label_join(max by (network_id, eero_id, channel, channel_bandwidth) (eero_channel_info_info{network_id=~\"$network_id\", eero_id=~\"$eero_id\", band=~\".*6_?GHz\"}), \"b6\", \" · \", \"channel\", \"channel_bandwidth\"), \"b6\", \"ch $1\", \"b6\", \"(.*)\"))) * on (network_id, eero_id) group_left(location) topk by (network_id, eero_id) (1, group by (network_id, eero_id, location) (eero_eero_status{network_id=~\"$network_id\"}))",
+              "refId": "C4",
+              "legendFormat": "__auto",
+              "format": "table",
+              "instant": true
             }
           ],
-          "description": "Current channel and bandwidth per radio (RF tier).",
+          "description": "Current channel and bandwidth per radio (RF tier). Eeros split 5 GHz into low/high radios or use a single full-band radio, depending on the model.",
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "instance": true,
+                  "job": true,
+                  "mac": true,
+                  "eero_id": true,
+                  "device_id": true,
+                  "profile_id": true,
+                  "network_id": true,
+                  "forward_id": true
+                },
+                "renameByName": {
+                  "Value #E": "roster",
+                  "Value #C0": "v0",
+                  "Value #C1": "v1",
+                  "Value #C2": "v2",
+                  "Value #C3": "v3",
+                  "Value #C4": "v4",
+                  "location": "Eero",
+                  "b24": "2.4 GHz",
+                  "b5": "5 GHz",
+                  "b5l": "5 GHz low",
+                  "b5h": "5 GHz high",
+                  "b6": "6 GHz"
+                }
+              }
+            }
+          ],
           "gridPos": {
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 150
+            "y": 152
           }
         }
       ]
     },
     {
-      "id": 63,
+      "id": 64,
       "type": "row",
       "title": "Devices",
       "collapsed": true,
@@ -4589,11 +4835,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 110
+        "y": 112
       },
       "panels": [
         {
-          "id": 47,
+          "id": 48,
           "type": "piechart",
           "title": "Wireless clients by band",
           "datasource": {
@@ -4649,13 +4895,13 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 111
+            "y": 113
           }
         },
         {
-          "id": 48,
-          "type": "bargauge",
-          "title": "Devices by Wi-Fi generation",
+          "id": 49,
+          "type": "piechart",
+          "title": "Connected devices by link",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -4665,41 +4911,28 @@
               "unit": "short",
               "mappings": [],
               "color": {
-                "mode": "fixed",
-                "fixedColor": "blue"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "blue",
-                    "value": null
-                  }
-                ]
-              },
-              "min": 0
+                "mode": "palette-classic"
+              }
             },
             "overrides": []
           },
           "options": {
-            "displayMode": "gradient",
-            "orientation": "horizontal",
-            "namePlacement": "left",
-            "showUnfilled": true,
-            "sizing": "auto",
-            "valueMode": "text",
-            "minVizHeight": 14,
-            "minVizWidth": 8,
-            "maxVizHeight": 22,
-            "text": {
-              "titleSize": 12,
-              "valueSize": 14
-            },
+            "pieType": "donut",
+            "displayLabels": [
+              "percent"
+            ],
             "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": false
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "values": [
+                "value",
+                "percent"
+              ]
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
             },
             "reduceOptions": {
               "calcs": [
@@ -4711,23 +4944,43 @@
           },
           "targets": [
             {
-              "expr": "count_values(\"gen\", max by (network_id, device_id) (eero_device_wifi_generation{network_id=~\"$network_id\"}))",
+              "expr": "count((max by (network_id, device_id) (eero_device_wireless{network_id=~\"$network_id\"}) == 0) and on (network_id, device_id) (max by (network_id, device_id) (eero_device_connected{network_id=~\"$network_id\"}) == 1)) or on () vector(0)",
               "refId": "A",
-              "legendFormat": "Wi-Fi {{gen}}",
+              "legendFormat": "Wired",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "count(((max by (network_id, device_id) (eero_device_frequency_mhz{network_id=~\"$network_id\"}) and on (network_id, device_id) (max by (network_id, device_id) (eero_device_connected{network_id=~\"$network_id\"}) == 1)) > 0) < 3000) or on () vector(0)",
+              "refId": "B",
+              "legendFormat": "2.4 GHz",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "count(((max by (network_id, device_id) (eero_device_frequency_mhz{network_id=~\"$network_id\"}) and on (network_id, device_id) (max by (network_id, device_id) (eero_device_connected{network_id=~\"$network_id\"}) == 1)) >= 3000) < 5925) or on () vector(0)",
+              "refId": "C",
+              "legendFormat": "5 GHz",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "count((max by (network_id, device_id) (eero_device_frequency_mhz{network_id=~\"$network_id\"}) and on (network_id, device_id) (max by (network_id, device_id) (eero_device_connected{network_id=~\"$network_id\"}) == 1)) >= 5925) or on () vector(0)",
+              "refId": "D",
+              "legendFormat": "6 GHz",
               "instant": true,
               "range": false
             }
           ],
-          "description": "Only devices that report a generation are counted.",
           "gridPos": {
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 111
+            "y": 113
           }
         },
         {
-          "id": 49,
+          "id": 50,
           "type": "bargauge",
           "title": "Top manufacturers (connected)",
           "datasource": {
@@ -4796,11 +5049,11 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 111
+            "y": 113
           }
         },
         {
-          "id": 50,
+          "id": 51,
           "type": "timeseries",
           "title": "Device flags",
           "datasource": {
@@ -4900,11 +5153,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 119
+            "y": 121
           }
         },
         {
-          "id": 51,
+          "id": 52,
           "type": "histogram",
           "title": "Signal distribution (connected)",
           "datasource": {
@@ -4954,11 +5207,11 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 119
+            "y": 121
           }
         },
         {
-          "id": 52,
+          "id": 53,
           "type": "timeseries",
           "title": "Weakest signals (bottom 10)",
           "datasource": {
@@ -5039,11 +5292,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 127
+            "y": 129
           }
         },
         {
-          "id": 53,
+          "id": 54,
           "type": "timeseries",
           "title": "Lowest connection scores (bottom 10)",
           "datasource": {
@@ -5118,11 +5371,11 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 127
+            "y": 129
           }
         },
         {
-          "id": 54,
+          "id": 55,
           "type": "timeseries",
           "title": "Receive bitrate (top 10)",
           "datasource": {
@@ -5196,11 +5449,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 135
+            "y": 137
           }
         },
         {
-          "id": 55,
+          "id": 56,
           "type": "timeseries",
           "title": "Transmit bitrate (top 10)",
           "datasource": {
@@ -5274,11 +5527,11 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 135
+            "y": 137
           }
         },
         {
-          "id": 56,
+          "id": 57,
           "type": "timeseries",
           "title": "MCS index (top 5 rx / tx)",
           "datasource": {
@@ -5354,11 +5607,11 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 143
+            "y": 145
           }
         },
         {
-          "id": 57,
+          "id": 58,
           "type": "timeseries",
           "title": "Spatial streams (top 5 rx / tx)",
           "datasource": {
@@ -5434,11 +5687,11 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 143
+            "y": 145
           }
         },
         {
-          "id": 58,
+          "id": 59,
           "type": "timeseries",
           "title": "Lifetime packets (top 10)",
           "datasource": {
@@ -5510,11 +5763,11 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 143
+            "y": 145
           }
         },
         {
-          "id": 59,
+          "id": 60,
           "type": "timeseries",
           "title": "Tx retransmit rate (top 10)",
           "datasource": {
@@ -5585,11 +5838,11 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 151
+            "y": 153
           }
         },
         {
-          "id": 60,
+          "id": 61,
           "type": "timeseries",
           "title": "Tx failure rate (top 10)",
           "datasource": {
@@ -5660,11 +5913,11 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 151
+            "y": 153
           }
         },
         {
-          "id": 61,
+          "id": 62,
           "type": "timeseries",
           "title": "Rx drop rate (top 10)",
           "datasource": {
@@ -5735,11 +5988,11 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 151
+            "y": 153
           }
         },
         {
-          "id": 62,
+          "id": 63,
           "type": "table",
           "title": "Device inventory",
           "datasource": {
@@ -6209,13 +6462,13 @@
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 159
+            "y": 161
           }
         }
       ]
     },
     {
-      "id": 73,
+      "id": 74,
       "type": "row",
       "title": "Data usage",
       "collapsed": true,
@@ -6223,11 +6476,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 111
+        "y": 113
       },
       "panels": [
         {
-          "id": 64,
+          "id": 65,
           "type": "timeseries",
           "title": "Network usage — $period",
           "datasource": {
@@ -6302,11 +6555,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 112
+            "y": 114
           }
         },
         {
-          "id": 65,
+          "id": 66,
           "type": "timeseries",
           "title": "Network usage — trailing window",
           "datasource": {
@@ -6385,11 +6638,11 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 112
+            "y": 114
           }
         },
         {
-          "id": 66,
+          "id": 67,
           "type": "timeseries",
           "title": "Download by calendar period",
           "datasource": {
@@ -6463,11 +6716,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 120
+            "y": 122
           }
         },
         {
-          "id": 67,
+          "id": 68,
           "type": "timeseries",
           "title": "Unprofiled devices — current window",
           "datasource": {
@@ -6542,11 +6795,11 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 120
+            "y": 122
           }
         },
         {
-          "id": 68,
+          "id": 69,
           "type": "bargauge",
           "title": "Top 10 devices — current window",
           "datasource": {
@@ -6615,11 +6868,11 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 128
+            "y": 130
           }
         },
         {
-          "id": 69,
+          "id": 70,
           "type": "bargauge",
           "title": "Per eero — current window",
           "datasource": {
@@ -6688,11 +6941,11 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 128
+            "y": 130
           }
         },
         {
-          "id": 70,
+          "id": 71,
           "type": "bargauge",
           "title": "Per profile — current window",
           "datasource": {
@@ -6761,11 +7014,11 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 128
+            "y": 130
           }
         },
         {
-          "id": 71,
+          "id": 72,
           "type": "bargauge",
           "title": "Top 10 devices download — trailing window",
           "datasource": {
@@ -6834,11 +7087,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 136
+            "y": 138
           }
         },
         {
-          "id": 72,
+          "id": 73,
           "type": "bargauge",
           "title": "Top 10 devices upload — trailing window",
           "datasource": {
@@ -6907,13 +7160,13 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 136
+            "y": 138
           }
         }
       ]
     },
     {
-      "id": 85,
+      "id": 86,
       "type": "row",
       "title": "Profiles & insights",
       "collapsed": true,
@@ -6921,11 +7174,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 112
+        "y": 114
       },
       "panels": [
         {
-          "id": 74,
+          "id": 75,
           "type": "state-timeline",
           "title": "Profile paused",
           "datasource": {
@@ -7001,11 +7254,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 113
+            "y": 115
           }
         },
         {
-          "id": 75,
+          "id": 76,
           "type": "timeseries",
           "title": "Connected devices per profile",
           "datasource": {
@@ -7079,11 +7332,11 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 113
+            "y": 115
           }
         },
         {
-          "id": 76,
+          "id": 77,
           "type": "bargauge",
           "title": "Devices per profile",
           "datasource": {
@@ -7152,11 +7405,11 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 121
+            "y": 123
           }
         },
         {
-          "id": 77,
+          "id": 78,
           "type": "bargauge",
           "title": "Blocked apps & schedules",
           "datasource": {
@@ -7232,11 +7485,11 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 121
+            "y": 123
           }
         },
         {
-          "id": 78,
+          "id": 79,
           "type": "state-timeline",
           "title": "Content filters",
           "datasource": {
@@ -7312,11 +7565,11 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 121
+            "y": 123
           }
         },
         {
-          "id": 79,
+          "id": 80,
           "type": "timeseries",
           "title": "Insight events (window)",
           "datasource": {
@@ -7400,11 +7653,11 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 129
+            "y": 131
           }
         },
         {
-          "id": 80,
+          "id": 81,
           "type": "bargauge",
           "title": "Threats blocked by category",
           "datasource": {
@@ -7473,11 +7726,11 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 137
+            "y": 139
           }
         },
         {
-          "id": 81,
+          "id": 82,
           "type": "bargauge",
           "title": "Ads blocked by category",
           "datasource": {
@@ -7546,11 +7799,11 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 137
+            "y": 139
           }
         },
         {
-          "id": 82,
+          "id": 83,
           "type": "bargauge",
           "title": "Inspected by category",
           "datasource": {
@@ -7619,11 +7872,11 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 137
+            "y": 139
           }
         },
         {
-          "id": 83,
+          "id": 84,
           "type": "timeseries",
           "title": "Profile insight events (top 10)",
           "datasource": {
@@ -7697,11 +7950,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 145
+            "y": 147
           }
         },
         {
-          "id": 84,
+          "id": 85,
           "type": "bargauge",
           "title": "Devices with insights per profile",
           "datasource": {
@@ -7770,13 +8023,13 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 145
+            "y": 147
           }
         }
       ]
     },
     {
-      "id": 91,
+      "id": 92,
       "type": "row",
       "title": "Security & account",
       "collapsed": true,
@@ -7784,11 +8037,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 113
+        "y": 115
       },
       "panels": [
         {
-          "id": 86,
+          "id": 87,
           "type": "state-timeline",
           "title": "Subscription & alerts",
           "datasource": {
@@ -7908,11 +8161,11 @@
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 114
+            "y": 116
           }
         },
         {
-          "id": 87,
+          "id": 88,
           "type": "table",
           "title": "Capabilities, entitlements, permissions & subnets",
           "datasource": {
@@ -8041,11 +8294,11 @@
             "h": 10,
             "w": 12,
             "x": 12,
-            "y": 114
+            "y": 116
           }
         },
         {
-          "id": 88,
+          "id": 89,
           "type": "timeseries",
           "title": "Members & networks",
           "datasource": {
@@ -8121,11 +8374,11 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 124
+            "y": 126
           }
         },
         {
-          "id": 89,
+          "id": 90,
           "type": "timeseries",
           "title": "Guest network clients",
           "datasource": {
@@ -8197,11 +8450,11 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 124
+            "y": 126
           }
         },
         {
-          "id": 90,
+          "id": 91,
           "type": "state-timeline",
           "title": "Open (unencrypted) subnets",
           "datasource": {
@@ -8277,13 +8530,13 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 124
+            "y": 126
           }
         }
       ]
     },
     {
-      "id": 99,
+      "id": 100,
       "type": "row",
       "title": "Exporter health",
       "collapsed": true,
@@ -8291,11 +8544,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 114
+        "y": 116
       },
       "panels": [
         {
-          "id": 92,
+          "id": 93,
           "type": "timeseries",
           "title": "API requests by status",
           "datasource": {
@@ -8520,11 +8773,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 115
+            "y": 117
           }
         },
         {
-          "id": 93,
+          "id": 94,
           "type": "text",
           "title": "API status legend",
           "datasource": {
@@ -8547,11 +8800,11 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 115
+            "y": 117
           }
         },
         {
-          "id": 94,
+          "id": 95,
           "type": "timeseries",
           "title": "Collection duration vs interval",
           "datasource": {
@@ -8627,11 +8880,11 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 123
+            "y": 125
           }
         },
         {
-          "id": 95,
+          "id": 96,
           "type": "timeseries",
           "title": "Time since last collection",
           "datasource": {
@@ -8711,11 +8964,11 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 123
+            "y": 125
           }
         },
         {
-          "id": 96,
+          "id": 97,
           "type": "timeseries",
           "title": "API requests per cycle",
           "datasource": {
@@ -8787,11 +9040,11 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 123
+            "y": 125
           }
         },
         {
-          "id": 97,
+          "id": 98,
           "type": "timeseries",
           "title": "Scrape errors by type",
           "datasource": {
@@ -8866,11 +9119,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 131
+            "y": 133
           }
         },
         {
-          "id": 98,
+          "id": 99,
           "type": "timeseries",
           "title": "API requests by endpoint (top 10)",
           "datasource": {
@@ -8945,13 +9198,13 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 131
+            "y": 133
           }
         }
       ]
     },
     {
-      "id": 102,
+      "id": 103,
       "type": "row",
       "title": "Per-profile (--include-per-profile)",
       "collapsed": true,
@@ -8959,11 +9212,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 115
+        "y": 117
       },
       "panels": [
         {
-          "id": 100,
+          "id": 101,
           "type": "bargauge",
           "title": "DNS-policy applications per profile",
           "datasource": {
@@ -9032,11 +9285,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 116
+            "y": 118
           }
         },
         {
-          "id": 101,
+          "id": 102,
           "type": "timeseries",
           "title": "DNS-policy applications over time",
           "datasource": {
@@ -9110,13 +9363,13 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 116
+            "y": 118
           }
         }
       ]
     },
     {
-      "id": 105,
+      "id": 106,
       "type": "row",
       "title": "Per-device (--include-per-device)",
       "collapsed": true,
@@ -9124,11 +9377,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 116
+        "y": 118
       },
       "panels": [
         {
-          "id": 103,
+          "id": 104,
           "type": "bargauge",
           "title": "Top 10 device insights",
           "datasource": {
@@ -9197,11 +9450,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 117
+            "y": 119
           }
         },
         {
-          "id": 104,
+          "id": 105,
           "type": "timeseries",
           "title": "Device insights by type",
           "datasource": {
@@ -9275,13 +9528,13 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 117
+            "y": 119
           }
         }
       ]
     },
     {
-      "id": 108,
+      "id": 109,
       "type": "row",
       "title": "Per-eero (--include-per-eero)",
       "collapsed": true,
@@ -9289,11 +9542,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 117
+        "y": 119
       },
       "panels": [
         {
-          "id": 106,
+          "id": 107,
           "type": "timeseries",
           "title": "Wireless connections per eero",
           "datasource": {
@@ -9367,11 +9620,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 118
+            "y": 120
           }
         },
         {
-          "id": 107,
+          "id": 108,
           "type": "state-timeline",
           "title": "OUI check",
           "datasource": {
@@ -9452,13 +9705,13 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 118
+            "y": 120
           }
         }
       ]
     },
     {
-      "id": 113,
+      "id": 114,
       "type": "row",
       "title": "Unverified shapes (--include-unverified)",
       "collapsed": true,
@@ -9466,11 +9719,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 118
+        "y": 120
       },
       "panels": [
         {
-          "id": 109,
+          "id": 110,
           "type": "timeseries",
           "title": "Routing table sizes",
           "datasource": {
@@ -9559,11 +9812,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 119
+            "y": 121
           }
         },
         {
-          "id": 110,
+          "id": 111,
           "type": "timeseries",
           "title": "Backup, cellular & schedules",
           "datasource": {
@@ -9657,11 +9910,11 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 119
+            "y": 121
           }
         },
         {
-          "id": 111,
+          "id": 112,
           "type": "state-timeline",
           "title": "Unverified flags",
           "datasource": {
@@ -9776,11 +10029,11 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 127
+            "y": 129
           }
         },
         {
-          "id": 112,
+          "id": 113,
           "type": "state-timeline",
           "title": "Backup access points",
           "datasource": {
@@ -9861,7 +10114,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 127
+            "y": 129
           }
         }
       ]

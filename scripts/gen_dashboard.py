@@ -376,15 +376,10 @@ def kpi(
     return p
 
 
-def text_tiles(
-    title: str,
-    items: list[tuple[str, str]],
-    *,
-    unit: str = "none",
-    names_only: bool = True,
-    description: str = "",
+def stat_list(
+    title: str, items: list[tuple[str, str]], unit: str, *, description: str = ""
 ) -> Panel:
-    """Compact text tiles: each series' legend (built from Info labels) is the tile text."""
+    """One "name ........ value" row per series (dates, versions): a compact key/value list."""
     p = base(title, "stat", unit, description)
     d = p["fieldConfig"]["defaults"]
     d["color"] = {"mode": "fixed", "fixedColor": "text"}
@@ -392,15 +387,80 @@ def text_tiles(
     p["options"] = {
         "colorMode": "none",
         "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "name" if names_only else "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
         "wideLayout": True,
         "showPercentChange": False,
-        "text": {"titleSize": 13, "valueSize": 18},
+        "text": {"titleSize": 14, "valueSize": 18},
         "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
     }
     p["targets"] = targets_of(items, instant=True)
+    return p
+
+
+Relabel = tuple[str, str, str]
+"""(replacement, source label, anchored regex) for a PromQL ``label_replace``."""
+
+
+def relabel(expr: str, dst: str, rules: list[Relabel]) -> str:
+    """Apply ``label_replace`` rules in order; a rule whose regex does not match is a no-op."""
+    for replacement, src, regex in rules:
+        expr = f'label_replace({expr}, "{dst}", "{replacement}", "{src}", "{regex}")'
+    return expr
+
+
+def setting(order: int, name: str | list[Relabel], expr: str, value: str) -> str:
+    """One key/value row: Info label ``value`` shown under the setting ``name``.
+
+    ``name`` is either a fixed string or relabel rules deriving it from a label (one
+    row per label value, e.g. per band); the hidden ``order`` label keeps rows stable.
+    """
+    rules = [(name, "", "")] if isinstance(name, str) else name
+    order_rules = [(f"{order:02d}", "", "")]
+    if not isinstance(name, str):
+        order_rules = [(f"{order:02d}$1", name[0][1], "(.*)")]
+    e = relabel(expr, "value", [("$1", value, "(.*)")])
+    e = relabel(relabel(e, "setting", rules), "order", order_rules)
+    return f"group by (network_id, setting, value, order) ({e})"
+
+
+def settings_table(title: str, rows: list[str], *, description: str = "") -> Panel:
+    """Two-column Setting | Value list built from Info labels, in declaration order."""
+    p = base(title, "table", "none", description)
+    d = p["fieldConfig"]["defaults"]
+    d["custom"] = {"align": "auto", "cellOptions": {"type": "auto"}, "inspect": False}
+    d["color"] = {"mode": "fixed", "fixedColor": "text"}
+    d["thresholds"] = steps([("text", None)])
+    muted = {
+        "custom.width": 170,
+        "color": {"mode": "fixed", "fixedColor": NEUTRAL},
+        "custom.cellOptions": {"type": "color-text"},
+    }
+    p["fieldConfig"]["overrides"] = [override("Setting", **muted)]
+    p["options"] = {
+        "cellHeight": "sm",
+        "showHeader": False,
+        "footer": {"show": False, "reducer": ["sum"], "countRows": False, "fields": ""},
+        "sortBy": [],
+    }
+    p["targets"] = [target(" or ".join(rows), table=True)]
+    p["transformations"] = [
+        {"id": "sortBy", "options": {"fields": {}, "sort": [{"field": "order"}]}},
+        {
+            "id": "organize",
+            "options": {
+                "excludeByName": {
+                    "Time": True,
+                    "Value": True,
+                    "order": True,
+                    "network_id": True,
+                },
+                "indexByName": {"setting": 0, "value": 1},
+                "renameByName": {"setting": "Setting", "value": "Value"},
+            },
+        },
+    ]
     return p
 
 
@@ -681,31 +741,49 @@ def overview(g: Grid) -> None:
 
 
 def network_wan(g: Grid) -> None:
+    wpa_band = f'label_replace(eero_network_wpa3_band_mode{{{N}}} == 1, "mode", "$1/$2", "mode", "(WPA2)_(WPA3)")'
+    wpa_name = [
+        ("Security · $1", "band", "(.*)"),
+        ("Security · $1 GHz", "band", "([0-9]+)_ghz"),
+        ("Security · $1.$2 GHz", "band", "([0-9]+)_([0-9]+)_ghz"),
+    ]
+    dns_name = [("DNS · IPv4", "family", "ipv4"), ("DNS · IPv6", "family", "ipv6")]
+    settings_h = HALF_TABLE
     g.line(
         (
-            text_tiles(
-                "Network settings",
+            settings_table(
+                "Internet & LAN",
                 [
-                    (f"eero_network_info{{{N}}}", "ISP · {{isp}}"),
-                    (f"eero_network_wan_type_info{{{N}}}", "WAN · {{type}}"),
-                    (f"eero_network_connection_mode_info{{{N}}}", "Mode · {{mode}}"),
-                    (f"eero_network_wireless_mode_info{{{N}}}", "Wi-Fi · {{mode}}"),
-                    (f"eero_network_mlo_mode_info{{{N}}}", "MLO · {{mode}}"),
-                    (f"eero_network_dhcp_mode_info{{{N}}}", "DHCP · {{mode}}"),
-                    (f"eero_network_dns_mode_info{{{N}}}", "DNS {{family}} · {{mode}}"),
-                    (f"eero_dns_config_info{{{N}}}", "DNS config · {{mode}}"),
-                    (f"eero_network_wpa3_band_mode{{{N}}} == 1", "{{band}} · {{mode}}"),
-                    (f"eero_network_update_target_info{{{N}}}", "Target fw · {{version}}"),
-                    (f"eero_guest_network_info{{{N}}}", "Guest · {{name}}"),
-                    (f"eero_network_role_info{{{N}}}", "Role · {{role}}"),
-                    (f"eero_network_timezone_info{{{N}}}", "{{timezone}}"),
+                    setting(1, "ISP", f"eero_network_info{{{N}}}", "isp"),
+                    setting(2, "WAN", f"eero_network_wan_type_info{{{N}}}", "type"),
+                    setting(3, "Connection", f"eero_network_connection_mode_info{{{N}}}", "mode"),
+                    setting(4, "DHCP", f"eero_network_dhcp_mode_info{{{N}}}", "mode"),
+                    setting(5, dns_name, f"eero_network_dns_mode_info{{{N}}}", "mode"),
+                    setting(6, "DNS config", f"eero_dns_config_info{{{N}}}", "mode"),
+                    setting(7, "Timezone", f"eero_network_timezone_info{{{N}}}", "timezone"),
+                    setting(8, "Account role", f"eero_network_role_info{{{N}}}", "role"),
                 ],
             ),
-            FULL,
+            settings_h,
+        ),
+        (
+            settings_table(
+                "Wi-Fi & firmware",
+                [
+                    setting(1, "Wireless mode", f"eero_network_wireless_mode_info{{{N}}}", "mode"),
+                    setting(2, "MLO", f"eero_network_mlo_mode_info{{{N}}}", "mode"),
+                    setting(3, wpa_name, wpa_band, "mode"),
+                    setting(4, "Guest network", f"eero_guest_network_info{{{N}}}", "name"),
+                    setting(
+                        5, "Target firmware", f"eero_network_update_target_info{{{N}}}", "version"
+                    ),
+                ],
+            ),
+            settings_h,
         ),
     )
     key_dates = (
-        text_tiles(
+        stat_list(
             "Key dates",
             [
                 (f"eero_speed_test_timestamp_seconds{{{N}}} * 1000", "Last speed test"),
@@ -722,8 +800,7 @@ def network_wan(g: Grid) -> None:
                     "Entitlement since",
                 ),
             ],
-            unit="dateTimeFromNow",
-            names_only=False,
+            "dateTimeFromNow",
         ),
         THIRD,
     )
@@ -1179,19 +1256,51 @@ def rf(g: Grid) -> None:
             THIRD,
         ),
     )
-    plan = with_location(
-        "max by (network_id, eero_id, band, channel, channel_bandwidth) "
-        f"(eero_channel_info_info{{{NE}}})"
-    )
-    g.line(
-        (
-            text_tiles(
-                "Channel plan",
-                [(plan, "{{location}} {{band}} · ch {{channel}} · {{channel_bandwidth}}")],
-                description="Current channel and bandwidth per radio (RF tier).",
-            ),
-            FULL,
+    g.line((_channel_plan(), FULL))
+
+
+# (band regex, column label, header). The API reports e.g. band_2_4GHz / band_5GHz_low;
+# the regexes also accept the short 2.4GHz / 5GHz spellings.
+CHANNEL_PLAN_BANDS = [
+    (".*2[._]4_?GHz", "b24", "2.4 GHz"),
+    ("(band_)?5_?GHz(_full)?", "b5", "5 GHz"),
+    (".*5_?GHz_low", "b5l", "5 GHz low"),
+    (".*5_?GHz_high", "b5h", "5 GHz high"),
+    (".*6_?GHz", "b6", "6 GHz"),
+]
+
+
+def _channel_plan() -> Panel:
+    """Eero x band matrix; each cell reads "ch 36 · 80 MHz"."""
+
+    def cell(band: str, col: str) -> str:
+        radios = (
+            "max by (network_id, eero_id, channel, channel_bandwidth) "
+            f'(eero_channel_info_info{{{NE}, band=~"{band}"}})'
         )
+        joined = f'label_join({radios}, "{col}", " · ", "channel", "channel_bandwidth")'
+        labelled = relabel(joined, col, [("ch $1", col, "(.*)")])
+        return with_location(f"group by (network_id, eero_id, {col}) ({labelled})")
+
+    return table(
+        "Channel plan",
+        [
+            # The eero roster goes first: merge keeps the first frame's column order.
+            (
+                "E",
+                f"group by (network_id, eero_id, location) (eero_eero_status{{{NE}}})",
+                "roster",
+                col_hidden(),
+            ),
+            *(
+                (f"C{i}", cell(band, col), f"v{i}", col_hidden())
+                for i, (band, col, _) in enumerate(CHANNEL_PLAN_BANDS)
+            ),
+        ],
+        {"location": "Eero", **{col: name for _, col, name in CHANNEL_PLAN_BANDS}},
+        sort_by="Eero",
+        description="Current channel and bandwidth per radio (RF tier). Eeros split 5 GHz "
+        "into low/high radios or use a single full-band radio, depending on the model.",
     )
 
 
@@ -1281,7 +1390,16 @@ def _device_inventory() -> Panel:
 
 
 def devices(g: Grid) -> None:
-    wifi_gen = f'count_values("gen", {per_device("eero_device_wifi_generation")})'
+    freq = f"({per_device('eero_device_frequency_mhz')} and on (network_id, device_id) {CONNECTED})"
+    wired = (
+        f"({per_device('eero_device_wireless')} == 0) and on (network_id, device_id) {CONNECTED}"
+    )
+    links = [
+        (f"count({wired}) or on () vector(0)", "Wired"),
+        (f"count(({freq} > 0) < 3000) or on () vector(0)", "2.4 GHz"),
+        (f"count(({freq} >= 3000) < 5925) or on () vector(0)", "5 GHz"),
+        (f"count({freq} >= 5925) or on () vector(0)", "6 GHz"),
+    ]
     manufacturers = (
         "topk(10, count by (manufacturer) "
         f"(topk by (network_id, device_id) (1, eero_device_connected{{{N}}}) == 1))"
@@ -1294,14 +1412,7 @@ def devices(g: Grid) -> None:
             ),
             THIRD,
         ),
-        (
-            bargauge(
-                "Devices by Wi-Fi generation",
-                [(wifi_gen, "Wi-Fi {{gen}}")],
-                description="Only devices that report a generation are counted.",
-            ),
-            THIRD,
-        ),
+        (donut("Connected devices by link", links), THIRD),
         (bargauge("Top manufacturers (connected)", [(manufacturers, "{{manufacturer}}")]), THIRD),
     )
     g.line(
