@@ -7,12 +7,15 @@ This test ensures:
 4. BaseAPI exposes the write methods for the read-only guard to patch
 """
 
+import importlib.metadata
 import inspect
 import re
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 from eero import EeroClient
 from eero.api.base import BaseAPI
+from eero.const import DEFAULT_USER_AGENT, LEGACY_USER_AGENT
 from eero.exceptions import EeroException
 
 
@@ -196,3 +199,35 @@ class TestAdapterCallsValidSignatures:
         ]
 
         assert removed_calls == [], f"Adapter still calls removed SDK methods: {removed_calls}"
+
+
+class TestEeroApi806Integration:
+    """Behaviour the exporter relies on from eero-api 8.0.5/8.0.6 (folded-in PR #140)."""
+
+    def test_installed_sdk_meets_the_floor(self) -> None:
+        version = importlib.metadata.version("eero-api")
+        major, minor, patch = (int(part) for part in version.split(".")[:3])
+        assert (major, minor, patch) >= (8, 0, 6), version
+        assert major == 8, "pyproject pins eero-api to the 8.x major"
+
+    async def test_sdk_coerces_an_integer_network_id_to_str(self, tmp_path: Path) -> None:
+        """8.0.5 (#137): an account whose `/networks` returns `"id": <int>`."""
+        client = EeroClient(cookie_file=str(tmp_path / "session.json"))
+        client._api.networks.get_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value={"meta": {"code": 200}, "data": [{"id": 9999424, "name": "N"}]}
+        )
+
+        await client.get_networks()
+
+        assert client.preferred_network_id == "9999424"
+
+    def test_adapter_sends_the_sdk_default_client_version(self) -> None:
+        """8.0.5 (#135): the current `User-Agent` unlocks capabilities the legacy one
+        hid. The adapter must not pin the legacy string, so it gets the SDK default."""
+        adapter_path = Path(__file__).parent.parent / "src" / "eero_exporter" / "eero_adapter.py"
+        source = adapter_path.read_text()
+
+        assert "user_agent" in inspect.signature(EeroClient.__init__).parameters
+        assert "user_agent" not in source
+        assert "LEGACY_USER_AGENT" not in source
+        assert DEFAULT_USER_AGENT != LEGACY_USER_AGENT

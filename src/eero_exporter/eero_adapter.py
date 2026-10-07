@@ -329,6 +329,28 @@ def _extract_data(raw_response: Any) -> Any:
     return raw_response
 
 
+def _extract_dict(raw_response: Any) -> dict[str, Any]:
+    """Extract an object payload from a raw API response, always as a ``dict``.
+
+    ``"data": null`` (or a list/scalar where an object was expected) yields
+    ``{}`` instead of raising: ``dict(None)`` is a ``TypeError`` that no SDK
+    exception mapping catches, so it would escape the adapter and abort the
+    whole collection cycle -- the same failure class as #139.
+
+    Args:
+        raw_response: Raw response from eero-api
+
+    Returns:
+        The envelope's ``data`` object, or ``{}`` when it is not an object
+    """
+    data = _extract_data(raw_response)
+    if isinstance(data, dict):
+        return dict(data)
+    if data is not None and data != []:
+        _LOGGER.debug("Expected an object payload, got %s; treating as empty", type(data).__name__)
+    return {}
+
+
 def _extract_list(raw_response: Any, list_key: str | None = None) -> list[dict[str, Any]]:
     """Extract a list from raw API response.
 
@@ -580,7 +602,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_account()
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_networks(self) -> list[dict[str, Any]]:
@@ -604,7 +626,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_network(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # Eero Devices
@@ -661,7 +683,7 @@ class EeroClient:
 
         # Get speed data from network info
         raw_response = await self._client.get_network(network_id)
-        network_data = _extract_data(raw_response)
+        network_data = _extract_dict(raw_response)
         # eero-api returns "speed_test", but check "speed" as fallback for compatibility
         speed_data = network_data.get("speed_test") or network_data.get("speed", {})
         if isinstance(speed_data, dict):
@@ -681,7 +703,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_transfer_stats(network_id, device_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # Data Usage
@@ -719,7 +741,7 @@ class EeroClient:
         raw_response = await self._client.get_data_usage(
             network_id, start=start, end=end, cadence=cadence, timezone=timezone
         )
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_data_usage_breakdown(
@@ -756,7 +778,7 @@ class EeroClient:
         raw_response = await self._client.get_data_usage_breakdown(
             network_id, start=start, end=end, cadence=cadence, timezone=timezone
         )
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_devices_data_usage(
@@ -794,7 +816,7 @@ class EeroClient:
             timezone=timezone,
             profile_id=profile_id,
         )
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_eeros_data_usage_summary(
@@ -824,7 +846,7 @@ class EeroClient:
         raw_response = await self._client.get_eeros_data_usage_summary(
             network_id, start=start, end=end, cadence=cadence, timezone=timezone
         )
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_eero_data_usage(
@@ -859,7 +881,7 @@ class EeroClient:
         raw_response = await self._client.get_eero_data_usage(
             eero_id, network_id, start=start, end=end, cadence=cadence, timezone=timezone
         )
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_device_data_usage(
@@ -891,7 +913,7 @@ class EeroClient:
         raw_response = await self._client.get_device_data_usage(
             device_mac, network_id, start=start, end=end, cadence=cadence, timezone=timezone
         )
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_profile_data_usage(
@@ -923,7 +945,7 @@ class EeroClient:
         raw_response = await self._client.get_profile_data_usage(
             profile_id, network_id, start=start, end=end, cadence=cadence, timezone=timezone
         )
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # SQM Settings
@@ -936,7 +958,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_sqm_settings(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # Security Settings
@@ -949,7 +971,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_security_settings(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # Premium Features (Eero Plus)
@@ -962,7 +984,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_premium_status(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def is_premium(self, network_id: str) -> bool:
@@ -975,7 +997,7 @@ class EeroClient:
         if isinstance(raw_response, bool):
             return raw_response
         if isinstance(raw_response, dict):
-            data = _extract_data(raw_response)
+            data = _extract_dict(raw_response)
             # Check various fields that indicate premium status
             # eero_plus, premium_status, premium_dns, or premium
             if data.get("eero_plus"):
@@ -1000,7 +1022,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_thread(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # Port Forwards
@@ -1052,7 +1074,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_updates(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # Insights
@@ -1092,7 +1114,7 @@ class EeroClient:
             insight_type=insight_type,
             cadence=cadence,
         )
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # Diagnostics
@@ -1105,7 +1127,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_diagnostics(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # Extended tier -- entitlements, security, permissions, members,
@@ -1120,7 +1142,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_entitlement_features(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_wpa3_per_band(self, network_id: str) -> dict[str, Any]:
@@ -1129,7 +1151,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_wpa3_per_band(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_fast_transition(self, network_id: str) -> dict[str, Any]:
@@ -1138,7 +1160,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_fast_transition(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_permissions(self, network_id: str) -> dict[str, Any]:
@@ -1147,7 +1169,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_permissions(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_members(self, network_id: str) -> dict[str, Any]:
@@ -1156,7 +1178,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_members(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_notification_settings(self, network_id: str) -> dict[str, Any]:
@@ -1165,7 +1187,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_notification_settings(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def has_unread_notifications(self, network_id: str) -> dict[str, Any]:
@@ -1174,7 +1196,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.has_unread_notifications(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_advanced_content_filter(self, network_id: str) -> dict[str, Any]:
@@ -1187,7 +1209,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_advanced_content_filter(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_subnets_config(self, network_id: str) -> list[dict[str, Any]]:
@@ -1230,7 +1252,7 @@ class EeroClient:
             cadence=cadence,
             insight_type=insight_type,
         )
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # rf tier -- channel utilisation (§9 #20/#21, §11.7). One unparameterised
@@ -1250,7 +1272,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_channel_utilization(network_id, start=start, end=end)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # per_device tier -- device-level insights (§9 #11, §11.6)
@@ -1273,7 +1295,7 @@ class EeroClient:
         raw_response = await self._client.get_devices_insights(
             network_id, start=start, end=end, cadence=cadence, insight_type=insight_type
         )
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # per_eero tier -- nightlight, connections, ouicheck (§9 #44)
@@ -1290,7 +1312,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_nightlight(eero_id, network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_connections(self, eero_id: str, network_id: str) -> dict[str, Any]:
@@ -1299,7 +1321,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_connections(eero_id, network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_ouicheck(self, network_id: str, *, serial: str, version: str) -> dict[str, Any]:
@@ -1308,7 +1330,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_ouicheck(network_id, serial=serial, version=version)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # per_profile tier -- DNS policy applications (§9 #42)
@@ -1326,7 +1348,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_dns_policy_applications(profile_id, network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     # =========================================================================
     # unverified tier -- routing, backup access points, cellular backup,
@@ -1342,7 +1364,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_routing(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def list_backup_access_points(self, network_id: str) -> list[dict[str, Any]]:
@@ -1360,7 +1382,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_cellular_backup_usage(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_cellular_backup_events(self, network_id: str) -> dict[str, Any]:
@@ -1369,7 +1391,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_cellular_backup_events(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_network_scan(self, network_id: str) -> dict[str, Any]:
@@ -1378,7 +1400,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_network_scan(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_speed_tests(self, network_id: str, *, limit: int) -> list[dict[str, Any]]:
@@ -1400,7 +1422,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_multistaticip(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_ac_compat(self, network_id: str) -> dict[str, Any]:
@@ -1409,7 +1431,7 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_ac_compat(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)
 
     @_wrap_api_call()
     async def get_power_saving_schedules(self, network_id: str) -> dict[str, Any]:
@@ -1418,4 +1440,4 @@ class EeroClient:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
         raw_response = await self._client.get_power_saving_schedules(network_id)
-        return dict(_extract_data(raw_response))
+        return _extract_dict(raw_response)

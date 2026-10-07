@@ -1,8 +1,10 @@
 """Collector module for gathering eero metrics."""
 
+import inspect
 import logging
 import re
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -1364,7 +1366,10 @@ class EeroCollector:
             EERO_UP.set(0)
 
         except Exception as e:
-            _LOGGER.error("Unexpected error during collection: %s", type(e).__name__)
+            # Full traceback: the class name alone made #139 undiagnosable.
+            # Exceptions reaching here are local bugs or SDK errors that the
+            # adapter already stripped of the API envelope -- no account data.
+            _LOGGER.exception("Unexpected error during collection: %s: %s", type(e).__name__, e)
             EXPORTER_SCRAPE_ERRORS.labels(error_type="unknown").inc()
             EERO_UP.set(0)
 
@@ -1406,7 +1411,223 @@ class EeroCollector:
         if exc is not None:
             _LOGGER.warning(f"Failed to get network details: {exc}")
             network_details = network_data
+        elif not isinstance(network_details, dict) or not network_details:
+            _LOGGER.warning("Network %s returned an empty envelope; using list entry", network_id)
+            network_details = network_data
 
+        # Every family below runs isolated: a payload shape one family does
+        # not expect (#139: `dns.custom` = null) is logged with its traceback
+        # and costs that family only, never the rest of the cycle.
+        await self._isolated(
+            "network_summary",
+            network_id,
+            lambda: self._collect_network_summary(network_id, network_name, network_details),
+        )
+        await self._isolated(
+            "network_feature_flags",
+            network_id,
+            lambda: self._collect_network_feature_flags(
+                client, network_id, network_name, network_details
+            ),
+        )
+        await self._isolated(
+            "network_envelope_extras",
+            network_id,
+            lambda: self._collect_network_envelope_extras(
+                network_id, network_name, network_details
+            ),
+        )
+        await self._isolated(
+            "network_capabilities",
+            network_id,
+            lambda: self._collect_network_capabilities(network_id, network_details),
+        )
+        eeros: list[dict[str, Any]] = await self._isolated(
+            "eeros",
+            network_id,
+            lambda: self._collect_eero_metrics(client, network_id, network_name, network_details),
+            default=[],
+        )
+
+        devices: list[dict[str, Any]] | None = None
+        if self._include_devices:
+            devices = await self._isolated(
+                "devices",
+                network_id,
+                lambda: self._collect_device_metrics(client, network_id, network_name),
+            )
+
+        if self._include_data_usage:
+            await self._isolated(
+                "data_usage",
+                network_id,
+                lambda: self._collect_data_usage_metrics(client, network_id, network_details),
+            )
+
+        profiles: list[dict[str, Any]] | None = None
+        if self._include_profiles:
+            profiles = await self._isolated(
+                "profiles",
+                network_id,
+                lambda: self._collect_profile_metrics(client, network_id),
+            )
+
+        if self._include_premium:
+            await self._isolated(
+                "premium",
+                network_id,
+                lambda: self._collect_premium_metrics(
+                    client, network_id, network_name, network_details
+                ),
+            )
+
+        # NOTE (commit 4, metrics reorganisation): `_collect_thread_metrics`
+        # (eero_thread_device_count/eero_thread_border_router) and
+        # `_collect_diagnostics_metrics` (all eero_diagnostics_*) are no
+        # longer called -- `get_thread` has neither a device count nor a
+        # border-router count, and `get_diagnostics` returns only a status
+        # string (§11.11 of the v8 probe shape summary). `include_thread` is
+        # kept for a later commit's Thread family; `include_diagnostics` has
+        # been removed entirely since nothing in the API backs it.
+
+        if self._include_port_forwards:
+            await self._isolated(
+                "port_forwards",
+                network_id,
+                lambda: self._collect_port_forward_metrics(client, network_id, network_name),
+            )
+
+        if self._include_reservations:
+            await self._isolated(
+                "reservations",
+                network_id,
+                lambda: self._collect_reservation_metrics(client, network_id, network_name),
+            )
+
+        if self._include_blacklist:
+            await self._isolated(
+                "blacklist",
+                network_id,
+                lambda: self._collect_blacklist_metrics(client, network_id, network_name),
+            )
+
+        if self._include_insights:
+            await self._isolated(
+                "insights", network_id, lambda: self._collect_insights_metrics(client, network_id)
+            )
+
+        if self._include_extended:
+            await self._isolated(
+                "extended", network_id, lambda: self._collect_extended_metrics(client, network_id)
+            )
+
+        if self._include_rf:
+            await self._isolated(
+                "rf", network_id, lambda: self._collect_rf_metrics(client, network_id)
+            )
+
+        if self._include_per_device:
+            await self._isolated(
+                "per_device",
+                network_id,
+                lambda: self._collect_per_device_metrics(client, network_id),
+            )
+
+        if self._include_per_eero:
+            await self._isolated(
+                "per_eero",
+                network_id,
+                lambda: self._collect_per_eero_metrics(client, network_id, eeros),
+            )
+
+        if self._include_per_profile:
+            await self._isolated(
+                "per_profile",
+                network_id,
+                lambda: self._collect_per_profile_tier(client, network_id, profiles),
+            )
+
+        if self._include_unverified:
+            await self._isolated(
+                "unverified",
+                network_id,
+                lambda: self._collect_unverified_metrics(client, network_id, devices),
+            )
+
+    async def _isolated(
+        self,
+        family: str,
+        network_id: str,
+        call: Callable[[], Any],
+        default: Any = None,
+    ) -> Any:
+        """Run one sub-collector so an unexpected exception costs only its family.
+
+        API errors are already classified per request by :meth:`_api_get`; an
+        ``EeroAuthError`` or ``EeroAPIError`` that still escapes a sub-collector
+        is re-raised so ``collect()`` classifies it exactly as before (an
+        expired session must abort the cycle). Anything else is a payload
+        shape the family did not expect, or a bug: it is logged at ERROR with
+        its full traceback, counted as
+        ``eero_exporter_scrape_errors_total{error_type="collector"}``, and the
+        cycle moves on to the next family.
+
+        Args:
+            family: Label-safe sub-collector name used in the log line.
+            network_id: The network being collected, for the log line.
+            call: Zero-argument callable invoking the sub-collector; may return
+                a value or an awaitable.
+            default: Returned in place of the sub-collector's result when it
+                fails.
+
+        Returns:
+            The sub-collector's result, or ``default`` if it raised.
+        """
+        try:
+            result = call()
+            if inspect.isawaitable(result):
+                result = await result
+        except (EeroAuthError, EeroAPIError):
+            raise
+        except Exception as exc:
+            _LOGGER.exception(
+                "Sub-collector %s failed for network %s (%s: %s); continuing with the "
+                "remaining metric families",
+                family,
+                network_id,
+                type(exc).__name__,
+                exc,
+            )
+            EXPORTER_SCRAPE_ERRORS.labels(error_type="collector").inc()
+            return default
+        return result
+
+    async def _collect_per_profile_tier(
+        self,
+        client: EeroClient,
+        network_id: str,
+        profiles: list[dict[str, Any]] | None,
+    ) -> None:
+        """Collect the `per_profile` tier, fetching profiles if the core read did not."""
+        profiles_for_tier = profiles
+        if profiles_for_tier is None:
+            profiles_for_tier, _exc = await self._api_get(
+                "profiles", client.get_profiles(network_id)
+            )
+            profiles_for_tier = profiles_for_tier or []
+        await self._collect_per_profile_metrics(client, network_id, profiles_for_tier)
+
+    def _collect_network_summary(
+        self,
+        network_id: str,
+        network_name: str,
+        network_details: dict[str, Any],
+    ) -> None:
+        """Collect network info/status, health and the envelope's last speed test.
+
+        Every nested object is type-checked before use: the envelope is
+        nullable throughout and its shapes vary between accounts.
+        """
         # Extract status - may be nested {"status": "online"} or just "online"
         status_str = _parse_network_status(network_details.get("status"))
 
@@ -1444,11 +1665,11 @@ class EeroCollector:
         is_online = 1 if status_str.lower() in ("connected", "online") else 0
         NETWORK_STATUS.labels(network_id=network_id, name=network_name).set(is_online)
 
-        health = network_details.get("health", {})
-        if health:
-            internet_health = health.get("internet", {})
-            eero_health = health.get("eero_network", {})
-            if internet_health:
+        health = network_details.get("health")
+        if isinstance(health, dict):
+            internet_health = health.get("internet")
+            eero_health = health.get("eero_network")
+            if isinstance(internet_health, dict) and internet_health:
                 is_healthy = 1 if internet_health.get("status") == "connected" else 0
                 try:
                     HEALTH_STATUS.labels(network_id=network_id, source="internet").set(is_healthy)
@@ -1456,7 +1677,7 @@ class EeroCollector:
                     _LOGGER.warning(
                         "Failed to set HEALTH_STATUS[internet] for network %s", network_id
                     )
-            if eero_health:
+            if isinstance(eero_health, dict) and eero_health:
                 is_healthy = 1 if eero_health.get("status") == "connected" else 0
                 try:
                     HEALTH_STATUS.labels(network_id=network_id, source="eero_network").set(
@@ -1469,16 +1690,16 @@ class EeroCollector:
 
         # Check for speedtest data - eero-api returns "speed_test", but older versions
         # or direct API calls may return "speed"
-        speed = network_details.get("speed_test") or network_details.get("speed", {})
-        if speed:
-            upload = speed.get("up", {})
-            download = speed.get("down", {})
-            if upload and "value" in upload:
+        speed = network_details.get("speed_test") or network_details.get("speed")
+        if isinstance(speed, dict) and speed:
+            upload = speed.get("up")
+            download = speed.get("down")
+            if isinstance(upload, dict) and "value" in upload:
                 try:
                     SPEED_UPLOAD_MBPS.labels(network_id=network_id).set(upload["value"])
                 except Exception:
                     _LOGGER.warning("Failed to set SPEED_UPLOAD_MBPS for network %s", network_id)
-            if download and "value" in download:
+            if isinstance(download, dict) and "value" in download:
                 try:
                     SPEED_DOWNLOAD_MBPS.labels(network_id=network_id).set(download["value"])
                 except Exception:
@@ -1489,70 +1710,6 @@ class EeroCollector:
                     SPEED_TEST_TIMESTAMP.labels(network_id=network_id).set(speed_ts)
                 except Exception:
                     _LOGGER.warning("Failed to set SPEED_TEST_TIMESTAMP for network %s", network_id)
-
-        await self._collect_network_feature_flags(client, network_id, network_name, network_details)
-        self._collect_network_envelope_extras(network_id, network_name, network_details)
-        self._collect_network_capabilities(network_id, network_details)
-        eeros = await self._collect_eero_metrics(client, network_id, network_name, network_details)
-
-        devices: list[dict[str, Any]] | None = None
-        if self._include_devices:
-            devices = await self._collect_device_metrics(client, network_id, network_name)
-
-        if self._include_data_usage:
-            await self._collect_data_usage_metrics(client, network_id, network_details)
-
-        profiles: list[dict[str, Any]] | None = None
-        if self._include_profiles:
-            profiles = await self._collect_profile_metrics(client, network_id)
-
-        if self._include_premium:
-            await self._collect_premium_metrics(client, network_id, network_name, network_details)
-
-        # NOTE (commit 4, metrics reorganisation): `_collect_thread_metrics`
-        # (eero_thread_device_count/eero_thread_border_router) and
-        # `_collect_diagnostics_metrics` (all eero_diagnostics_*) are no
-        # longer called -- `get_thread` has neither a device count nor a
-        # border-router count, and `get_diagnostics` returns only a status
-        # string (§11.11 of the v8 probe shape summary). `include_thread` is
-        # kept for a later commit's Thread family; `include_diagnostics` has
-        # been removed entirely since nothing in the API backs it.
-
-        if self._include_port_forwards:
-            await self._collect_port_forward_metrics(client, network_id, network_name)
-
-        if self._include_reservations:
-            await self._collect_reservation_metrics(client, network_id, network_name)
-
-        if self._include_blacklist:
-            await self._collect_blacklist_metrics(client, network_id, network_name)
-
-        if self._include_insights:
-            await self._collect_insights_metrics(client, network_id)
-
-        if self._include_extended:
-            await self._collect_extended_metrics(client, network_id)
-
-        if self._include_rf:
-            await self._collect_rf_metrics(client, network_id)
-
-        if self._include_per_device:
-            await self._collect_per_device_metrics(client, network_id)
-
-        if self._include_per_eero:
-            await self._collect_per_eero_metrics(client, network_id, eeros)
-
-        if self._include_per_profile:
-            profiles_for_tier = profiles
-            if profiles_for_tier is None:
-                profiles_for_tier, _exc = await self._api_get(
-                    "profiles", client.get_profiles(network_id)
-                )
-                profiles_for_tier = profiles_for_tier or []
-            await self._collect_per_profile_metrics(client, network_id, profiles_for_tier)
-
-        if self._include_unverified:
-            await self._collect_unverified_metrics(client, network_id, devices)
 
     async def _collect_eero_metrics(
         self,
@@ -2871,7 +3028,11 @@ class EeroCollector:
         # read for its values, only its length -- the actual server
         # addresses are never exported as label/info values.
         dns_mode = dns_obj.get("mode") if isinstance(dns_obj, dict) else None
-        custom_dns_ips = dns_obj.get("custom", {}).get("ips") if isinstance(dns_obj, dict) else None
+        # `dns.custom` is JSON null on a network that never configured custom
+        # resolvers (#139) -- a `.get("custom", {})` default only covers a
+        # missing key, so check the type rather than chaining `.get`.
+        dns_custom = dns_obj.get("custom") if isinstance(dns_obj, dict) else None
+        custom_dns_ips = dns_custom.get("ips") if isinstance(dns_custom, dict) else None
         is_custom_dns = dns_mode == "custom"
 
         NETWORK_CUSTOM_DNS_ENABLED.labels(network_id=network_id, name=network_name).set(
