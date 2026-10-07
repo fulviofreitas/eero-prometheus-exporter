@@ -495,7 +495,10 @@ def render() -> str:
     out.append("")
     out.append(
         "`eero_exporter_scrape_errors_total{error_type}` counts whole-cycle failures with "
-        "`error_type` in `auth`, `api`, `network`, `rate_limit` or `unknown`."
+        "`error_type` in `auth`, `api`, `network`, `rate_limit` or `unknown`, plus "
+        "`collector`: one metric family failed on an unexpected payload shape and was "
+        "skipped while the rest of the cycle completed. Its traceback is logged at ERROR; "
+        "please report it."
     )
     out.append("")
 

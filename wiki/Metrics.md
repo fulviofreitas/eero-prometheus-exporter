@@ -484,7 +484,7 @@ Family `unverified` -- tier `unverified`, enabled with `--include-unverified` (d
 | `transport` | DNS failure, connection error or timeout. Transient; the bounded `--get-retries` applies. |
 | `validation` | The SDK rejected an argument before sending, or the API returned a 400 form error. Usually a malformed identifier -- please report it. |
 
-`eero_exporter_scrape_errors_total{error_type}` counts whole-cycle failures with `error_type` in `auth`, `api`, `network`, `rate_limit` or `unknown`.
+`eero_exporter_scrape_errors_total{error_type}` counts whole-cycle failures with `error_type` in `auth`, `api`, `network`, `rate_limit` or `unknown`, plus `collector`: one metric family failed on an unexpected payload shape and was skipped while the rest of the cycle completed. Its traceback is logged at ERROR; please report it.
 
 ## PromQL examples
 
