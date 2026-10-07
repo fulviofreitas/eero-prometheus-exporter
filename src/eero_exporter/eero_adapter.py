@@ -346,7 +346,7 @@ def _extract_dict(raw_response: Any) -> dict[str, Any]:
     data = _extract_data(raw_response)
     if isinstance(data, dict):
         return dict(data)
-    if data not in (None, {}, []):
+    if data is not None and data != []:
         _LOGGER.debug("Expected an object payload, got %s; treating as empty", type(data).__name__)
     return {}
 
