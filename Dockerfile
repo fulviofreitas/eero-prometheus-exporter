@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.27
+# syntax=docker/dockerfile:1.28
 # Eero Prometheus Exporter
 # Multi-stage build for minimal image size
 # Uses uv.lock to ensure reproducible builds with pinned versions
