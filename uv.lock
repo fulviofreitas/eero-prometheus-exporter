@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 
 [[package]]
@@ -320,21 +320,21 @@ wheels = [
 
 [[package]]
 name = "eero-api"
-version = "8.0.6"
+version = "8.0.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "keyring" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/50/0b/2046395f85a39460bf35ddb912500eaa8928f7e71fa3780cd5755301a912/eero_api-8.0.6.tar.gz", hash = "sha256:3bf8460b77d07b6d7289d08b7017f8b78b8b6079a8348325e9aa4fe1cbf9c861", size = 128343, upload-time = "2026-10-06T23:33:41.898Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/18/521f5016b63bea1039816190f82f9c59828f5f1c01bbce81cd306c25897d/eero_api-8.0.7.tar.gz", hash = "sha256:7313c83e6d48e247c1d79b4fd5e3bee7d0a2636b501825ab59268616ce041fb1", size = 128459, upload-time = "2026-10-10T16:16:26.509Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1d/f4/b5d2e08e7e92213fe3fc3e0ee9ccded81ec8b4b18dae8b3defb41e179dcd/eero_api-8.0.6-py3-none-any.whl", hash = "sha256:3638e68dbca1e4687c3c4907fdae1b205dd75450c6318af4e319096a79b183da", size = 163181, upload-time = "2026-10-06T23:33:40.733Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/a1/3a33c7ccd20dfb68c808d7f9c9165ae4d49b1e72c3550c129d1e9350cd4e/eero_api-8.0.7-py3-none-any.whl", hash = "sha256:38760ffd453add908bfba005965dcecdfed0fa2154e1f1064ea7a28cdea7aa03", size = 163327, upload-time = "2026-10-10T16:16:25.2Z" },
 ]
 
 [[package]]
 name = "eero-prometheus-exporter"
-version = "4.2.0"
+version = "4.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "eero-api" },
@@ -356,7 +356,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "eero-api", specifier = ">=8.0.6,<9" },
+    { name = "eero-api", specifier = ">=8.0.7,<9" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "prometheus-client", specifier = ">=0.19.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
