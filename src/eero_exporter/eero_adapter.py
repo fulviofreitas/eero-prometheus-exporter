@@ -119,8 +119,8 @@ class EeroAuthError(Exception):
     per-endpoint failure like the rest of the ``EeroAPIError`` family.
 
     Attributes:
-        status_code: The HTTP status code, when known (the upstream SDK does
-            not currently attach one to authentication failures).
+        status_code: The HTTP status code, when known (``None`` for
+            client-side failures raised before any request was made).
         error_code: The value of ``envelope["meta"]["error"]``, when known.
         group: The catalogue group name ``error_code`` classifies into.
     """
