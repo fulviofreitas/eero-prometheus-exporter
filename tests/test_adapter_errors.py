@@ -57,10 +57,13 @@ def _envelope() -> dict[str, Any]:
 MAPPING_CASES = [
     pytest.param(
         EeroAuthenticationException(
-            "unrecognised error string", envelope=_envelope(), error_code="error.session.expired"
+            "unrecognised error string",
+            envelope=_envelope(),
+            error_code="error.session.expired",
+            status_code=401,
         ),
         EeroAuthError,
-        None,
+        401,
         "error.session.expired",
         "session",
         id="authentication",
@@ -113,9 +116,11 @@ MAPPING_CASES = [
         id="feature_unavailable",
     ),
     pytest.param(
-        EeroRateLimitException("rate limited", envelope=_envelope(), error_code="error.rate.limit"),
+        EeroRateLimitException(
+            "rate limited", envelope=_envelope(), error_code="error.rate.limit", status_code=429
+        ),
         EeroRateLimitError,
-        None,
+        429,
         "error.rate.limit",
         "rate_limit",
         id="rate_limit",
