@@ -3,7 +3,7 @@
 # Multi-stage build for minimal image size
 # Uses uv.lock to ensure reproducible builds with pinned versions
 
-FROM python:3.14-slim AS builder
+FROM python:3.15-slim AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN python -m build --wheel && \
     uv export --frozen --no-dev --no-emit-project -o requirements.txt
 
 # Final stage
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 # OCI Image Labels - GitHub Container Registry supported labels
 # https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#labelling-container-images
