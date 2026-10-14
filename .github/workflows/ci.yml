@@ -37,7 +37,7 @@ jobs:
   # ============================================================================
   commitlint:
     name: 📝 Commit Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
 
     steps:
@@ -57,7 +57,7 @@ jobs:
   # ============================================================================
   lint:
     name: 🧹 Lint & Format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     needs: commitlint
 
@@ -85,7 +85,7 @@ jobs:
   # ============================================================================
   type-check:
     name: 🔍 Type Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     needs: lint
 
@@ -116,7 +116,7 @@ jobs:
   # ============================================================================
   security:
     name: 🛡️ Security Scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     needs: lint
 
@@ -147,7 +147,7 @@ jobs:
   # ============================================================================
   test:
     name: 🧪 Tests (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     needs: lint
     strategy:
@@ -188,7 +188,7 @@ jobs:
   # 8.0.0 break every scrape, so the declared floor gets its own run.
   test-min-sdk:
     name: 🧪 Tests (declared eero-api floor)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     needs: lint
 
@@ -233,7 +233,7 @@ jobs:
   # ============================================================================
   docker-build:
     name: 🐳 Docker Build Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     needs: lint
 
@@ -258,7 +258,7 @@ jobs:
   # ============================================================================
   ci-success:
     name: ✅ CI Success
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [commitlint, lint, type-check, test, test-min-sdk, security, docker-build]
     if: always()
 
