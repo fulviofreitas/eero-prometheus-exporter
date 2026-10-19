@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import stat
 from collections.abc import Mapping
 from pathlib import Path
@@ -42,6 +41,7 @@ from eero_exporter.probe import (
     run_probe_cli,
     write_guard,
 )
+from tests.readonly_names import is_read_name
 
 FIXTURES = Path(__file__).parent / "fixtures" / "probe"
 
@@ -99,15 +99,6 @@ PLANTED_SECRETS = (
     "PLANTED-SYSTEM-DESCRIPTION",
     "PLANTED-ORG-ID",
     "203.0.113.53",
-)
-
-#: Method-name prefixes that mean "this call can change state".
-WRITE_NAME_RE = re.compile(
-    r"^(login|verify|logout|set_|create_|delete_|update_|run_|reboot_|request_"
-    r"|discover_|start_|pause_|unpause_|block_|unblock_|allow_|apply_|query_"
-    r"|respond_|promote_|remove_|cancel_|rearrange_|add_|enable_|disable_"
-    r"|clear_|configure_|node_|port_|led_|nightlight_|mark_|regenerate_"
-    r"|backup_connectivity_check)"
 )
 
 
@@ -190,13 +181,10 @@ class TestAllowlist:
         missing = [name for name in iter_probe_methods() if not hasattr(EeroClient, name)]
         assert missing == []
 
-    def test_no_write_named_methods(self) -> None:
-        offenders = [name for name in iter_probe_methods() if WRITE_NAME_RE.match(name)]
-        assert offenders == []
-
     def test_every_method_is_a_get_or_list_read(self) -> None:
-        for name in iter_probe_methods():
-            assert name.startswith(("get_", "list_", "has_")), name
+        """Shared allow-list (`tests/readonly_names.py`): reads only, not even auth."""
+        offenders = [name for name in iter_probe_methods() if not is_read_name(name)]
+        assert offenders == []
 
     def test_labels_are_unique(self) -> None:
         labels = [step.label for step in PROBE_STEPS]

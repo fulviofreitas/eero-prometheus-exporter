@@ -11,12 +11,14 @@ import importlib.metadata
 import inspect
 import re
 from pathlib import Path
-from unittest.mock import AsyncMock
 
+import pytest
 from eero import EeroClient
 from eero.api.base import BaseAPI
 from eero.const import DEFAULT_USER_AGENT, LEGACY_USER_AGENT
 from eero.exceptions import EeroException
+
+from tests.readonly_names import KNOWN_SDK_WRITES, is_read_only_name
 
 
 class TestSDKSurface:
@@ -52,29 +54,29 @@ class TestSDKSurface:
         assert not non_callable, f"Adapter calls non-callable attributes: {non_callable}"
 
     def test_no_write_methods_in_adapter_calls(self) -> None:
-        """Verify adapter never calls SDK write methods."""
-        write_patterns = {
-            "set_",
-            "create_",
-            "delete_",
-            "update_",
-            "run_",
-            "reboot_",
-            "request_support",
-            "discover_",
-            "pause_",
-            "block_",
-            "apply_",
-        }
+        """Every SDK call in the adapter is a read (`get_`/`list_`/`has_`) or auth.
 
-        write_calls = []
-        for call in sorted(self.adapter_calls):
-            for pattern in write_patterns:
-                if call.startswith(pattern):
-                    write_calls.append(call)
-                    break
+        Allow-list, shared with the cycle and probe guards via
+        `tests/readonly_names.py`, so a new SDK verb is rejected by default.
+        """
+        # `__aenter__`/`__aexit__` are context-manager plumbing, not API calls.
+        write_calls = [
+            call
+            for call in sorted(self.adapter_calls)
+            if not call.startswith("__") and not is_read_only_name(call)
+        ]
 
-        assert not write_calls, f"Adapter calls write methods (forbidden): {write_calls}"
+        assert not write_calls, f"Adapter calls non-read methods (forbidden): {write_calls}"
+
+    def test_allow_list_rejects_real_sdk_writes(self) -> None:
+        """The allow-list must reject the SDK's actual write helpers, including the
+        8.4.0 additions (`add_`, `remove_`, `clear_`, `resend_`) that a prefix
+        deny-list would have let through."""
+        present = [name for name in KNOWN_SDK_WRITES if hasattr(EeroClient, name)]
+        assert len(present) >= len(KNOWN_SDK_WRITES) - 2, f"sample drifted from the SDK: {present}"
+        leaked = [name for name in present if is_read_only_name(name)]
+        assert leaked == [], leaked
+        assert is_read_only_name("get_eeros_data_usage")
 
     def test_login_verify_exist(self) -> None:
         """login() and verify() must exist (used by CLI, not read-only guarded)."""
@@ -207,15 +209,29 @@ class TestEeroApi806Integration:
     def test_installed_sdk_meets_the_floor(self) -> None:
         version = importlib.metadata.version("eero-api")
         major, minor, patch = (int(part) for part in version.split(".")[:3])
-        assert (major, minor, patch) >= (8, 0, 6), version
+        assert (major, minor, patch) >= (8, 4, 0), version
         assert major == 8, "pyproject pins eero-api to the 8.x major"
 
-    async def test_sdk_coerces_an_integer_network_id_to_str(self, tmp_path: Path) -> None:
-        """8.0.5 (#137): an account whose `/networks` returns `"id": <int>`."""
+    async def test_sdk_coerces_an_integer_network_id_to_str(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """8.0.5 (#137): an account whose `/networks` returns `"id": <int>`.
+
+        The coercion lives inside `EeroClient.get_networks`, so the stub sits
+        below it on the SDK's public HTTP seams (`BaseAPI.get` and
+        `AuthAPI.get_auth_token`), never on a private `_api` attribute (#154).
+        """
+
+        async def fake_get(_self: object, endpoint: str, *args: object, **kwargs: object) -> dict:
+            assert endpoint == "networks"
+            return {"meta": {"code": 200}, "data": [{"id": 9999424, "name": "N"}]}
+
+        async def fake_token(_self: object) -> str:
+            return "token"
+
+        monkeypatch.setattr("eero.api.base.BaseAPI.get", fake_get)
+        monkeypatch.setattr("eero.api.auth.AuthAPI.get_auth_token", fake_token)
         client = EeroClient(cookie_file=str(tmp_path / "session.json"))
-        client._api.networks.get_networks = AsyncMock(  # type: ignore[method-assign]
-            return_value={"meta": {"code": 200}, "data": [{"id": 9999424, "name": "N"}]}
-        )
 
         await client.get_networks()
 
