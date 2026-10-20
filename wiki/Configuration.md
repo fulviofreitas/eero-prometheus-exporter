@@ -181,6 +181,7 @@ Defaults shown for `serve` are the effective built-in defaults (the flag itself 
 | `--eeros-from-envelope` | `EERO_EXPORTER_EEROS_FROM_ENVELOPE` | `eeros_from_envelope` | `false` | Read eeros from the cached network envelope instead of a separate GET |
 | `--auth-failure-exit` | `EERO_EXPORTER_AUTH_FAILURE_EXIT` | `auth_failure_exit` | `false` | Exit non-zero on a terminal authentication failure instead of retrying forever |
 | `--expose-public-ip` | `EERO_EXPORTER_EXPOSE_PUBLIC_IP` | `expose_public_ip` | `false` | Add public_ip back onto eero_network_info (off by default, D13) |
+| `--wan-burst` | `EERO_EXPORTER_WAN_BURST` | `wan_burst` | `false` | Sample live WAN throughput (eero_network_wan_download_mbps/upload) by POSTing one burst-reporter request per network per cycle. The only non-auth write the exporter can make; off by default |
 | `--auth-ui` | `EERO_EXPORTER_AUTH_UI` | `auth_ui` | `false` | Enable the opt-in /auth web login page. Put it behind TLS or a trusted network -- it accepts a shared secret over plain HTTP otherwise |
 | `--auth-ui-token` | `EERO_EXPORTER_AUTH_UI_TOKEN` | `auth_ui_token` | - | Shared secret required by /auth (min 16 chars, never logged) |
 | `--auth-ui-pending-ttl` | `EERO_EXPORTER_AUTH_UI_PENDING_TTL` | `auth_ui_pending_ttl` | `600` | Seconds a pending /auth login->verify flow stays valid before expiring |

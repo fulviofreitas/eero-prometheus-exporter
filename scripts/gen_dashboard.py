@@ -2114,6 +2114,60 @@ def opt_unverified(g: Grid) -> None:
     )
 
 
+def opt_wan_burst(g: Grid) -> None:
+    """Live WAN throughput sampled via burst-reporter requests (opt-in write)."""
+    g.line(
+        (
+            timeseries(
+                "WAN throughput (burst sample)",
+                [
+                    (f"sum(eero_network_wan_download_mbps{{{N}}})", "Download"),
+                    (f"sum(eero_network_wan_upload_mbps{{{N}}})", "Upload"),
+                ],
+                "Mbits",
+                description=(
+                    "Approximate: the sum of per-device live usage about 12 s after a "
+                    "burst-reporter request. Not a speed test; absent when no fresh sample."
+                ),
+            ),
+            FULL,
+        ),
+    )
+    g.line(
+        (
+            kpi(
+                "Sample age",
+                f"time() - max(eero_network_wan_burst_sample_timestamp_seconds{{{N}}})",
+                "s",
+                thresholds=[("green", None), ("orange", 120), ("red", 600)],
+                decimals=0,
+                description="Seconds since the device-list read behind the current values.",
+            ),
+            THIRD,
+        ),
+        (
+            kpi(
+                "Burst sampling",
+                "max(eero_exporter_wan_burst_enabled)",
+                "short",
+                thresholds=[("red", None), ("green", 1)],
+                description="0 once the collector disabled bursts after repeated failures.",
+            ),
+            THIRD,
+        ),
+        (
+            kpi(
+                "Settle wait (last cycle)",
+                "max(eero_exporter_wan_burst_wait_seconds)",
+                "s",
+                decimals=0,
+                description="Idle wait excluded from eero_exporter_scrape_duration_seconds.",
+            ),
+            THIRD,
+        ),
+    )
+
+
 section("Overview", overview)
 section("Network & WAN", network_wan)
 section("Eero mesh health", eero_mesh)
@@ -2127,6 +2181,7 @@ section("Per-profile (--include-per-profile)", opt_per_profile, collapsed=True)
 section("Per-device (--include-per-device)", opt_per_device, collapsed=True)
 section("Per-eero (--include-per-eero)", opt_per_eero, collapsed=True)
 section("Unverified shapes (--include-unverified)", opt_unverified, collapsed=True)
+section("WAN throughput (--wan-burst)", opt_wan_burst, collapsed=True)
 
 
 # ---------------------------------------------------------------------------

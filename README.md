@@ -12,8 +12,8 @@
 
 ---
 
-_A modern, async, strictly read-only Prometheus exporter for your eero mesh WiFi network._  
-_Network health, every eero and radio, client devices, data usage, entitlements -- 197 metrics._
+_A modern, async, read-only-by-default Prometheus exporter for your eero mesh WiFi network._  
+_Network health, every eero and radio, client devices, data usage, entitlements -- 202 metrics._
 
 [Get Started](../../wiki/Installation) · [Metrics](../../wiki/Metrics) · [Docker](../../wiki/Docker) · [Documentation](../../wiki)
 
@@ -48,8 +48,8 @@ _Network health, every eero and radio, client devices, data usage, entitlements 
 
 | Feature | Description |
 |---------|-------------|
-| 📊 **197 metrics, tiered** | `core`, `extended` and `rf` on by default (29 API requests per cycle); `per-profile`, `per-device`, `per-eero` and `unverified` opt-in. Every metric documents its API source path and evidence level. |
-| 🔒 **Strictly read-only** | Every data operation is a GET: the exporter never creates, changes or deletes anything on your network. The only POSTs are authentication -- `login`/`verify`, plus the SDK's own transparent session refresh. Enforced by a surface test against the real SDK and a write guard in the test suite. |
+| 📊 **202 metrics, tiered** | `core`, `extended` and `rf` on by default (29 API requests per cycle); `per-profile`, `per-device`, `per-eero` and `unverified` opt-in. Every metric documents its API source path and evidence level. |
+| 🔒 **Read-only by default** | Every data operation is a GET: the exporter never creates, changes or deletes anything on your network. The only POSTs are authentication -- `login`/`verify`, plus the SDK's own transparent session refresh -- and, only if you opt in with `--wan-burst`, a burst-reporter request that refreshes live per-device usage and changes no setting. Enforced by a read-name allow-list against the real SDK and a write guard in the test suite. |
 | 🌐 **Network & radios** | Health, ISP state, speed test, DNS/DHCP/WAN modes, 119 capability flags, per-band channel, width, TX power and utilisation on every eero. |
 | 📱 **Devices & profiles** | Connection quality, PHY rates, MCS/NSS, packet statistics, data usage per device, eero and profile. |
 | 💎 **eero Plus / Secure** | Entitlements, DNS policies, insights, WPA3 per band, permissions, subnets, notifications. |

@@ -1,6 +1,6 @@
 # 🌐 Eero Prometheus Exporter
 
-A modern, async, strictly read-only Prometheus exporter for your eero mesh WiFi network.
+A modern, async, read-only-by-default Prometheus exporter for your eero mesh WiFi network.
 
 > **Upgrading from 3.x?** 4.0.0 is a breaking release (eero-api 8.x, removed metrics, new
 > session-file format). Read [Installation - Upgrading from 3.x](Installation#upgrading-from-3x)
@@ -14,7 +14,7 @@ A modern, async, strictly read-only Prometheus exporter for your eero mesh WiFi 
 | [🐳 Docker](Docker) | Compose, `docker run`, writable config mount, full monitoring stack |
 | [💻 CLI Reference](CLI-Reference) | Every command, flag, exit code, the read-only probe |
 | [⚙️ Configuration](Configuration) | Precedence, tiers and their cost, generated flag / env var / YAML table |
-| [📊 Metrics](Metrics) | All 197 metrics with tier, evidence and source path; removed-in-4.0.0 appendix |
+| [📊 Metrics](Metrics) | All 202 metrics with tier, evidence and source path; removed-in-4.0.0 appendix |
 | [🔒 Security](Security) | Credential record, never-export list, read-only guarantee, `/auth` threat model |
 | [🔧 Troubleshooting](Troubleshooting) | Status values, missing families, auth, rollback |
 | [🛠️ Development](Development) | SDK notes, error mapping, registry design, adding a metric |

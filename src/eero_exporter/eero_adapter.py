@@ -9,12 +9,14 @@ As of eero-api v2.0.0, all responses are raw JSON in the format:
 
 This adapter handles data extraction from the envelope.
 
-This adapter exposes no write methods: every method here issues a GET
-against the eero cloud API, with the sole exception of ``login``/``verify``
-(and ``logout``, unused today), which are the only POSTs the exporter is
-permitted to issue. Nothing here calls a ``set_*``/``create_*``/``delete_*``/
-``update_*``/``run_*``/``pause_*``/``block_*``/``reboot_*``/``apply_*``/
-``request_support``/``discover_*`` method on the underlying SDK client.
+This adapter is read-only by default: every method here issues a GET
+against the eero cloud API, with two documented exceptions. ``login``/``verify``
+are the authentication POSTs. ``request_wan_burst`` is the one opt-in
+non-authentication POST (an empty-body burst-reporter request that asks the
+cloud to refresh per-device live usage); the collector only calls it when
+``ExporterConfig.wan_burst`` is on, and never retries it. The allow-list in
+``tests/readonly_names.py`` / ``tests/test_sdk_surface.py`` rejects any other
+non-``get_``/``list_``/``has_`` call on the underlying SDK client.
 
 Upstream (eero-api 8.x) exception -> local exception mapping
 ================================================================
@@ -646,13 +648,44 @@ class EeroClient:
     # =========================================================================
 
     @_wrap_api_call()
-    async def get_devices(self, network_id: str) -> list[dict[str, Any]]:
-        """Get list of client devices in a network."""
+    async def get_devices(
+        self, network_id: str, *, refresh_cache: bool = False
+    ) -> list[dict[str, Any]]:
+        """Get list of client devices in a network.
+
+        Args:
+            network_id: The network to list.
+            refresh_cache: Bypass the SDK's 60 s device-list cache. Used by the
+                post-burst read, which must see the refreshed ``usage`` values.
+        """
         if not self._client:
             raise EeroAPIError("Client not initialized. Use async context manager.")
 
-        raw_response = await self._client.get_devices(network_id)
+        raw_response = await self._client.get_devices(network_id, refresh_cache=refresh_cache)
         return _extract_list(raw_response, "devices")
+
+    # =========================================================================
+    # WAN burst -- the one opt-in non-authentication POST (module docstring)
+    # =========================================================================
+
+    @_wrap_api_call()
+    async def request_wan_burst(self, network_id: str) -> None:
+        """Ask the eero cloud to refresh per-device live usage for ``network_id``.
+
+        POSTs an empty body to the network's ``burst_reporters`` link. It runs
+        no speed test and changes no setting; about 12 s later the device
+        list's ``usage.down_mbps``/``usage.up_mbps`` carry fresh values that
+        decay again by ~30 s. The API allows one burst per minute per network.
+        Live-verified 2026-10-20 (eero-api 8.4.1): no node rebooted.
+
+        Only the collector's ``wan_burst`` family calls this, only when
+        ``ExporterConfig.wan_burst`` is on, and never more than once per
+        network per cycle. Never retry it.
+        """
+        if not self._client:
+            raise EeroAPIError("Client not initialized. Use async context manager.")
+
+        await self._client.create_burst_reporter(network_id)
 
     # =========================================================================
     # Profiles

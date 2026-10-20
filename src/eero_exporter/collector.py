@@ -1,5 +1,6 @@
 """Collector module for gathering eero metrics."""
 
+import asyncio
 import inspect
 import logging
 import re
@@ -222,6 +223,11 @@ from .metrics import (
     SUBNET_OPEN_NETWORK,
     SUBNET_WAN_ACCESS,
     UNPROFILED_DATA_USAGE_BYTES,
+    WAN_BURST_ENABLED,
+    WAN_BURST_SAMPLE_TIMESTAMP,
+    WAN_BURST_WAIT_SECONDS,
+    WAN_DOWNLOAD_MBPS,
+    WAN_UPLOAD_MBPS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -937,6 +943,45 @@ def _get_wifi_generation(device: dict[str, Any]) -> int | None:
     return None
 
 
+#: Seconds to wait after a burst request before re-reading the device list.
+#: Live verification (eero-api 8.4.1, 2026-10-20) saw per-device usage
+#: refreshed within 12 s and largely decayed again by 30 s, so neither a
+#: shorter nor a longer wait reads the right numbers. Tests patch this to 0.
+_WAN_BURST_SETTLE_SECONDS = 12.0
+
+#: Minimum gap between two burst requests for the same network: the API's
+#: own limit is one per minute per network. Consumed even when the POST
+#: fails, so a failure is never retried inside the window.
+_WAN_BURST_COOLDOWN_SECONDS = 60.0
+
+#: Consecutive *definitive* burst failures (permission, feature-unavailable,
+#: validation) after which the family disables itself for the rest of the
+#: process. Transport/rate-limit/auth outcomes do not count.
+_WAN_BURST_TRIP_THRESHOLD = 3
+_WAN_BURST_TRIP_ERRORS = (EeroAccessDeniedError, EeroFeatureUnavailableError, EeroValidationError)
+
+
+def _sum_device_usage(devices: list[Any], key: str) -> float | None:
+    """Sum ``usage.<key>`` over connected devices; ``None`` when nothing contributes.
+
+    Only numeric (non-bool) values on devices whose ``connected`` flag is
+    truthy count. ``None`` (not ``0``) is returned when no device contributed,
+    so the caller can leave the gauge absent -- "unknown beats zero".
+    """
+    total = 0.0
+    contributed = False
+    for device in devices:
+        if not isinstance(device, dict) or not device.get("connected", False):
+            continue
+        usage = device.get("usage")
+        value = usage.get(key) if isinstance(usage, dict) else None
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        total += float(value)
+        contributed = True
+    return total if contributed else None
+
+
 class _SeriesTracker:
     """Tracks the label sets a per-item metric family writes each cycle and
     removes any label set from a prior cycle that was not re-observed.
@@ -1200,6 +1245,15 @@ class EeroCollector:
         self._eeros_from_envelope = cfg.eeros_from_envelope
         self._expose_public_ip = cfg.expose_public_ip
 
+        # --wan-burst (the one opt-in non-auth POST). Per-network monotonic
+        # time of the last burst request, the circuit breaker, and the settle
+        # time spent this cycle (excluded from the scrape-duration gauge).
+        self._wan_burst = cfg.wan_burst
+        self._wan_burst_last: dict[str, float] = {}
+        self._wan_burst_failures: int = 0
+        self._wan_burst_tripped: bool = False
+        self._wan_burst_wait_this_cycle: float = 0.0
+
         self._cookie_file = session_file if session_file is not None else str(cfg.session_file)
         self._send_legacy_cookie = cfg.send_legacy_cookie
         self._accept_language = cfg.accept_language
@@ -1314,6 +1368,7 @@ class EeroCollector:
         success = False
         self.last_error_kind = None
         self._api_requests_this_cycle = 0
+        self._wan_burst_wait_this_cycle = 0.0
         _UNVERIFIED_KEYS_LOGGED_THIS_CYCLE.clear()
         self._series.reset_cycle()
 
@@ -1374,8 +1429,13 @@ class EeroCollector:
             EERO_UP.set(0)
 
         finally:
-            duration = time.monotonic() - start_time
+            # Burst settle waits are idle time, not API work: keep them out of
+            # the duration gauge so duration-vs-interval alerts stay honest.
+            duration = time.monotonic() - start_time - self._wan_burst_wait_this_cycle
             EXPORTER_SCRAPE_DURATION.set(duration)
+            if self._wan_burst:
+                WAN_BURST_WAIT_SECONDS.set(self._wan_burst_wait_this_cycle)
+                WAN_BURST_ENABLED.set(0 if self._wan_burst_tripped else 1)
             self._last_collection_time = time.time()
             # Set timestamp metrics for cache monitoring
             EXPORTER_LAST_COLLECTION_TIMESTAMP.set(self._last_collection_time)
@@ -1455,6 +1515,13 @@ class EeroCollector:
                 "devices",
                 network_id,
                 lambda: self._collect_device_metrics(client, network_id, network_name),
+            )
+
+        if self._wan_burst:
+            await self._isolated(
+                "wan_burst",
+                network_id,
+                lambda: self._collect_wan_burst(client, network_id, network_name, network_details),
             )
 
         if self._include_data_usage:
@@ -2119,6 +2186,92 @@ class EeroCollector:
             )
             if client_count is not None:
                 self._track(EERO_RADIO_CLIENT_COUNT, **labels).set(client_count)
+
+    async def _collect_wan_burst(
+        self,
+        client: EeroClient,
+        network_id: str,
+        network_name: str,
+        network_details: dict[str, Any],
+    ) -> None:
+        """Sample live WAN throughput for one network (``--wan-burst`` only).
+
+        One burst-reporter POST per network per cycle at most, never within
+        60 s of the previous one, never retried; then a settle wait and one
+        cache-bypassing ``get_devices`` whose per-device ``usage`` is summed.
+        Every exit path that produced no fresh sample prunes the gauges so
+        they are absent rather than stale or zero -- except a cooldown skip,
+        which keeps the previous (<60 s old, timestamped) sample.
+
+        Skipped outright for bridge-mode networks (no WAN on the mesh) and
+        once the circuit breaker has tripped.
+        """
+        scope = {"network_id": network_id}
+
+        def prune_unobserved() -> None:
+            for metric in (WAN_DOWNLOAD_MBPS, WAN_UPLOAD_MBPS, WAN_BURST_SAMPLE_TIMESTAMP):
+                self._series.prune(metric, scope)
+
+        if self._wan_burst_tripped:
+            prune_unobserved()
+            return
+
+        connection = network_details.get("connection") if network_details else None
+        mode = connection.get("mode") if isinstance(connection, dict) else None
+        if isinstance(mode, str) and mode.strip().lower() == "bridge":
+            _LOGGER.debug("WAN burst skipped for network %s: bridge mode", network_id)
+            prune_unobserved()
+            return
+
+        now = time.monotonic()
+        last = self._wan_burst_last.get(network_id)
+        if last is not None and now - last < _WAN_BURST_COOLDOWN_SECONDS:
+            _LOGGER.debug(
+                "WAN burst skipped for network %s: %.0fs since the last request (<%.0fs)",
+                network_id,
+                now - last,
+                _WAN_BURST_COOLDOWN_SECONDS,
+            )
+            return
+
+        # Stamp before the POST so a failure consumes the window too.
+        self._wan_burst_last[network_id] = now
+        _, exc = await self._api_get("wan_burst", client.request_wan_burst(network_id))
+        if exc is not None:
+            if isinstance(exc, _WAN_BURST_TRIP_ERRORS):
+                self._wan_burst_failures += 1
+                if self._wan_burst_failures >= _WAN_BURST_TRIP_THRESHOLD:
+                    self._wan_burst_tripped = True
+                    _LOGGER.warning(
+                        "WAN burst sampling disabled for the rest of this process after %d "
+                        "consecutive definitive failures (last: %s); restart to re-enable",
+                        self._wan_burst_failures,
+                        type(exc).__name__,
+                    )
+            prune_unobserved()
+            return
+        self._wan_burst_failures = 0
+
+        await asyncio.sleep(_WAN_BURST_SETTLE_SECONDS)
+        self._wan_burst_wait_this_cycle += _WAN_BURST_SETTLE_SECONDS
+
+        devices, exc = await self._api_get(
+            "devices_burst", client.get_devices(network_id, refresh_cache=True)
+        )
+        if exc is not None or not isinstance(devices, list):
+            prune_unobserved()
+            return
+
+        down = _sum_device_usage(devices, "down_mbps")
+        up = _sum_device_usage(devices, "up_mbps")
+        labels = {"network_id": network_id, "name": network_name}
+        if down is not None:
+            self._track(WAN_DOWNLOAD_MBPS, **labels).set(down)
+        if up is not None:
+            self._track(WAN_UPLOAD_MBPS, **labels).set(up)
+        if down is not None or up is not None:
+            self._track(WAN_BURST_SAMPLE_TIMESTAMP, **labels).set(time.time())
+        prune_unobserved()
 
     async def _collect_device_metrics(
         self, client: EeroClient, network_id: str, network_name: str

@@ -654,6 +654,17 @@ def serve(
         show_envvar=True,
         help="Add public_ip back onto eero_network_info (off by default, D13)",
     ),
+    wan_burst: bool | None = typer.Option(
+        None,
+        "--wan-burst/--no-wan-burst",
+        envvar=envvar_name("--wan-burst"),
+        show_envvar=True,
+        help=(
+            "Sample live WAN throughput (eero_network_wan_download_mbps/upload) by POSTing one "
+            "burst-reporter request per network per cycle. The only non-auth write the "
+            "exporter can make; off by default"
+        ),
+    ),
     auth_ui: bool | None = typer.Option(
         None,
         "--auth-ui/--no-auth-ui",
@@ -720,6 +731,7 @@ def serve(
         eeros_from_envelope=eeros_from_envelope,
         auth_failure_exit=auth_failure_exit,
         expose_public_ip=expose_public_ip,
+        wan_burst=wan_burst,
         auth_ui=auth_ui,
         auth_ui_token=auth_ui_token,
         auth_ui_pending_ttl=auth_ui_pending_ttl,

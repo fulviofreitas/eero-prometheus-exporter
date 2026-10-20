@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE: do not edit by hand. Regenerate with `uv run python scripts/gen_metrics_doc.py`; tests/test_metrics_doc.py fails when this page and src/eero_exporter/metrics.py drift. -->
 
-The exporter declares **197 metrics** in 29 resource families. Every metric is read from the eero cloud API with GET requests only; the exporter never changes anything on your network.
+The exporter declares **202 metrics** in 30 resource families. Every metric is read from the eero cloud API with GET requests only; the exporter never changes anything on your network. The one exception is the opt-in `--wan-burst` family, whose burst-reporter POST asks the cloud to refresh live per-device usage and changes no setting.
 
 Each table lists the metric name, its Prometheus type, labels, the collection tier that has to be enabled for it to be exposed, the evidence level for its source, and the API path it is read from. Metrics whose family is disabled do not appear on `/metrics` at all (no empty `# HELP` lines).
 
@@ -20,7 +20,7 @@ Families are grouped into tiers. A tier is enabled with one `serve` flag (or its
 
 | Tier | Enable with | Default | Metrics | Cost per cycle |
 |---|---|---|---:|---|
-| `core` | per-family `--include-*` flags | on | 145 | about 16 GETs: account + networks (2), network envelope, eeros, devices, profiles, data usage (one per period + one breakdown), insights (3), port forwards, reservations, blacklist |
+| `core` | per-family `--include-*` flags | on | 150 | about 16 GETs: account + networks (2), network envelope, eeros, devices, profiles, data usage (one per period + one breakdown), insights (3), port forwards, reservations, blacklist |
 | `extended` | `--include-extended` | on | 22 | +12 GETs, fixed cost: entitlements, WPA3 per band, fast transition, permissions, members, notification settings, unread flag, DNS content filter, subnets, profile insights (3) |
 | `rf` | `--include-rf` | on | 11 | +1 GET: a single unparameterised channel-utilisation call covering every eero and band |
 | `per_profile` | `--include-per-profile` | off | 1 | +1 GET per profile (DNS policy applications, needs eero Secure) |
@@ -28,7 +28,7 @@ Families are grouped into tiers. A tier is enabled with one `serve` flag (or its
 | `per_eero` | `--include-per-eero` | off | 3 | +3 GETs per eero: nightlight (Beacon only), connections, OUI check |
 | `unverified` | `--include-unverified` | off | 14 | +12 GETs: families whose payload was empty or absent on the probed mesh; parsers are defensive and log the observed keys at DEBUG |
 
-Core families with their own flag: `blacklist` (`--include-blacklist`), `data_usage` (`--include-data-usage`), `devices` (`--include-devices`), `ethernet` (`--include-ethernet`), `insights` (`--include-insights`), `port_forwards` (`--include-port-forwards`), `profiles` (`--include-profiles`), `reservations` (`--include-reservations`). Every other core family is always on.
+Core families with their own flag: `blacklist` (`--include-blacklist`), `data_usage` (`--include-data-usage`), `devices` (`--include-devices`), `ethernet` (`--include-ethernet`), `insights` (`--include-insights`), `port_forwards` (`--include-port-forwards`), `profiles` (`--include-profiles`), `reservations` (`--include-reservations`), `wan_burst` (`--wan-burst`). Every other core family is always on.
 
 Flags that gate reads inside other families rather than a family of their own: `--include-premium`, `--include-thread` (`--no-premium` skips the premium sub-collector and the eero Secure DNS content-filter read; `--include-thread` is accepted for compatibility but gates nothing in 4.0.0 -- the Thread read lives in the `unverified` tier).
 
@@ -47,6 +47,7 @@ Flags that gate reads inside other families rather than a family of their own: `
 - [Profiles](#profiles) (6)
 - [Data usage](#data-usage) (9)
 - [Insights (eero Secure)](#insights-eero-secure) (3)
+- [WAN throughput sampling (--wan-burst, opt-in write)](#wan-throughput-sampling---wan-burst-opt-in-write) (5)
 - [Port forwards](#port-forwards) (3)
 - [DHCP reservations](#dhcp-reservations) (1)
 - [Blocked devices](#blocked-devices) (1)
@@ -297,6 +298,18 @@ Family `insights` -- tier `core`, toggled by `--include-insights` (default on).
 | `eero_insights_adblock_total` | gauge | `network_id`, `category` | `core` | `verified` | `get_insights(insight_type=adblock).data.series[].sum` |
 | `eero_insights_blocked_total` | gauge | `network_id`, `category` | `core` | `verified` | `get_insights(insight_type=blocked).data.series[].sum` |
 | `eero_insights_inspected_total` | gauge | `network_id`, `category` | `core` | `verified` | `get_insights(insight_type=inspected).data.series[].sum` |
+
+## WAN throughput sampling (--wan-burst, opt-in write)
+
+Family `wan_burst` -- tier `core`, toggled by `--wan-burst` (default on).
+
+| Metric | Type | Labels | Tier | Evidence | Source |
+|---|---|---|---|---|---|
+| `eero_exporter_wan_burst_enabled` | gauge | - | `core` | `verified` | `derived: EeroCollector WAN burst circuit breaker` |
+| `eero_exporter_wan_burst_wait_seconds` | gauge | - | `core` | `verified` | `derived: EeroCollector wan burst settle wait` |
+| `eero_network_wan_burst_sample_timestamp_seconds` | gauge | `network_id`, `name` | `core` | `verified` | `derived: wall-clock time of the post-burst GET devices` |
+| `eero_network_wan_download_mbps` | gauge | `network_id`, `name` | `core` | `verified` | `POST networks/{id}/burst_reporters, then GET devices: sum(usage.down_mbps)` |
+| `eero_network_wan_upload_mbps` | gauge | `network_id`, `name` | `core` | `verified` | `POST networks/{id}/burst_reporters, then GET devices: sum(usage.up_mbps)` |
 
 ## Port forwards
 

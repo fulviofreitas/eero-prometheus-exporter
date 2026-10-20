@@ -47,6 +47,7 @@ FAMILY_TITLES: dict[str, str] = {
     "profiles": "Profiles",
     "data_usage": "Data usage",
     "insights": "Insights (eero Secure)",
+    "wan_burst": "WAN throughput sampling (--wan-burst, opt-in write)",
     "port_forwards": "Port forwards",
     "reservations": "DHCP reservations",
     "blacklist": "Blocked devices",
@@ -372,7 +373,9 @@ def render() -> str:
     out.append(
         f"The exporter declares **{len(rows)} metrics** in {len(by_family)} resource families. "
         "Every metric is read from the eero cloud API with GET requests only; the exporter "
-        "never changes anything on your network."
+        "never changes anything on your network. The one exception is the opt-in `--wan-burst` "
+        "family, whose burst-reporter POST asks the cloud to refresh live per-device usage "
+        "and changes no setting."
     )
     out.append("")
     out.append(

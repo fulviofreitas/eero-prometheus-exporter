@@ -20,6 +20,10 @@ from eero.exceptions import EeroException
 
 from tests.readonly_names import KNOWN_SDK_WRITES, is_read_only_name
 
+#: The one sanctioned non-authentication write (the opt-in --wan-burst request).
+#: It may appear exactly once in the adapter, inside `request_wan_burst`.
+ALLOWED_WRITES = frozenset({"create_burst_reporter"})
+
 
 class TestSDKSurface:
     """Verify SDK surface compatibility."""
@@ -63,10 +67,32 @@ class TestSDKSurface:
         write_calls = [
             call
             for call in sorted(self.adapter_calls)
-            if not call.startswith("__") and not is_read_only_name(call)
+            if not call.startswith("__")
+            and not is_read_only_name(call)
+            and call not in ALLOWED_WRITES
         ]
 
         assert not write_calls, f"Adapter calls non-read methods (forbidden): {write_calls}"
+
+    def test_the_burst_write_appears_exactly_once_inside_request_wan_burst(self) -> None:
+        """`create_burst_reporter` is the only sanctioned write: one call site, in
+        `request_wan_burst`, so the collector's flag gate and no-retry rule cover it."""
+        source = self.adapter_source
+        assert source.count("self._client.create_burst_reporter(") == 1
+        start = source.index("async def request_wan_burst(")
+        end = source.find("\n    async def ", start + 1)
+        body = source[start : end if end > 0 else len(source)]
+        assert "self._client.create_burst_reporter(" in body
+        # Strip the docstring before checking for loop/retry constructs.
+        code = body.split('"""')[-1]
+        for word in ("retry", "for ", "while "):
+            assert word not in code, f"burst body must not loop/retry: {word!r}"
+
+    def test_burst_and_devices_signatures(self) -> None:
+        burst = inspect.signature(EeroClient.create_burst_reporter).parameters
+        assert "network_id" in burst
+        devices = inspect.signature(EeroClient.get_devices).parameters
+        assert "refresh_cache" in devices
 
     def test_allow_list_rejects_real_sdk_writes(self) -> None:
         """The allow-list must reject the SDK's actual write helpers, including the
@@ -209,7 +235,7 @@ class TestEeroApi806Integration:
     def test_installed_sdk_meets_the_floor(self) -> None:
         version = importlib.metadata.version("eero-api")
         major, minor, patch = (int(part) for part in version.split(".")[:3])
-        assert (major, minor, patch) >= (8, 4, 0), version
+        assert (major, minor, patch) >= (8, 4, 1), version
         assert major == 8, "pyproject pins eero-api to the 8.x major"
 
     async def test_sdk_coerces_an_integer_network_id_to_str(
