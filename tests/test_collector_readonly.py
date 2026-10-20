@@ -5,9 +5,9 @@ client so every read returns a fixture, and runs `collect()` inside
 `probe.write_guard()`. Asserts:
 
 1. The cycle completes without `ProbeWriteBlocked`.
-2. None of the mock method names called during the cycle match a write-verb
-   pattern (`set_*`, `create_*`, `delete_*`, `update_*`, `run_*`, `pause_*`,
-   `block_*`, `reboot_*`, `apply_*`, `request_*`, `discover_*`, `start_*`).
+2. Every mock method name called during the cycle is a read (`get_*`,
+   `list_*`, `has_*`) per the shared allow-list in `tests/readonly_names.py`;
+   not even `login`/`verify` may appear in a collection cycle.
 3. The total adapter call count for the fixture mesh (E=4, D=3, P=2),
    measured via `EXPORTER_API_REQUESTS_LAST_CYCLE`:
 
@@ -41,25 +41,9 @@ from eero_exporter.collector import EeroCollector
 from eero_exporter.config import ExporterConfig
 from eero_exporter.metrics import EXPORTER_API_REQUESTS_LAST_CYCLE
 from eero_exporter.probe import ProbeWriteBlocked, write_guard
+from tests.readonly_names import is_read_name
 
 FIXTURES = Path(__file__).parent / "fixtures" / "v8"
-
-# Every non-GET verb pattern the module docstrings/hard rules forbid an
-# adapter method from matching.
-_WRITE_PREFIXES = (
-    "set_",
-    "create_",
-    "delete_",
-    "update_",
-    "run_",
-    "pause_",
-    "block_",
-    "reboot_",
-    "apply_",
-    "request_",
-    "discover_",
-    "start_",
-)
 
 
 def _load(name: str) -> Any:
@@ -176,7 +160,7 @@ async def test_full_cycle_is_read_only_under_the_probe_write_guard() -> None:
     called_names = _called_method_names(mock_client)
     assert called_names, "expected at least one adapter method to have been called"
     for name in called_names:
-        assert not name.startswith(_WRITE_PREFIXES), f"write-verb-shaped call: {name}"
+        assert is_read_name(name), f"non-read call in a collection cycle: {name}"
 
 
 @pytest.mark.asyncio
