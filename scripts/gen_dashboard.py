@@ -2133,6 +2133,11 @@ def opt_wan_burst(g: Grid) -> None:
             FULL,
         ),
     )
+    _wan_burst_kpis(g)
+
+
+def _wan_burst_kpis(g: Grid) -> None:
+    """Sample age, breaker state and settle wait for the WAN burst row."""
     g.line(
         (
             kpi(
