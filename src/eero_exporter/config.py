@@ -170,6 +170,14 @@ class ExporterConfig:
     # Privacy-sensitive opt-in (D13)
     expose_public_ip: bool = False
 
+    # Opt-in WAN throughput sampling. The ONLY non-authentication write the
+    # exporter can issue: when on, each collection cycle POSTs one empty-body
+    # "burst reporter" request per network (never more than once per 60 s per
+    # network), waits ~12 s and re-reads the device list to sum live
+    # per-device usage. Deliberately not an `include_*` family flag: those
+    # gate reads, this one enables a write. See wiki/Security.md.
+    wan_burst: bool = False
+
     # Logging
     log_level: str = "INFO"
 
@@ -280,6 +288,7 @@ class ExporterConfig:
             "auth_ui_token": "***" if self.auth_ui_token else None,
             "auth_ui_pending_ttl": self.auth_ui_pending_ttl,
             "expose_public_ip": self.expose_public_ip,
+            "wan_burst": self.wan_burst,
             "log_level": self.log_level,
         }
 

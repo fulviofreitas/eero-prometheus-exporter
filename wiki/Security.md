@@ -4,7 +4,7 @@
 
 | Aspect | Implementation |
 |---|---|
-| API access | Read-only. Every request the collector makes is a GET; the only POSTs the exporter ever issues are `login`/`verify` (CLI or the opt-in `/auth` page). |
+| API access | Read-only by default. Every request the collector makes is a GET; the only POSTs the exporter ever issues are `login`/`verify` (CLI or the opt-in `/auth` page) and, with `--wan-burst` opted in, one burst-reporter request per network per cycle (see [Non-read opt-ins](#non-read-opt-ins)). |
 | Transport | HTTPS only, enforced by the eero-api client |
 | Authentication | Session token sent as the `X-User-Token` header (plus the legacy cookie while `--send-legacy-cookie` is on) |
 | Credential storage | `~/.config/eero-exporter/session.json`, mode `0600`, written atomically |
@@ -52,18 +52,45 @@ device family with `--no-devices` if that is not acceptable in your environment.
 
 ## Read-only guarantee and how it is tested
 
-The exporter cannot change anything on your network. Three layers enforce that:
+With the defaults the exporter cannot change anything on your network. Three layers enforce
+that:
 
-1. **Adapter surface.** `eero_adapter.py` wraps only read methods of the SDK. The unit test
-   `tests/test_sdk_surface.py` imports the real `eero.EeroClient`, checks every method the
-   adapter calls exists with a compatible signature, and fails if any name matches a write
-   pattern (`set_`, `create_`, `delete_`, `update_`, `run_`, `reboot_`, ...).
+1. **Adapter surface.** `eero_adapter.py` wraps read methods of the SDK. The unit test
+   `tests/test_sdk_surface.py` imports the real `eero.EeroClient` and checks every method the
+   adapter calls exists with a compatible signature and is on the read allow-list
+   (`get_`/`list_`/`has_`, plus `login`/`verify`) in `tests/readonly_names.py`. The single
+   sanctioned exception, `create_burst_reporter`, must appear exactly once, inside
+   `request_wan_burst`.
 2. **Write guard.** `tests/test_collector_readonly.py` runs a full collection cycle with every
    tier enabled while the SDK's `post`/`put`/`delete` methods are patched to raise. The same
-   guard is installed by `eero-exporter probe` for real runs.
+   guard is installed by `eero-exporter probe` for real runs, which never includes a burst.
 3. **Classification by class.** API failures are mapped by exception class and `error_code`,
    never by matching message text, and the raw response envelope (which can contain account
    data) is never copied into an exception message or a log line.
+
+## Non-read opt-ins
+
+`--wan-burst` (`EERO_EXPORTER_WAN_BURST=true`, `wan_burst: true` in YAML; **off by default**) is
+the only setting that makes the collector issue a non-authentication POST. It asks the eero
+cloud for a "burst reporter": the cloud then refreshes each device's live `usage` for a few
+seconds, which the exporter reads back about 12 s later and sums into
+`eero_network_wan_download_mbps` / `eero_network_wan_upload_mbps`. The request has an empty
+body, runs no speed test and changes no setting. It was verified live on 2026-10-20 against
+eero-api 8.4.1 (usage refreshed within 12 s on 103 of 116 connected devices, no node rebooted).
+
+Safeguards built into the collector:
+
+- at most one burst per network per collection cycle, and never within 60 s of the previous one
+  (the API's own limit); the window is consumed even when the request fails, so nothing is ever
+  retried inside it;
+- bridge-mode networks are skipped;
+- after three consecutive definitive failures (permission, feature-unavailable, validation) the
+  family disables itself for the rest of the process and `eero_exporter_wan_burst_enabled` drops
+  to 0; transport and rate-limit errors do not trip it;
+- when no fresh sample exists the gauges are absent, never 0, and
+  `eero_network_wan_burst_sample_timestamp_seconds` dates the sample that is there.
+
+Leave the flag off if a strictly GET-only exporter matters more to you than the two gauges.
 
 ## Web login page (`/auth`)
 

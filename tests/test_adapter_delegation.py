@@ -29,7 +29,8 @@ from eero_exporter.eero_adapter import EeroClient
 #   - login/verify: side-effecting auth flow, not simple delegation
 #   - get_speed_test: delegates to client.get_network(), not client.get_speed_test()
 #   - is_premium: delegates to client.get_premium_status() with extra parsing
-_EXCLUDED = {"login", "verify", "get_speed_test", "is_premium"}
+#   - request_wan_burst: the one opt-in write (returns nothing); covered below
+_EXCLUDED = {"login", "verify", "get_speed_test", "is_premium", "request_wan_burst"}
 
 
 def _introspected_read_methods() -> set[str]:
@@ -55,7 +56,15 @@ DELEGATION_TABLE: list[_DelegationEntry] = [
     ("get_networks", (), {}, (), {}, "list"),
     ("get_network", ("net-1",), {}, ("net-1",), {}, "dict"),
     ("get_eeros", ("net-1",), {}, ("net-1",), {}, "list"),
-    ("get_devices", ("net-1",), {}, ("net-1",), {}, "list"),
+    ("get_devices", ("net-1",), {}, ("net-1",), {"refresh_cache": False}, "list"),
+    (
+        "get_devices",
+        ("net-1",),
+        {"refresh_cache": True},
+        ("net-1",),
+        {"refresh_cache": True},
+        "list",
+    ),
     ("get_profiles", ("net-1",), {}, ("net-1",), {}, "list"),
     ("get_transfer_stats", ("net-1", "dev-1"), {}, ("net-1", "dev-1"), {}, "dict"),
     (
@@ -235,7 +244,10 @@ def test_delegation_table_matches_introspected_read_methods() -> None:
 @pytest.mark.parametrize(
     ("method_name", "call_args", "call_kwargs", "expected_args", "expected_kwargs", "kind"),
     DELEGATION_TABLE,
-    ids=[entry[0] for entry in DELEGATION_TABLE],
+    ids=[
+        entry[0] + ("[fresh]" if entry[2].get("refresh_cache") else "")
+        for entry in DELEGATION_TABLE
+    ],
 )
 async def test_adapter_delegates_and_unwraps_envelope(
     method_name: str,
@@ -355,6 +367,17 @@ async def test_is_premium_coerces_non_bool_non_dict_response() -> None:
 # ---------------------------------------------------------------------------
 # login/verify -- side-effecting flow (not simple delegation)
 # ---------------------------------------------------------------------------
+
+
+async def test_request_wan_burst_delegates_once_and_returns_none() -> None:
+    """The one opt-in write forwards the network id to create_burst_reporter, once."""
+    adapter = EeroClient()
+    facade = AsyncMock()
+    facade.create_burst_reporter = AsyncMock(return_value={"meta": {}, "data": {"next_burst": "x"}})
+    adapter._client = facade
+
+    assert await adapter.request_wan_burst("net-1") is None
+    facade.create_burst_reporter.assert_awaited_once_with("net-1")
 
 
 async def test_login_success_returns_none() -> None:

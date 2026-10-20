@@ -79,6 +79,7 @@ def test_default_config_has_expected_new_fields() -> None:
     assert config.accept_language == "en-US"
     assert config.auth_failure_exit is False
     assert config.expose_public_ip is False
+    assert config.wan_burst is False
     assert config.data_usage_periods == ["day", "week", "month"]
     assert config.eeros_from_envelope is False
     assert config.include_extended is True

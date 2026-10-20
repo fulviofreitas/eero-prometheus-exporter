@@ -41,7 +41,7 @@ tests/fixtures/v8/       redacted API payloads (one per endpoint) used by the pa
 
 ## The SDK: eero-api 8.x
 
-- `eero-api` is pinned to `>=8.4.0,<9`. Docker images install from `uv.lock`, so an image
+- `eero-api` is pinned to `>=8.4.1,<9`. Docker images install from `uv.lock`, so an image
   never resolves a newer SDK than the lock.
 - **The SDK hands back raw envelopes, not Pydantic models.** (It does depend on Pydantic
   internally -- see `uv.lock` -- but no model instance reaches a caller.) Every call returns
@@ -126,14 +126,17 @@ EERO_UPTIME_SECONDS = _gauge(
 ## Read-only guarantee
 
 - `tests/test_sdk_surface.py` imports the real `eero.EeroClient` and asserts every method the
-  adapter calls exists with a compatible signature and none matches a write-name pattern.
+  adapter calls exists with a compatible signature and is on the read allow-list in
+  `tests/readonly_names.py` (`get_`/`list_`/`has_`, plus `login`/`verify`). The one sanctioned
+  write, `create_burst_reporter`, must appear exactly once, inside `request_wan_burst`.
 - `tests/test_collector_readonly.py` runs a full cycle with every tier on under the probe's
   write guard (`BaseAPI.post/put/delete` replaced with functions that raise) and asserts the
   GET counts: 29 with the defaults, 58 on the fixture mesh with everything on.
 - Any new adapter method must be a documented read in the eero-api API reference. Every data
   operation is a GET; the only POSTs are authentication -- `login` / `verify` (CLI and
-  `/auth`), and the SDK's transparent session refresh, which it replays for the caller (see
-  `tests/test_adapter_refresh_replay.py`).
+  `/auth`), the SDK's transparent session refresh, which it replays for the caller (see
+  `tests/test_adapter_refresh_replay.py`) -- and the opt-in `--wan-burst` request, which is
+  documented in [Security](Security#non-read-opt-ins) and must stay the only one.
 
 ## Probe workflow
 

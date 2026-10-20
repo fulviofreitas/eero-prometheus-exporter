@@ -71,6 +71,9 @@ _FAMILY_INCLUDE_FLAG: dict[str, str] = {
     "reservations": "include_reservations",
     "blacklist": "include_blacklist",
     "insights": "include_insights",
+    # Not an `include_*` read family: `wan_burst` enables the exporter's one
+    # opt-in non-authentication POST (see config.py / wiki/Security.md).
+    "wan_burst": "wan_burst",
 }
 
 
@@ -440,6 +443,66 @@ SPEED_TEST_TIMESTAMP = _gauge(
     ("network_id",),
     family="network",
     source="network.data.speed.date",
+    evidence="verified",
+)
+
+# -----------------------------------------------------------------------------
+# WAN throughput sampling (--wan-burst, off by default). The one family that
+# is fed by a write: a burst-reporter POST asks the cloud to refresh each
+# device's live `usage`, which is read back ~12 s later. Live-verified
+# 2026-10-20 against eero-api 8.4.1 (usage refreshed within 12 s on 103 of 116
+# connected devices, no node rebooted). Absent, never 0, when no sample exists.
+# -----------------------------------------------------------------------------
+
+WAN_DOWNLOAD_MBPS = _gauge(
+    f"{PREFIX}_network_wan_download_mbps",
+    "Approximate WAN download throughput in megabits per second (Mbps): the sum of "
+    "usage.down_mbps over connected devices, sampled about 12 s after a burst-reporter "
+    "request. Excludes traffic not attributed to a client device; not a speed test. "
+    "Only with --wan-burst; absent when no fresh sample exists.",
+    ("network_id", "name"),
+    family="wan_burst",
+    source="POST networks/{id}/burst_reporters, then GET devices: sum(usage.down_mbps)",
+    evidence="verified",
+)
+
+WAN_UPLOAD_MBPS = _gauge(
+    f"{PREFIX}_network_wan_upload_mbps",
+    "Approximate WAN upload throughput in megabits per second (Mbps): the sum of "
+    "usage.up_mbps over connected devices, sampled about 12 s after a burst-reporter "
+    "request. Excludes traffic not attributed to a client device; not a speed test. "
+    "Only with --wan-burst; absent when no fresh sample exists.",
+    ("network_id", "name"),
+    family="wan_burst",
+    source="POST networks/{id}/burst_reporters, then GET devices: sum(usage.up_mbps)",
+    evidence="verified",
+)
+
+WAN_BURST_SAMPLE_TIMESTAMP = _gauge(
+    f"{PREFIX}_network_wan_burst_sample_timestamp_seconds",
+    "Unix timestamp of the device-list read behind the current "
+    "eero_network_wan_download_mbps/upload_mbps values (sample age = time() - this).",
+    ("network_id", "name"),
+    family="wan_burst",
+    source="derived: wall-clock time of the post-burst GET devices",
+    evidence="verified",
+)
+
+WAN_BURST_ENABLED = _gauge(
+    f"{PREFIX}_exporter_wan_burst_enabled",
+    "1 while --wan-burst sampling is active; 0 once the collector has disabled it for the "
+    "rest of the process after repeated definitive failures (restart to re-enable).",
+    family="wan_burst",
+    source="derived: EeroCollector WAN burst circuit breaker",
+    evidence="verified",
+)
+
+WAN_BURST_WAIT_SECONDS = _gauge(
+    f"{PREFIX}_exporter_wan_burst_wait_seconds",
+    "Seconds the last collection cycle spent waiting for burst samples to settle. "
+    "Excluded from eero_exporter_scrape_duration_seconds.",
+    family="wan_burst",
+    source="derived: EeroCollector wan burst settle wait",
     evidence="verified",
 )
 
