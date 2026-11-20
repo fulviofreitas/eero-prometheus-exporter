@@ -15,7 +15,10 @@
 name: 🐳 Docker Build & Publish
 
 on:
-  workflow_run:
+  # Reviewed: `branches` matches the head branch NAME only, so the
+  # check-release gate also verifies the Release run came from this repo
+  # (never a fork) and was itself started by workflow_run/workflow_dispatch.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: ["🚀 Release"]
     types: [completed]
     branches: [master]
@@ -24,6 +27,8 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   # ============================================================================
@@ -40,7 +45,7 @@ jobs:
     steps:
       - name: 🔍 Look up release-published artifact
         id: check
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             // A manual dispatch is for re-publishing a release whose image
@@ -63,6 +68,17 @@ jobs:
               core.setOutput('released', 'false');
               return;
             }
+            // `branches: [master]` only matches the head branch NAME. Require
+            // the Release run to belong to this repository and to have been
+            // started the way Release legitimately is (after CI, or manually).
+            const thisRepo = `${context.repo.owner}/${context.repo.repo}`;
+            const headRepo = run.head_repository && run.head_repository.full_name;
+            if (headRepo !== thisRepo
+                || !['workflow_run', 'workflow_dispatch'].includes(run.event)) {
+              core.warning(`Ignoring Release run ${run.id} (event=${run.event}, head_repository=${headRepo})`);
+              core.setOutput('released', 'false');
+              return;
+            }
             const artifacts = await github.paginate(
               github.rest.actions.listWorkflowRunArtifacts,
               { owner: context.repo.owner, repo: context.repo.repo, run_id: run.id },
@@ -80,7 +96,7 @@ jobs:
     name: 🐳 Docker
     needs: check-release
     if: needs.check-release.outputs.released == 'true'
-    uses: fulviofreitas/workflow-arsenal/.github/workflows/docker-build.yml@master
+    uses: fulviofreitas/workflow-arsenal/.github/workflows/docker-build.yml@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
     permissions:
       contents: read
       packages: write

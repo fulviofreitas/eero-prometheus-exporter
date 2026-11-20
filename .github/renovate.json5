@@ -4,7 +4,7 @@
   // ============================================================================
   // Base Configuration
   // ============================================================================
-  extends: ["config:recommended", ":semanticCommits"],
+  extends: ["config:recommended", ":semanticCommits", "helpers:pinGitHubActionDigests"],
 
   // Timezone for scheduling
   timezone: "America/Los_Angeles",
@@ -76,7 +76,7 @@
     // ==========================================================================
     {
       matchManagers: ["github-actions"],
-      matchUpdateTypes: ["minor", "patch"],
+      matchUpdateTypes: ["minor", "patch", "digest", "pinDigest"],
       groupName: "github-actions",
       description: "GitHub Actions minor/patch updates (auto-merge)",
       automerge: true,
