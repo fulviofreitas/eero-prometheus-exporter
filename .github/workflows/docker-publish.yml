@@ -96,7 +96,7 @@ jobs:
     name: 🐳 Docker
     needs: check-release
     if: needs.check-release.outputs.released == 'true'
-    uses: fulviofreitas/workflow-arsenal/.github/workflows/docker-build.yml@2087aa01c13f842fc566101ceeb9a4a49ec2a370 # master
+    uses: fulviofreitas/workflow-arsenal/.github/workflows/docker-build.yml@7fcefdc57681a54229f0ae2c846f13d47e436e19 # master
     permissions:
       contents: read
       packages: write
